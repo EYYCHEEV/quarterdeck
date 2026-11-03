@@ -1,0 +1,261 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release, for example 0.1.1
+        required: true
+        type: string
+      commit:
+        description: Full 40-character commit SHA on main
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build twice, compare, and test the built files
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ inputs.version }}
+      COMMIT: ${{ inputs.commit }}
+    steps:
+      - name: Check the inputs
+        run: |
+          set -eu
+          printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'
+          printf '%s' "$COMMIT" | grep -Eq '^[0-9a-f]{40}$'
+
+      - name: Checkout the named commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Confirm the commit, the branch and the version
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$COMMIT"
+          git merge-base --is-ancestor "$COMMIT" origin/main
+          grep -Fq "\"version\": \"$VERSION\"" omp-quarterdeck/package.json
+          grep -Fxq "## $VERSION" CHANGELOG.md
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.3.14
+
+      - name: Write the safe unpack helper
+        run: |
+          cat > "$RUNNER_TEMP/safe_unpack.py" <<'PY'
+          import os
+          import posixpath
+          import stat
+          import sys
+          import tarfile
+          import zipfile
+
+
+          def refuse(reason):
+              sys.exit("unsafe archive: " + reason)
+
+
+          def check_names(names):
+              seen = set()
+              for name in names:
+                  if not name or name.startswith("/") or "\\" in name or "\x00" in name:
+                      refuse("bad member name")
+                  parts = name.rstrip("/").split("/")
+                  if ".." in parts or "" in parts:
+                      refuse("bad member name")
+                  normal = posixpath.normpath(name)
+                  if normal in seen:
+                      refuse("duplicate member name")
+                  seen.add(normal)
+
+
+          def unpack_zip(path, destination):
+              with zipfile.ZipFile(path) as archive:
+                  members = archive.infolist()
+                  check_names([member.filename for member in members])
+                  for member in members:
+                      kind = stat.S_IFMT(member.external_attr >> 16)
+                      if kind not in (0, stat.S_IFREG, stat.S_IFDIR):
+                          refuse("link or device member")
+                  os.makedirs(destination)
+                  archive.extractall(destination)
+
+
+          def unpack_tar(path, destination):
+              with tarfile.open(path) as archive:
+                  members = archive.getmembers()
+                  check_names([member.name for member in members])
+                  for member in members:
+                      if not (member.isreg() or member.isdir()):
+                          refuse("link or device member")
+                  os.makedirs(destination)
+                  archive.extractall(destination, members=members, filter="data")
+
+
+          source, destination = sys.argv[1], sys.argv[2]
+          if source.endswith(".whl"):
+              unpack_zip(source, destination)
+          elif source.endswith(".tar.gz"):
+              unpack_tar(source, destination)
+          else:
+              refuse("unknown archive type")
+          PY
+
+      - name: Build both files twice in two clean folders
+        run: |
+          set -eu
+          for n in 1 2; do
+            mkdir "build-$n" "out-$n"
+            git archive --format=tar "$COMMIT" | tar -x -C "build-$n"
+            python3 "build-$n/qd-client-wheel/build_wheel.py" --source-root "build-$n" --version "$VERSION" --output "out-$n"
+            tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner \
+              --transform "s,^omp-quarterdeck,quarterdeck-omp-wake-$VERSION," \
+              -cf - -C "build-$n" omp-quarterdeck | gzip -n -9 > "out-$n/quarterdeck-omp-wake-$VERSION.tar.gz"
+          done
+
+      - name: Fail if the two builds differ
+        run: |
+          set -eu
+          cmp "out-1/quarterdeck_mcp-$VERSION-py3-none-any.whl" "out-2/quarterdeck_mcp-$VERSION-py3-none-any.whl"
+          cmp "out-1/quarterdeck-omp-wake-$VERSION.tar.gz" "out-2/quarterdeck-omp-wake-$VERSION.tar.gz"
+
+      - name: Test the wheel after unpacking it into an empty folder
+        run: |
+          set -eu
+          unpacked="$(mktemp -d)/wheel"
+          python3 "$RUNNER_TEMP/safe_unpack.py" "out-1/quarterdeck_mcp-$VERSION-py3-none-any.whl" "$unpacked"
+          python3 "$unpacked/qd.py" --help > /dev/null
+          python3 - "$unpacked" "build-1/golive/connect/connect-config.json" <<'PY'
+          import json
+          import subprocess
+          import sys
+
+          folder, config = sys.argv[1], sys.argv[2]
+          requests = [
+              {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+              {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+          ]
+          completed = subprocess.run(
+              [sys.executable, folder + "/qd_mcp.py", "--config", config],
+              input="".join(json.dumps(request) + "\n" for request in requests),
+              capture_output=True,
+              text=True,
+              timeout=60,
+              check=True,
+          )
+          answers = [json.loads(line) for line in completed.stdout.splitlines()]
+          assert answers[0]["result"]["serverInfo"]["name"] == "quarterdeck"
+          expected = ["qd_join", "qd_create_invite", "qd_send", "qd_wait", "qd_ack"]
+          assert [tool["name"] for tool in answers[1]["result"]["tools"]] == expected
+          PY
+
+      - name: Test the extension from its unpacked archive
+        run: |
+          set -eu
+          unpacked="$(mktemp -d)/extension"
+          python3 "$RUNNER_TEMP/safe_unpack.py" "out-1/quarterdeck-omp-wake-$VERSION.tar.gz" "$unpacked"
+          cd "$unpacked/quarterdeck-omp-wake-$VERSION"
+          bun test
+
+      - name: Rehearse the install switch with stand-ins in a throwaway home
+        run: |
+          set -eu
+          home="$(mktemp -d)"
+          base="$home/.local/share/quarterdeck/bot-a"
+          mkdir -p "$base/releases/0.0.0"
+          printf 'print("stand-in older version")\n' > "$base/releases/0.0.0/qd.py"
+          python3 "$RUNNER_TEMP/safe_unpack.py" "out-1/quarterdeck_mcp-$VERSION-py3-none-any.whl" "$base/releases/$VERSION"
+          ln -s releases/0.0.0 "$base/current"
+          point() {
+            ln -s "releases/$1" "$base/current.next"
+            mv -T "$base/current.next" "$base/current"
+          }
+          test "$(python3 "$base/current/qd.py")" = "stand-in older version"
+          point "$VERSION"
+          python3 "$base/current/qd.py" --help > /dev/null
+          point 0.0.0
+          test "$(python3 "$base/current/qd.py")" = "stand-in older version"
+
+      - name: Write the sums and the release notes
+        run: |
+          set -eu
+          mkdir release
+          cp "out-1/quarterdeck_mcp-$VERSION-py3-none-any.whl" "out-1/quarterdeck-omp-wake-$VERSION.tar.gz" release/
+          (cd release && sha256sum "quarterdeck_mcp-$VERSION-py3-none-any.whl" "quarterdeck-omp-wake-$VERSION.tar.gz" > SHA256SUMS)
+          awk -v v="$VERSION" '$0 == "## " v { found = 1; next } /^## / && found { exit } found' CHANGELOG.md > release/RELEASE-NOTES.md
+          test -s release/RELEASE-NOTES.md
+
+      - name: Keep the built files for the draft job
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: release-files
+          path: release/
+          if-no-files-found: error
+          retention-days: 7
+
+  draft:
+    name: Draft the release
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ inputs.version }}
+      COMMIT: ${{ inputs.commit }}
+      TAGGER_NAME: Quarterdeck Contributors
+      TAGGER_DOMAIN: quarterdeck.invalid
+    steps:
+      - name: Download the built files
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: release-files
+          path: release
+
+      - name: Check the sums again
+        run: cd release && sha256sum --check SHA256SUMS
+
+      - name: Create the annotated tag
+        run: |
+          set -eu
+          tag_object="$(gh api "repos/$GITHUB_REPOSITORY/git/tags" \
+            -f tag="v$VERSION" \
+            -f message="Quarterdeck bot tools v$VERSION" \
+            -f object="$COMMIT" \
+            -f type=commit \
+            -f "tagger[name]=$TAGGER_NAME" \
+            -f "tagger[email]=noreply@$TAGGER_DOMAIN" \
+            --jq .sha)"
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/v$VERSION" -f sha="$tag_object"
+
+      - name: Draft the release with the two files and the sums
+        run: |
+          set -eu
+          gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" --draft --verify-tag \
+            --title "Quarterdeck bot tools v$VERSION" --notes-file release/RELEASE-NOTES.md \
+            "release/quarterdeck_mcp-$VERSION-py3-none-any.whl" "release/quarterdeck-omp-wake-$VERSION.tar.gz" release/SHA256SUMS
+
+      - name: Check that exactly one draft with exactly those files exists
+        run: |
+          set -eu
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" | jq -e \
+            --arg tag "v$VERSION" \
+            --arg wheel "quarterdeck_mcp-$VERSION-py3-none-any.whl" \
+            --arg archive "quarterdeck-omp-wake-$VERSION.tar.gz" \
+            '[.[] | select(.tag_name == $tag)] | length == 1 and .[0].draft == true and ([.[0].assets[].name] | sort) == ([$wheel, $archive, "SHA256SUMS"] | sort)'

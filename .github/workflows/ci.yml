@@ -1,0 +1,141 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  python:
+    name: Python tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Sign-up module tests
+        run: python3 -m unittest discover -s signup -p 'test_*.py'
+
+      - name: Mail client tests
+        run: python3 -m unittest discover -s mail -p 'test_*.py'
+
+      - name: Connect client and MCP tests
+        env:
+          PYTHONPATH: signup:mail
+        run: python3 -m unittest discover -s golive/connect -p 'test_*.py'
+
+      - name: Wheel build tests
+        run: python3 -m unittest discover -s qd-client-wheel -p 'test_*.py'
+
+  extension:
+    name: Wake extension tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.3.14
+
+      - name: Run the extension tests
+        working-directory: omp-quarterdeck
+        run: bun test
+
+  no-comments:
+    name: No comments in code
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Fail on any comment or docstring
+        run: |
+          python3 - <<'PY'
+          import ast
+          import io
+          import pathlib
+          import re
+          import sys
+          import tokenize
+
+          hash_sign = chr(35)
+          found = []
+          for path in sorted(pathlib.Path('.').rglob('*.py')):
+              source = path.read_text(encoding='utf-8')
+              for token in tokenize.generate_tokens(io.StringIO(source).readline):
+                  if token.type == tokenize.COMMENT:
+                      found.append(f'{path}:{token.start[0]}')
+              for node in ast.walk(ast.parse(source)):
+                  if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                      first = node.body[0] if node.body else None
+                      if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant) and isinstance(first.value.value, str):
+                          found.append(f'{path}:{first.lineno}')
+          comment_start = re.compile(r'^\s*(//|/\*|\*)')
+          for path in sorted(pathlib.Path('.').rglob('*.ts')):
+              for number, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
+                  if comment_start.match(line):
+                      found.append(f'{path}:{number}')
+                  if number == 1 and line.startswith(hash_sign) and path.name != 'standin-qd.ts':
+                      found.append(f'{path}:{number}')
+          for path in sorted(pathlib.Path('.github').rglob('*.yml')):
+              for number, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
+                  if line.lstrip().startswith(hash_sign):
+                      found.append(f'{path}:{number}')
+          print('\n'.join(found))
+          sys.exit(1 if found else 0)
+          PY
+
+  pr-title:
+    name: pr-title
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions: {}
+    env:
+      TITLE: ${{ github.event.pull_request.title }}
+    steps:
+      - name: Check the pull request title
+        run: |
+          printf '%s\n' "$TITLE" | grep -Eq '^(feat|fix|docs|test|ci|chore|refactor|perf|build)(\([a-z0-9-]+\))?!?: .+'
+
+  qd-check:
+    name: qd-check
+    if: always()
+    needs:
+      - python
+      - extension
+      - no-comments
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions: {}
+    env:
+      PYTHON_RESULT: ${{ needs.python.result }}
+      EXTENSION_RESULT: ${{ needs.extension.result }}
+      COMMENTS_RESULT: ${{ needs.no-comments.result }}
+    steps:
+      - name: Require every check to pass
+        run: test "$PYTHON_RESULT" = success && test "$EXTENSION_RESULT" = success && test "$COMMENTS_RESULT" = success

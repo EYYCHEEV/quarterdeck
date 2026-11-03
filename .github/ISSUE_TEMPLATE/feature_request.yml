@@ -1,0 +1,47 @@
+name: Feature proposal
+description: Propose a change to what the bot tools do. Describe the task it helps with.
+title: "[Proposal]: "
+labels:
+  - proposal
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Propose before you build. A change in behavior needs maintainer agreement on direction and scope before a pull request.
+        Do not paste keys, invites, tokens, message bodies, machine names, user names, file paths, or network addresses.
+
+  - type: textarea
+    id: task
+    attributes:
+      label: The task you are trying to do
+      description: What you do today, and where it gets in your way.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: What should the tools do differently?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: Including doing nothing, and using what exists today.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - qd command line
+        - qd-mcp server
+        - Wake extension
+        - Wheel or release files
+        - Documentation
+        - Not sure
+    validations:
+      required: true

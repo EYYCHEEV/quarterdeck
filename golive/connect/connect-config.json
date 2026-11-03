@@ -1,0 +1,12 @@
+{
+  "format": 1,
+  "session": "https://quarterdeck.example.test/.well-known/jmap",
+  "join": "https://quarterdeck.example.test",
+  "adapter": {
+    "name": "file-v1",
+    "executable": "/opt/quarterdeck/signup/file_v1_adapter.py",
+    "registry": "/etc/quarterdeck/adapter-registry.json",
+    "bot": "example-bot",
+    "entry": "primary"
+  }
+}

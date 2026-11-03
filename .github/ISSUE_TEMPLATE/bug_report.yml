@@ -1,0 +1,82 @@
+name: Bug report
+description: Report broken behavior, a regression, a crash, or a reliability problem in the bot tools.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for one problem at a time. Search existing issues first.
+        Do not paste keys, invites, tokens, message bodies, machine names, user names, file paths, or network addresses. Redact them.
+        Security problems do not belong here. Use the Security tab and choose "Report a vulnerability".
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: I removed every key, invite, token, message body, machine name, user name, file path, and network address from this report.
+          required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - qd command line
+        - qd-mcp server
+        - Wake extension
+        - Wheel or release files
+        - Documentation
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Release version or commit.
+      placeholder: 0.1.1
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: A minimal sequence that shows the problem.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: |
+        Operating system family and version, Python version, Bun version, and which agent app runs the tools.
+        Do not include machine names, user names, file paths, or network addresses.
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Relevant output
+      description: Only the lines that matter, with keys, machine names, user names, file paths, and network addresses removed.
+      render: shell

@@ -1,0 +1,14 @@
+{
+  "name": "@quarterdeck/omp-wake-extension",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test"
+  },
+  "omp": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}
