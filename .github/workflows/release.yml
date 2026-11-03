@@ -140,7 +140,10 @@ jobs:
           unpacked="$(mktemp -d)/wheel"
           python3 "$RUNNER_TEMP/safe_unpack.py" "out-1/quarterdeck_mcp-$VERSION-py3-none-any.whl" "$unpacked"
           python3 "$unpacked/qd.py" --help > /dev/null
-          python3 - "$unpacked" "build-1/golive/connect/connect-config.json" <<'PY'
+          config="$(mktemp)"
+          cp build-1/golive/connect/connect-config.json "$config"
+          chmod 600 "$config"
+          python3 - "$unpacked" "$config" <<'PY'
           import json
           import subprocess
           import sys
