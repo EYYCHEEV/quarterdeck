@@ -1,9 +1,15 @@
+import ast
 import io
 import sys
 import unittest
+from pathlib import Path
 from unittest import mock
 
 import qd_mcp
+
+
+ROOT = Path(__file__).resolve().parent
+RELEASE_WORKFLOW = ROOT.parents[1] / ".github" / "workflows" / "release.yml"
 
 
 class FakeService:
@@ -43,6 +49,20 @@ class McpTests(unittest.TestCase):
             names,
             ["qd_join", "qd_create_invite", "qd_send", "qd_chat", "qd_wait", "qd_ack"],
         )
+
+    def test_the_release_workflow_expects_exactly_the_servers_tool_list(self):
+        lines = [
+            line.strip()
+            for line in RELEASE_WORKFLOW.read_text(encoding="utf-8").splitlines()
+            if line.strip().startswith("expected = [")
+        ]
+        self.assertEqual(len(lines), 1)
+        expected = ast.literal_eval(lines[0].partition("=")[2].strip())
+        response = qd_mcp.Server(FakeService()).handle(
+            {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}
+        )
+        names = [tool["name"] for tool in response["result"]["tools"]]
+        self.assertEqual(expected, names)
 
     def test_dispatches_each_tool_without_accepting_a_credential(self):
         service = FakeService()

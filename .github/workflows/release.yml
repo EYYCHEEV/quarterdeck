@@ -160,7 +160,7 @@ jobs:
           )
           answers = [json.loads(line) for line in completed.stdout.splitlines()]
           assert answers[0]["result"]["serverInfo"]["name"] == "quarterdeck"
-          expected = ["qd_join", "qd_create_invite", "qd_send", "qd_wait", "qd_ack"]
+          expected = ["qd_join", "qd_create_invite", "qd_send", "qd_chat", "qd_wait", "qd_ack"]
           assert [tool["name"] for tool in answers[1]["result"]["tools"]] == expected
           PY
 
