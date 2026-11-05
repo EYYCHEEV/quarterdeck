@@ -64,6 +64,24 @@ class McpTests(unittest.TestCase):
         names = [tool["name"] for tool in response["result"]["tools"]]
         self.assertEqual(expected, names)
 
+    def test_the_release_workflow_hands_the_wheel_test_a_private_copy_of_the_settings(self):
+        text = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+        start = text.index("      - name: Test the wheel after unpacking it into an empty folder\n")
+        end = text.index("\n      - name:", start + 1)
+        step = [line.strip() for line in text[start:end].splitlines()]
+        committed = "build-1/golive/connect/connect-config.json"
+        calls = [index for index, line in enumerate(step) if line.startswith("python3 - ")]
+        self.assertEqual(len(calls), 1)
+        call = step[calls[0]]
+        self.assertNotIn(committed, call)
+        self.assertTrue(call.startswith('python3 - "$unpacked" "$config" '), call)
+        before = step[: calls[0]]
+        self.assertEqual(before.count('config="$(mktemp)"'), 1)
+        made = before.index('config="$(mktemp)"')
+        self.assertEqual([line for line in step if committed in line], [f'cp {committed} "$config"'])
+        self.assertLess(made, before.index(f'cp {committed} "$config"'))
+        self.assertLess(before.index(f'cp {committed} "$config"'), before.index('chmod 600 "$config"'))
+
     def test_dispatches_each_tool_without_accepting_a_credential(self):
         service = FakeService()
         server = qd_mcp.Server(service)
