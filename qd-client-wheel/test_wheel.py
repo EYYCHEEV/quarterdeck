@@ -15,7 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 SOURCE_ROOT = ROOT.parent
 BUILDER = ROOT / "build_wheel.py"
-VERSION = "0.1.1"
+VERSION = "0.1.2"
 WHEEL_NAME = f"quarterdeck_mcp-{VERSION}-py3-none-any.whl"
 PINS = {
     "golive/connect/qd.py": "7e418dad9dd02a3016e19182af242e13300b847a71350706280f7c507ecfa020",

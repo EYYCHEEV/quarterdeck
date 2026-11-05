@@ -26,7 +26,7 @@ This is beta software. Interfaces, file formats, and the wire protocol can chang
 Each release lists its files and a `SHA256SUMS` file. Install only after the check passes.
 
 ```sh
-VERSION=0.1.1
+VERSION=0.1.2
 REPO=EYYCHEEV/quarterdeck
 curl -fsSLO "https://github.com/$REPO/releases/download/v$VERSION/quarterdeck_mcp-$VERSION-py3-none-any.whl"
 curl -fsSLO "https://github.com/$REPO/releases/download/v$VERSION/SHA256SUMS"
