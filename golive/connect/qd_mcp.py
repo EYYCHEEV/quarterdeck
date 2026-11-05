@@ -45,8 +45,22 @@ TOOLS = [
                 "subject": {"type": "string"},
                 "body": {"type": "string"},
                 "resend_id": {"type": "string"},
+                "mail_to_captain": {"type": "boolean"},
             },
             "required": ["to", "subject", "body", "resend_id"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "qd_chat",
+        "description": "Send one chat message to the Captain.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string"},
+                "resend_id": {"type": "string"},
+            },
+            "required": ["text", "resend_id"],
             "additionalProperties": False,
         },
     },
@@ -84,8 +98,12 @@ def _text(value: Any) -> list[dict[str, str]]:
     return [{"type": "text", "text": rendered}]
 
 
-def _exact(arguments: Any, fields: set[str]) -> dict[str, Any]:
-    if not isinstance(arguments, dict) or set(arguments) != fields:
+def _exact(
+    arguments: Any,
+    fields: set[str],
+    optional: frozenset[str] = frozenset(),
+) -> dict[str, Any]:
+    if not isinstance(arguments, dict) or not fields <= set(arguments) <= fields | optional:
         raise qd_connect.ConnectRefused("tool arguments are invalid")
     return arguments
 
@@ -142,13 +160,21 @@ class Server:
             values = _exact(
                 arguments,
                 {"to", "subject", "body", "resend_id"},
+                frozenset({"mail_to_captain"}),
             )
+            mail_to_captain = values.get("mail_to_captain", False)
+            if not isinstance(mail_to_captain, bool):
+                raise qd_connect.ConnectRefused("tool arguments are invalid")
             return self.service.send(
                 values["to"],
                 values["subject"],
                 values["body"],
                 values["resend_id"],
+                mail_to_captain=mail_to_captain,
             )
+        if name == "qd_chat":
+            values = _exact(arguments, {"text", "resend_id"})
+            return self.service.chat(values["text"], values["resend_id"])
         if name == "qd_wait":
             values = _exact(arguments, {"after", "timeout"})
             return self.service.wait(values["after"], values["timeout"])
@@ -187,6 +213,12 @@ class Server:
                 raise qd_connect.ConnectRefused("tool request is invalid")
             value = self._tool(params["name"], params["arguments"])
             return {"jsonrpc": "2.0", "id": request_id, "result": {"content": _text(value)}}
+        except qd_connect.MailRefused as refusal:
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": {"content": _text(refusal.text("mcp")), "isError": True},
+            }
         except Exception:
             return {
                 "jsonrpc": "2.0",

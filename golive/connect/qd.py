@@ -22,6 +22,10 @@ def parser() -> argparse.ArgumentParser:
     send.add_argument("--to", required=True)
     send.add_argument("--subject", required=True)
     send.add_argument("--resend-id", required=True)
+    send.add_argument("--mail-to-captain", action="store_true")
+
+    chat = commands.add_parser("chat")
+    chat.add_argument("--resend-id", required=True)
 
     wait = commands.add_parser("wait")
     wait.add_argument("--after")
@@ -71,9 +75,12 @@ def main(
                     args.subject,
                     sys.stdin.read(),
                     args.resend_id,
+                    mail_to_captain=args.mail_to_captain,
                 ),
                 flush=True,
             )
+        elif args.command == "chat":
+            print(client.chat(sys.stdin.read(), args.resend_id), flush=True)
         elif args.command == "wait":
             for message in client.wait(args.after, args.timeout):
                 print(
@@ -87,6 +94,9 @@ def main(
         else:
             client.ack(args.id)
         return 0
+    except qd_connect.MailRefused as refusal:
+        print(refusal.text("cli"), file=sys.stderr)
+        return 2
     except Exception:
         print(PUBLIC_FAILURE, file=sys.stderr)
         return 2

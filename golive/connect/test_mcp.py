@@ -17,9 +17,14 @@ class FakeService:
         self.calls.append(("create-invite", bot))
         return "two-step stand-in prompt"
 
-    def send(self, recipient, subject, body, resend_key):
+    def send(self, recipient, subject, body, resend_key, mail_to_captain=False):
         self.calls.append(("send", recipient, subject, body, resend_key))
+        self.mail_to_captain = mail_to_captain
         return "message-id"
+
+    def chat(self, text, resend_id):
+        self.calls.append(("chat", text, resend_id))
+        return "chat-message-id"
 
     def wait(self, after, timeout):
         self.calls.append(("wait", after, timeout))
@@ -30,13 +35,13 @@ class FakeService:
 
 
 class McpTests(unittest.TestCase):
-    def test_lists_join_invite_send_wait_and_ack(self):
+    def test_lists_join_invite_send_chat_wait_and_ack(self):
         server = qd_mcp.Server(FakeService())
         response = server.handle({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}})
         names = [tool["name"] for tool in response["result"]["tools"]]
         self.assertEqual(
             names,
-            ["qd_join", "qd_create_invite", "qd_send", "qd_wait", "qd_ack"],
+            ["qd_join", "qd_create_invite", "qd_send", "qd_chat", "qd_wait", "qd_ack"],
         )
 
     def test_dispatches_each_tool_without_accepting_a_credential(self):
@@ -52,6 +57,7 @@ class McpTests(unittest.TestCase):
             ),
             ("qd_create_invite", {"bot": "next-bot"}),
             ("qd_send", {"to": "other", "subject": "s", "body": "b", "resend_id": "r"}),
+            ("qd_chat", {"text": "hello", "resend_id": "r"}),
             ("qd_wait", {"after": None, "timeout": 1.0}),
             ("qd_ack", {"id": "message-id"}),
         ]
@@ -75,6 +81,7 @@ class McpTests(unittest.TestCase):
                 ),
                 ("create-invite", "next-bot"),
                 ("send", "other", "s", "b", "r"),
+                ("chat", "hello", "r"),
                 ("wait", None, 1.0),
                 ("ack", "message-id"),
             ],
@@ -82,6 +89,24 @@ class McpTests(unittest.TestCase):
         listed_schema = server.handle({"jsonrpc": "2.0", "id": 9, "method": "tools/list", "params": {}})
         self.assertNotIn("key", str(listed_schema).lower())
         self.assertNotIn("credential", str(listed_schema).lower())
+
+    def test_send_passes_mail_to_captain_to_the_service_only_when_given(self):
+        for extra, expected in (({}, False), ({"mail_to_captain": False}, False), ({"mail_to_captain": True}, True)):
+            with self.subTest(extra=extra):
+                service = FakeService()
+                response = qd_mcp.Server(service).handle(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "tools/call",
+                        "params": {
+                            "name": "qd_send",
+                            "arguments": {"to": "captain", "subject": "s", "body": "b", "resend_id": "r", **extra},
+                        },
+                    }
+                )
+                self.assertFalse(response["result"].get("isError", False))
+                self.assertIs(service.mail_to_captain, expected)
 
     def test_create_invite_accepts_no_target_bot_and_exposes_no_key_field(self):
         service = FakeService()

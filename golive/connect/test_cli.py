@@ -17,9 +17,14 @@ class FakeService:
         self.joined = (description, bytes(invite))
         return {"code": "PUBLIC-CODE"}
 
-    def send(self, recipient, subject, body, resend_id):
+    def send(self, recipient, subject, body, resend_id, mail_to_captain=False):
         self.sent = (recipient, subject, body, resend_id)
+        self.mail_to_captain = mail_to_captain
         return "message-id"
+
+    def chat(self, text, resend_id):
+        self.chatted = (text, resend_id)
+        return "chat-message-id"
 
     def wait(self, after, timeout):
         return [{"id": "message-id", "body": "hello"}]
@@ -91,6 +96,57 @@ class CliTests(unittest.TestCase):
         with mock.patch.object(sys, "stderr", error):
             self.assertEqual(qd.main(["--config", "fixed", "ack", "fail"], service=FakeService()), 2)
         self.assertEqual(error.getvalue(), "qd: request could not be completed\n")
+
+    def test_only_the_mail_refusal_prints_its_own_message(self):
+        class Refusing(FakeService):
+            def send(self, recipient, subject, body, resend_id, mail_to_captain=False):
+                raise qd_connect.ConnectRefused("sensitive stand-in text")
+
+        error = io.StringIO()
+        with (
+            mock.patch.object(sys, "stdin", io.StringIO("body")),
+            mock.patch.object(sys, "stderr", error),
+        ):
+            code = qd.main(
+                ["--config", "fixed", "send", "--to", "captain", "--subject", "s", "--resend-id", "r"],
+                service=Refusing(),
+            )
+        self.assertEqual(code, 2)
+        self.assertEqual(error.getvalue(), "qd: request could not be completed\n")
+
+    def test_send_passes_the_mail_to_captain_flag_only_when_given(self):
+        for flags, expected in (([], False), (["--mail-to-captain"], True)):
+            with self.subTest(flags=flags):
+                service = FakeService()
+                with (
+                    mock.patch.object(sys, "stdin", io.StringIO("body")),
+                    mock.patch.object(sys, "stdout", io.StringIO()),
+                ):
+                    code = qd.main(
+                        ["--config", "fixed", "send", "--to", "captain", "--subject", "s", "--resend-id", "r", *flags],
+                        service=service,
+                    )
+                self.assertEqual(code, 0)
+                self.assertIs(service.mail_to_captain, expected)
+                self.assertEqual(service.sent, ("captain", "s", "body", "r"))
+
+    def test_chat_reads_standard_input_and_prints_the_message_id(self):
+        service = FakeService()
+        output = io.StringIO()
+        with (
+            mock.patch.object(sys, "stdin", io.StringIO("hello Captain\n")),
+            mock.patch.object(sys, "stdout", output),
+        ):
+            code = qd.main(["--config", "fixed", "chat", "--resend-id", "r"], service=service)
+        self.assertEqual(code, 0)
+        self.assertEqual(service.chatted, ("hello Captain\n", "r"))
+        self.assertEqual(output.getvalue(), "chat-message-id\n")
+
+    def test_chat_takes_no_recipient_or_subject(self):
+        for extra in (["--to", "captain"], ["--subject", "s"], ["--mail-to-captain"]):
+            with self.subTest(extra=extra), mock.patch.object(sys, "stderr", io.StringIO()):
+                with self.assertRaises(SystemExit):
+                    qd.parser().parse_args(["--config", "fixed", "chat", "--resend-id", "r", *extra])
 
     def test_a_missing_settings_file_prints_only_the_public_line(self):
         error = io.StringIO()
