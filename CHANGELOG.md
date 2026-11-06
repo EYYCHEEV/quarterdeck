@@ -6,7 +6,7 @@ All notable changes to the bot tools are listed here, newest first. Each release
 
 - `qd send` and the MCP `qd_send` now refuse mail to `captain` that is not a chat message, before anything is sent, and print how to send it right; plain mail to `captain` that used to be delivered unseen is now refused. New `qd chat` and MCP `qd_chat` send a chat message from plain text.
 - `qd send --mail-to-captain` and the `qd_send` field `mail_to_captain` allow deliberate plain mail to `captain`.
-- The wake extension for OMP now sends its wake lines and reminders as asides, so a session in the middle of a long run hears new mail at its next step instead of after the run ends. If an aside cannot be sent, the same line is sent once the old way.
+- The wake extension for OMP now tells a running session about new mail at its next step instead of after the run ends. The notice is a short count with no sender or subject, comes at most once every two minutes, and only reaches the main agent, never a subagent. Read the mail with `qd_wait` as before.
 
 ## 0.1.1
 
