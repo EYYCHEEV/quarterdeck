@@ -13,9 +13,10 @@ import {
 } from "./quarterdeck";
 
 type Handler = (event: unknown, context: ExtensionContext) => unknown;
+type SendKind = "aside" | "followUp";
 type SentMessage = {
   message: { customType: string; content: string; display: boolean };
-  options: { deliverAs: "followUp"; triggerTurn: true };
+  options: { deliverAs: SendKind; triggerTurn: true };
 };
 
 class FakeContext implements ExtensionContext {
@@ -49,10 +50,14 @@ class FakeContext implements ExtensionContext {
 class FakePi implements ExtensionApi {
   readonly context = new FakeContext();
   readonly sent: SentMessage[] = [];
+  readonly attempts: SendKind[] = [];
+  readonly delivered: SentMessage[] = [];
+  readonly pendingAsides: SentMessage[] = [];
+  readonly queuedFollowUps: SentMessage[] = [];
   readonly handlers = new Map<string, Handler[]>();
-  busy = false;
+  private readonly refusals: Record<SendKind, number> = { aside: 0, followUp: 0 };
+  runLive = false;
   startedTurns = 0;
-  queuedFollowUps = 0;
 
   on(name: string, handler: Handler) {
     const handlers = this.handlers.get(name) ?? [];
@@ -60,10 +65,40 @@ class FakePi implements ExtensionApi {
     this.handlers.set(name, handlers);
   }
 
+  refuseNext(kind: SendKind, count: number) {
+    this.refusals[kind] = count;
+  }
+
+  startRun() {
+    this.runLive = true;
+  }
+
+  stepBoundary() {
+    this.delivered.push(...this.pendingAsides.splice(0));
+  }
+
+  endRun() {
+    this.runLive = false;
+    this.delivered.push(...this.queuedFollowUps.splice(0));
+  }
+
   sendMessage(message: SentMessage["message"], options: SentMessage["options"]) {
-    this.sent.push({ message, options });
-    if (this.busy) this.queuedFollowUps += 1;
-    else if (options.triggerTurn) this.startedTurns += 1;
+    this.attempts.push(options.deliverAs);
+    if (this.refusals[options.deliverAs] > 0) {
+      this.refusals[options.deliverAs] -= 1;
+      throw new Error(`${options.deliverAs} refused`);
+    }
+    const entry = { message, options };
+    this.sent.push(entry);
+    if (this.runLive) {
+      (options.deliverAs === "aside" ? this.pendingAsides : this.queuedFollowUps).push(entry);
+      return;
+    }
+    if (options.triggerTurn) {
+      this.startedTurns += 1;
+      this.runLive = true;
+    }
+    this.delivered.push(entry);
   }
 
   async emit(name: string, event: unknown = {}) {
@@ -360,7 +395,7 @@ describe("Quarterdeck OMP wake extension", () => {
     }
   });
 
-  test("an idle session gets one follow-up turn for one mail batch", async () => {
+  test("an idle session starts one turn for one mail batch sent as an aside", async () => {
     const harness = await makeHarness([
       { messages: [mail("m-1"), mail("m-2")] },
       { holdMs: 10_000 },
@@ -371,27 +406,109 @@ describe("Quarterdeck OMP wake extension", () => {
     await waitFor(() => harness.pi.sent.length === 1);
 
     expect(harness.pi.startedTurns).toBe(1);
-    expect(harness.pi.queuedFollowUps).toBe(0);
-    expect(harness.pi.sent[0].options).toEqual({ deliverAs: "followUp", triggerTurn: true });
+    expect(harness.pi.delivered).toHaveLength(1);
+    expect(harness.pi.pendingAsides).toHaveLength(0);
+    expect(harness.pi.queuedFollowUps).toHaveLength(0);
+    expect(harness.pi.sent[0].options).toEqual({ deliverAs: "aside", triggerTurn: true });
     expect(harness.pi.sent[0].message.customType).toBe("quarterdeck.mail");
     expect(harness.pi.sent[0].message.display).toBe(true);
     expect(harness.pi.sent[0].message.content.split("\n")).toHaveLength(2);
   });
 
-  test("a busy session queues the mail batch behind the current run", async () => {
+  test("a busy session takes the mail batch as an aside at its next step boundary", async () => {
     const harness = await makeHarness(
       [{ messages: [mail("busy-1")] }, { holdMs: 10_000 }],
       { bot: "bot-b" },
     );
-    harness.pi.busy = true;
+    harness.pi.startRun();
     install(harness);
 
     await harness.pi.emit("session_start");
     await waitFor(() => harness.pi.sent.length === 1);
 
     expect(harness.pi.startedTurns).toBe(0);
-    expect(harness.pi.queuedFollowUps).toBe(1);
-    expect(harness.pi.sent[0].options.deliverAs).toBe("followUp");
+    expect(harness.pi.sent[0].options.deliverAs).toBe("aside");
+    expect(harness.pi.queuedFollowUps).toHaveLength(0);
+    expect(harness.pi.pendingAsides).toHaveLength(1);
+    harness.pi.stepBoundary();
+    expect(harness.pi.delivered).toHaveLength(1);
+  });
+
+  test("a run that never ends still hears the wake line at its first step boundary as an aside", async () => {
+    const harness = await makeHarness([
+      { messages: [] },
+      { messages: [mail("long-run-1")] },
+      { holdMs: 10_000 },
+    ]);
+    harness.pi.startRun();
+    install(harness);
+
+    await harness.pi.emit("session_start");
+    await waitFor(() => harness.pi.sent.length === 1);
+    harness.pi.stepBoundary();
+
+    expect(harness.pi.delivered).toHaveLength(1);
+    expect(harness.pi.delivered[0].message.content).toContain("id=long-run-1");
+    for (let boundary = 0; boundary < 4; boundary += 1) harness.pi.stepBoundary();
+    expect(harness.pi.runLive).toBe(true);
+    expect(harness.pi.delivered).toHaveLength(1);
+    expect(harness.pi.queuedFollowUps).toHaveLength(0);
+  });
+
+  test("an aside that throws once falls back to exactly one follow-up and the cursor still moves", async () => {
+    const harness = await makeHarness([
+      { messages: [] },
+      { messages: [mail("fallback-1")] },
+      { holdMs: 10_000 },
+    ]);
+    const cursorPath = join(harness.config.cursorRoot, harness.bot, "wake.cursor");
+    harness.pi.startRun();
+    harness.pi.refuseNext("aside", 1);
+    install(harness);
+
+    await harness.pi.emit("session_start");
+    await waitFor(async () => (await readState(harness)).calls >= 3);
+
+    expect(harness.pi.attempts).toEqual(["aside", "followUp"]);
+    expect(harness.pi.sent).toHaveLength(1);
+    expect(harness.pi.sent[0].options).toEqual({ deliverAs: "followUp", triggerTurn: true });
+    harness.pi.stepBoundary();
+    expect(harness.pi.delivered).toHaveLength(0);
+    harness.pi.endRun();
+    expect(harness.pi.delivered).toHaveLength(1);
+    expect(harness.pi.delivered[0].message.content).toContain("id=fallback-1");
+    expect((await readFile(cursorPath, "utf8")).trim()).toBe("fallback-1");
+    expect(harness.pi.attempts).toEqual(["aside", "followUp"]);
+  });
+
+  test("when the aside and the follow-up both throw the cursor stays, the backoff runs and the retry sends one line", async () => {
+    const harness = await makeHarness([
+      { messages: [] },
+      { messages: [mail("both-1")] },
+      { messages: [mail("both-1")] },
+      { holdMs: 10_000 },
+    ]);
+    const cursorPath = join(harness.config.cursorRoot, harness.bot, "wake.cursor");
+    harness.pi.refuseNext("aside", 1);
+    harness.pi.refuseNext("followUp", 1);
+    install(harness, { initialMs: 300, maximumMs: 300 });
+
+    await harness.pi.emit("session_start");
+    await waitFor(() => harness.pi.attempts.length === 2);
+
+    expect(harness.pi.attempts).toEqual(["aside", "followUp"]);
+    expect(harness.pi.sent).toHaveLength(0);
+    expect(await fileExists(cursorPath)).toBe(false);
+
+    await waitFor(async () => (await readState(harness)).calls >= 4);
+
+    expect(harness.pi.attempts).toEqual(["aside", "followUp", "aside"]);
+    expect(harness.pi.sent).toHaveLength(1);
+    expect(harness.pi.sent[0].options.deliverAs).toBe("aside");
+    expect(harness.pi.sent[0].message.content.match(/id=both-1/g)).toHaveLength(1);
+    expect(harness.pi.context.scheduledDelays.slice(0, 2)).toEqual([0, 300]);
+    expect((await readFile(cursorPath, "utf8")).trim()).toBe("both-1");
+    expect(harness.pi.sent).toHaveLength(1);
   });
 
   test("duplicate message ids are delivered once across and within batches", async () => {
@@ -453,6 +570,54 @@ describe("Quarterdeck OMP wake extension", () => {
       "--config", harness.scenarioPath, "wait", "--timeout", "0",
     ]);
     await Bun.sleep(reconcileIntervalMs / 2);
+    expect(harness.pi.sent).toHaveLength(2);
+  });
+
+  test("a reminder reaches a run that never ends as an aside at its next step boundary", async () => {
+    const reconcileIntervalMs = 80;
+    const harness = await makeHarness([
+      { messages: [mail("long-unacked")] },
+      { holdMs: reconcileIntervalMs + 20 },
+      { messages: [mail("long-unacked")] },
+      { holdMs: 10_000 },
+    ]);
+    harness.pi.startRun();
+    install(harness, { initialMs: 20, maximumMs: 40, successMs: 5 }, reconcileIntervalMs);
+
+    await harness.pi.emit("session_start");
+    await waitFor(() => harness.pi.sent.length === 1);
+    harness.pi.stepBoundary();
+    expect(harness.pi.delivered).toHaveLength(1);
+
+    await waitFor(() => harness.pi.sent.length === 2);
+    harness.pi.stepBoundary();
+
+    expect(harness.pi.delivered).toHaveLength(2);
+    expect(harness.pi.delivered[1].message.content).toContain("1 Quarterdeck mail still unhandled");
+    expect(harness.pi.attempts).toEqual(["aside", "aside"]);
+    expect(harness.pi.queuedFollowUps).toHaveLength(0);
+    expect(harness.pi.runLive).toBe(true);
+  });
+
+  test("a reminder whose aside throws once falls back to exactly one follow-up", async () => {
+    const reconcileIntervalMs = 80;
+    const harness = await makeHarness([
+      { messages: [mail("remind-fallback")] },
+      { holdMs: reconcileIntervalMs + 20 },
+      { messages: [mail("remind-fallback")] },
+      { holdMs: 10_000 },
+    ]);
+    install(harness, { initialMs: 20, maximumMs: 40, successMs: 5 }, reconcileIntervalMs);
+
+    await harness.pi.emit("session_start");
+    await waitFor(() => harness.pi.sent.length === 1);
+    harness.pi.refuseNext("aside", 1);
+    await waitFor(() => harness.pi.sent.length === 2);
+
+    expect(harness.pi.attempts).toEqual(["aside", "aside", "followUp"]);
+    expect(harness.pi.sent[1].options).toEqual({ deliverAs: "followUp", triggerTurn: true });
+    expect(harness.pi.sent[1].message.content).toContain("1 Quarterdeck mail still unhandled");
+    await waitFor(async () => (await readState(harness)).calls >= 4);
     expect(harness.pi.sent).toHaveLength(2);
   });
 
@@ -598,7 +763,7 @@ describe("Quarterdeck OMP wake extension", () => {
     expect(content).not.toContain(invite);
   });
 
-  test("the named MCP notification uses the same deduped wake path without acking", async () => {
+  test("the named MCP notification uses the same deduped wake path without acking, sending an aside", async () => {
     const harness = await makeHarness([{ holdMs: 10_000 }]);
     install(harness);
     await harness.pi.emit("session_start");
@@ -612,7 +777,7 @@ describe("Quarterdeck OMP wake extension", () => {
     await waitFor(() => harness.pi.sent.length === 1);
 
     expect(harness.pi.sent[0].message.content.match(/id=push-id/g)).toHaveLength(1);
-    expect(harness.pi.sent[0].options).toEqual({ deliverAs: "followUp", triggerTurn: true });
+    expect(harness.pi.sent[0].options).toEqual({ deliverAs: "aside", triggerTurn: true });
     const state = await readState(harness);
     expect(state.invocations.flatMap((call) => call.argv)).not.toContain("ack");
   });

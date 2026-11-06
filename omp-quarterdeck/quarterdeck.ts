@@ -38,7 +38,7 @@ export interface ExtensionApi {
   on(name: string, handler: (event: unknown, context: ExtensionContext) => unknown): void;
   sendMessage(
     message: { customType: string; content: string; display: boolean },
-    options: { deliverAs: "followUp"; triggerTurn: true },
+    options: { deliverAs: "aside" | "followUp"; triggerTurn: true },
   ): void;
 }
 
@@ -66,6 +66,8 @@ type WakeRecord = {
   remindedAt?: number;
   wokenAt: number;
 };
+
+type WakeMessage = Parameters<ExtensionApi["sendMessage"]>[0];
 
 const DEFAULT_RETRY: RetryPolicy = {
   initialMs: 1_000,
@@ -234,14 +236,11 @@ class WakeSession {
     }
 
     if (fresh.length > 0) {
-      this.state.pi.sendMessage(
-        {
-          customType: CUSTOM_MESSAGE_TYPE,
-          content: fresh.map(formatWakeLine).join("\n"),
-          display: true,
-        },
-        { deliverAs: "followUp", triggerTurn: true },
-      );
+      this.sendWake({
+        customType: CUSTOM_MESSAGE_TYPE,
+        content: fresh.map(formatWakeLine).join("\n"),
+        display: true,
+      });
       const wokenAt = Date.now();
       for (const message of fresh) this.remember(message, wokenAt);
     }
@@ -266,17 +265,22 @@ class WakeSession {
       return true;
     });
     if (due.length === 0) return;
-    this.state.pi.sendMessage(
-      {
-        customType: CUSTOM_MESSAGE_TYPE,
-        content: formatReminder(due),
-        display: true,
-      },
-      { deliverAs: "followUp", triggerTurn: true },
-    );
+    this.sendWake({
+      customType: CUSTOM_MESSAGE_TYPE,
+      content: formatReminder(due),
+      display: true,
+    });
     for (const message of due) {
       const record = this.wakeRecords.get(message.id);
       if (record) record.remindedAt = now;
+    }
+  }
+
+  private sendWake(message: WakeMessage) {
+    try {
+      this.state.pi.sendMessage(message, { deliverAs: "aside", triggerTurn: true });
+    } catch {
+      this.state.pi.sendMessage(message, { deliverAs: "followUp", triggerTurn: true });
     }
   }
 
