@@ -58,6 +58,8 @@ Each notice is a displayed `quarterdeck.mail` aside that reaches a running main 
 
 The extension also accepts the Quarterdeck MCP notification `notifications/quarterdeck/mail` from the configured MCP server. Push and polling use the same validation, de-duplication, cursor and bounded count-only notice path. Retained startup batches are coalesced into one notice. Subagents neither buffer MCP notifications nor start a poller or send a notice; a missing agent field counts as main.
 
+Pending notices retain at most 1000 message ids across startup and live delivery, never sender or subject; overflow does not advance the poller's cursor past uncounted mail, and dropped MCP ids remain unacknowledged for polling.
+
 ## Check it
 
 From this folder, run `bun test`. Then start one disposable OMP session with your configuration and confirm that a real mail starts a turn while the session is idle. A second session for the same bot must not start another `qd wait` process.

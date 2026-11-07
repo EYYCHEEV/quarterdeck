@@ -83,6 +83,8 @@ class FakePi implements ExtensionApi {
   runLive = false;
   startedTurns = 0;
   readonly receiptOutcomes: Array<"refused" | "lost"> = [];
+  loseNextAsideResponse = false;
+  lostAsideResponses = 0;
 
   sendMessageWithReceipt: ((message: SentMessage["message"], options: SentMessage["options"]) => Promise<{ admitted: boolean }>) | undefined =
     async (message, options) => {
@@ -129,13 +131,18 @@ class FakePi implements ExtensionApi {
     this.sent.push(entry);
     if (this.runLive) {
       (options.deliverAs === "aside" ? this.pendingAsides : this.queuedFollowUps).push(entry);
-      return;
+    } else {
+      if (options.triggerTurn) {
+        this.startedTurns += 1;
+        this.runLive = true;
+      }
+      this.delivered.push(entry);
     }
-    if (options.triggerTurn) {
-      this.startedTurns += 1;
-      this.runLive = true;
+    if (options.deliverAs === "aside" && this.loseNextAsideResponse) {
+      this.loseNextAsideResponse = false;
+      this.lostAsideResponses += 1;
+      throw new Error("admitted aside response lost");
     }
-    this.delivered.push(entry);
   }
 
   async emit(name: string, event: unknown = {}) {
@@ -517,13 +524,15 @@ describe("Quarterdeck OMP wake extension", () => {
       { messages: [] }, { messages: [mail("lost-1")] }, { messages: [mail("lost-1")] }, { holdMs: 10_000 },
     ]);
     const clock = useClock(harness);
-    harness.pi.receiptOutcomes.push("lost");
+    harness.pi.loseNextAsideResponse = true;
     install(harness);
     await harness.pi.emit("session_start");
     await clock.advance(0);
     const cursorPath = join(harness.config.cursorRoot, harness.bot, "wake.cursor");
     await waitFor(() => fileExists(cursorPath));
     await clock.advance(120_000);
+    expect(harness.pi.lostAsideResponses).toBe(1);
+    expect(harness.pi.loseNextAsideResponse).toBe(false);
     expect(harness.pi.attempts).toEqual(["aside"]);
     expect(harness.pi.sent).toHaveLength(1);
     expect((await readFile(cursorPath, "utf8")).trim()).toBe("lost-1");
@@ -1024,4 +1033,189 @@ describe("118f recipient-side admission and pacing", () => {
     await harness.pi.emit("mcp_notification", notification([mail("main-only")]));
     expect(harness.pi.sent.map((entry) => entry.message.content)).toEqual([oneWake]);
   });
+});
+
+function observePendingStorage(prefix: string) {
+  const sets: Set<unknown>[] = [];
+  const maps: Map<unknown, unknown>[] = [];
+  const announced = new Map<string, number>();
+  const mapSet = Map.prototype.set;
+  const setAdd = Set.prototype.add;
+  const arrayPush = Array.prototype.push;
+  let maximum = 0;
+  let metadataRetained = false;
+  const relevant = (value: unknown) => typeof value === "string" && value.startsWith(prefix);
+  const fullMessage = (value: unknown) => typeof value === "object" && value !== null
+    && "id" in value && relevant(value.id) && ("sender" in value || "subject" in value);
+  const measure = () => {
+    maximum = Math.max(maximum, sets.reduce((count, set) => count + set.size, 0)
+      + maps.reduce((count, map) => count + map.size, 0));
+  };
+  const mapSpy = spyOn(Map.prototype, "set").mockImplementation(function (this: Map<unknown, unknown>, key: unknown, value: unknown) {
+    const result = mapSet.call(this, key, value);
+    if (relevant(key) && fullMessage(value)) {
+      metadataRetained = true;
+      if (!maps.includes(this)) arrayPush.call(maps, this);
+      measure();
+    } else if (relevant(key) && typeof value === "object" && value !== null && "wokenAt" in value) {
+      mapSet.call(announced, key as string, (announced.get(key as string) ?? 0) + 1);
+    }
+    return result;
+  });
+  const setSpy = spyOn(Set.prototype, "add").mockImplementation(function (this: Set<unknown>, value: unknown) {
+    const result = setAdd.call(this, value);
+    if (relevant(value) || fullMessage(value)) {
+      if (fullMessage(value)) metadataRetained = true;
+      if (!sets.includes(this)) arrayPush.call(sets, this);
+      measure();
+    }
+    return result;
+  });
+  const arraySpy = spyOn(Array.prototype, "push").mockImplementation(function (this: unknown[], ...values: unknown[]) {
+    if (values.some((value) => Array.isArray(value) && value.some(fullMessage))) {
+      metadataRetained = true;
+    }
+    return arrayPush.apply(this, values);
+  });
+  clockRestores.push(() => {
+    mapSpy.mockRestore();
+    setSpy.mockRestore();
+    arraySpy.mockRestore();
+  });
+  return { get maximum() { return maximum; }, get metadataRetained() { return metadataRetained; }, announced };
+}
+
+async function useCursorServer(harness: Harness) {
+  const original = await readFile(standinSource, "utf8");
+  const needle = "const response = scenario.responses[Math.min(callIndex, scenario.responses.length - 1)] ?? { holdMs: 300_000 };";
+  expect(original.split(needle)).toHaveLength(2);
+  const replacement = [
+    "const sourceMessages = scenario.responses[0]?.messages ?? [];",
+    "const afterIndex = process.argv.indexOf('--after');",
+    "const after = afterIndex >= 0 ? process.argv[afterIndex + 1] : undefined;",
+    "const startAt = after === undefined ? 0 : sourceMessages.findIndex((message) => (message as { id: string }).id === after) + 1;",
+    "const timeoutIndex = process.argv.indexOf('--timeout');",
+    "const response: Response = process.argv[timeoutIndex + 1] === '0' ? { messages: [] } : { messages: sourceMessages.slice(startAt, startAt + 1000) };",
+  ].join("\n");
+  const writes = 'for (const message of response.messages ?? []) process.stdout.write(`${JSON.stringify(message)}\\n`);';
+  expect(original.split(writes)).toHaveLength(2);
+  const source = original.replace(needle, replacement).replace(writes,
+    'await Bun.write(Bun.stdout, (response.messages ?? []).map((message) => JSON.stringify(message) + "\\n").join(""));');
+  await writeFile(harness.config.qdExecutable, source, { mode: 0o700 });
+}
+
+function successTimers(clock: FakeContext) {
+  return clock.scheduledDelays.filter((delay) => delay === 250).length;
+}
+
+describe("118g capped id-only pending state", () => {
+  test("live MCP floods and repeated refusals keep at most 1000 ids and no metadata", async () => {
+    const harness = await makeHarness([{ holdMs: 10_000 }]);
+    const clock = useClock(harness);
+    const observed = observePendingStorage("118g-flood-");
+    const subject = "subject-not-retained-" + "s".repeat(10_240);
+    harness.pi.receiptOutcomes.push("refused", "refused");
+    install(harness);
+    await harness.pi.emit("session_start");
+    for (let batch = 0; batch < 12; batch += 1) {
+      const messages = Array.from({ length: 1000 }, (_, id) => mail(`118g-flood-${batch}-${id}`, {
+        sender: "sender-not-retained", subject,
+      }));
+      await harness.pi.emit("mcp_notification", notification(messages));
+    }
+    await clock.advance(120_000);
+    expect(harness.pi.attempts).toEqual(["aside", "aside"]);
+    expect(harness.pi.sent).toHaveLength(0);
+    expect(observed.maximum).toBeLessThanOrEqual(1000);
+    expect(observed.metadataRetained).toBe(false);
+    await clock.advance(120_000);
+    expect(harness.pi.sent).toHaveLength(1);
+    expect(harness.pi.sent[0].message.content).toBe("Quarterdeck: 1000 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.");
+  });
+
+  test("poll overflow advances only over the retained prefix and the next poll covers the rest once", async () => {
+    const polled = Array.from({ length: 10 }, (_, id) => mail(`118g-overflow-poll-${String(id).padStart(4, "0")}`));
+    const harness = await makeHarness([{ messages: polled }]);
+    await useCursorServer(harness);
+    const clock = useClock(harness);
+    const observed = observePendingStorage("118g-overflow-");
+    harness.pi.receiptOutcomes.push("refused");
+    install(harness);
+    await harness.pi.emit("mcp_notification", notification(
+      Array.from({ length: 995 }, (_, id) => mail(`118g-overflow-start-${id}`)),
+    ));
+    await harness.pi.emit("session_start");
+    const cursorPath = join(harness.config.cursorRoot, harness.bot, "wake.cursor");
+    expect(await fileExists(cursorPath)).toBe(false);
+    await clock.advance(0);
+    await waitFor(() => successTimers(clock) >= 1);
+    expect(await fileExists(cursorPath)).toBe(false);
+    let timers = successTimers(clock);
+    await clock.advance(120_000);
+    await waitFor(() => fileExists(cursorPath));
+    expect((await readFile(cursorPath, "utf8")).trim()).toBe("118g-overflow-poll-0004");
+    await waitFor(() => successTimers(clock) > timers);
+    timers = successTimers(clock);
+    await clock.advance(250);
+    await waitFor(() => successTimers(clock) > timers);
+    const invocations = (await readState(harness)).invocations;
+    expect(invocations.some((call) => call.argv.includes("--after") && call.argv.includes("118g-overflow-poll-0004"))).toBe(true);
+    timers = successTimers(clock);
+    await clock.advance(120_000);
+    await waitFor(async () => (await readFile(cursorPath, "utf8")).trim() === "118g-overflow-poll-0009");
+    await waitFor(() => successTimers(clock) > timers);
+    expect(harness.pi.sent.map((entry) => entry.message.content)).toEqual([
+      "Quarterdeck: 1000 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.",
+      "Quarterdeck: 5 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.",
+    ]);
+    expect(observed.maximum).toBeLessThanOrEqual(1000);
+    expect(observed.metadataRetained).toBe(false);
+    expect(observed.announced.size).toBe(1005);
+    expect([...observed.announced.values()].every((count) => count === 1)).toBe(true);
+  });
+
+  test("64 retained 1000-message batches keep 1000 ids and polling later drains every dropped id", async () => {
+    const messages = Array.from({ length: 64_000 }, (_, id) => mail(`118g-retained-${String(id).padStart(5, "0")}`));
+    const harness = await makeHarness([{ messages }]);
+    await useCursorServer(harness);
+    const clock = useClock(harness);
+    const observed = observePendingStorage("118g-retained-");
+    install(harness, { initialMs: 40, maximumMs: 80, successMs: 250 }, 86_400_000);
+    for (let batch = 0; batch < 64; batch += 1) {
+      await harness.pi.emit("mcp_notification", notification(messages.slice(batch * 1000, (batch + 1) * 1000)));
+    }
+    expect(observed.maximum).toBeLessThanOrEqual(1000);
+    expect(observed.metadataRetained).toBe(false);
+    await harness.pi.emit("session_start");
+    expect(harness.pi.sent).toHaveLength(1);
+    expect(harness.pi.sent[0].message.content).toBe("Quarterdeck: 1000 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.");
+    const cursorPath = join(harness.config.cursorRoot, harness.bot, "wake.cursor");
+    await clock.advance(0);
+    await waitFor(() => fileExists(cursorPath));
+    await waitFor(() => successTimers(clock) >= 1);
+    for (let batch = 1; batch < 64; batch += 1) {
+      let timers = successTimers(clock);
+      await clock.advance(250);
+      await waitFor(() => successTimers(clock) > timers);
+      timers = successTimers(clock);
+      await clock.advance(120_000);
+      const expected = `118g-retained-${String((batch + 1) * 1000 - 1).padStart(5, "0")}`;
+      await waitFor(async () => {
+        const actual = (await readFile(cursorPath, "utf8")).trim();
+        if (actual !== expected && harness.pi.sent.length > batch + 1) {
+          throw new Error(`retained cursor advanced unexpectedly: batch=${batch} expected=${expected} actual=${actual} notices=${harness.pi.sent.length}`);
+        }
+        return actual === expected;
+      }).catch(async (error) => {
+        throw new Error(`retained cursor check: batch=${batch} expected=${expected} actual=${(await readFile(cursorPath, "utf8")).trim()} notices=${harness.pi.sent.length} announced=${observed.announced.size}: ${error}`);
+      });
+      await waitFor(() => successTimers(clock) > timers);
+    }
+    expect(harness.pi.sent).toHaveLength(64);
+    expect(harness.pi.sent.every((entry) => entry.message.content === "Quarterdeck: 1000 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.")).toBe(true);
+    expect(observed.maximum).toBeLessThanOrEqual(1000);
+    expect(observed.metadataRetained).toBe(false);
+    expect(observed.announced.size).toBe(64_000);
+    expect([...observed.announced.values()].every((count) => count === 1)).toBe(true);
+  }, 30_000);
 });

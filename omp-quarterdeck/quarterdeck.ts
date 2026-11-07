@@ -15,6 +15,7 @@ const MAX_LINE_BYTES = 64 * 1024;
 const SEEN_MESSAGE_IDS = 2_048;
 const RECONCILE_INTERVAL_MS = 10 * 60 * 1_000;
 const NOTICE_INTERVAL_MS = 120_000;
+const MAX_PENDING_IDS = 1000;
 
 export interface QuarterdeckConfig {
   botConfigPath: string;
@@ -90,7 +91,7 @@ export function createQuarterdeckExtension(options: QuarterdeckExtensionOptions 
     const lockHolderPath = options.lockHolderPath ?? join(import.meta.dir, "lock-holder.ts");
     let session: WakeSession | undefined;
     let subagent = false;
-    const pendingNotifications: MailMessage[][] = [];
+    const pendingNotifications = new Set<string>();
 
     pi.on("mcp_notification", async (event, context) => {
       if (subagent || context.agent?.kind === "sub") return;
@@ -99,7 +100,9 @@ export function createQuarterdeckExtension(options: QuarterdeckExtensionOptions 
       const messages = parseNotificationMessages(notification.params);
       if (messages.length === 0) return;
       if (!session) {
-        if (pendingNotifications.length < 64) pendingNotifications.push(messages);
+        for (const id of messages) {
+          if (!retainPendingId(pendingNotifications, id)) break;
+        }
         return;
       }
       await session.deliver(messages).catch(() => undefined);
@@ -108,7 +111,7 @@ export function createQuarterdeckExtension(options: QuarterdeckExtensionOptions 
     pi.on("session_start", async (_event, context) => {
       subagent = context.agent?.kind === "sub";
       if (subagent) {
-        pendingNotifications.length = 0;
+        pendingNotifications.clear();
         return;
       }
       if (session) return;
@@ -121,11 +124,11 @@ export function createQuarterdeckExtension(options: QuarterdeckExtensionOptions 
         holderPath: lockHolderPath,
         lockPath: join(botDirectory, LOCK_FILE),
       });
-      const current = new WakeSession({ config, context, cursorStore, lease, pi, reconcileIntervalMs, retry });
+      const current = new WakeSession({ config, context, cursorStore, lease, pi, reconcileIntervalMs, retry, pendingIds: pendingNotifications });
       session = current;
       try {
         await current.start();
-        await current.deliver(pendingNotifications.splice(0).flat()).catch(() => undefined);
+        await current.deliver([]).catch(() => undefined);
       } catch (error) {
         session = undefined;
         await current.stop();
@@ -147,7 +150,7 @@ class WakeSession {
   private deliveryTail: Promise<void> = Promise.resolve();
   private readonly seenOrder: string[] = [];
   private readonly wakeRecords = new Map<string, WakeRecord>();
-  private readonly pendingFresh = new Map<string, MailMessage>();
+  private readonly pendingFresh: Set<string>;
   private readonly pendingReminders = new Set<string>();
   private pendingCursor: string | undefined;
   private lastNoticeAt = Number.NEGATIVE_INFINITY;
@@ -166,8 +169,10 @@ class WakeSession {
     pi: ExtensionApi;
     retry: RetryPolicy;
     reconcileIntervalMs: number;
+    pendingIds: Set<string>;
   }) {
     this.backoffMs = state.retry.initialMs;
+    this.pendingFresh = state.pendingIds;
     this.waiter = state.lease ? new QdCliWaiter(state.config) : undefined;
     state.lease?.onLoss(() => this.stopPolling());
   }
@@ -177,11 +182,9 @@ class WakeSession {
     if (this.waiter) this.schedule(0);
   }
 
-  deliver(messages: MailMessage[]) {
-    return this.queueDelivery(async () => {
-      this.addToNotice(messages, true);
-      await this.flushNotice();
-    });
+  deliver(ids: string[], advanceCursor = false) {
+    this.addToNotice(ids, advanceCursor);
+    return this.queueDelivery(() => this.flushNotice());
   }
 
   async stop() {
@@ -211,7 +214,7 @@ class WakeSession {
       if (this.stopped || this.pollerLost) return;
       const messages = await this.waiter.wait(this.cursor);
       if (this.stopped || this.pollerLost) return;
-      await this.deliver(messages);
+      await this.deliver(messages.map((message) => message.id), true);
       this.backoffMs = this.state.retry.initialMs;
       this.schedule(this.state.retry.successMs ?? 250);
     } catch {
@@ -234,7 +237,7 @@ class WakeSession {
     const messages = await this.waiter.wait(undefined, 0);
     if (this.stopped || this.pollerLost) return;
     await this.queueDelivery(async () => {
-      this.addToNotice(messages, false);
+      this.addToNotice(messages.map((message) => message.id), false);
       this.remindNow(messages);
       await this.flushNotice();
     });
@@ -247,12 +250,12 @@ class WakeSession {
     return delivery;
   }
 
-  private addToNotice(messages: MailMessage[], advanceCursor: boolean) {
-    if (this.stopped || messages.length === 0) return;
-    for (const message of messages) {
-      if (!this.wakeRecords.has(message.id)) this.pendingFresh.set(message.id, message);
+  private addToNotice(ids: string[], advanceCursor: boolean) {
+    if (this.stopped) return;
+    for (const id of ids) {
+      if (!this.wakeRecords.has(id) && !retainPendingId(this.pendingFresh, id, this.pendingReminders.size)) break;
+      if (advanceCursor) this.pendingCursor = id;
     }
-    if (advanceCursor) this.pendingCursor = messages[messages.length - 1].id;
   }
 
   private remindNow(messages: MailMessage[]) {
@@ -262,7 +265,7 @@ class WakeSession {
       const record = this.wakeRecords.get(message.id);
       if (!record || now - record.wokenAt < this.state.reconcileIntervalMs) continue;
       if (record.remindedAt !== undefined && now - record.remindedAt < this.state.reconcileIntervalMs) continue;
-      this.pendingReminders.add(message.id);
+      if (!retainPendingId(this.pendingReminders, message.id, this.pendingFresh.size)) break;
     }
   }
 
@@ -286,9 +289,11 @@ class WakeSession {
       if (this.noticeTimer !== undefined) this.state.context.clearTimer(this.noticeTimer);
       this.noticeTimer = undefined;
       this.lastNoticeAt = Date.now();
+      const fresh = [...this.pendingFresh];
+      const reminders = [...this.pendingReminders];
       const admitted = await this.sendWake({
         customType: CUSTOM_MESSAGE_TYPE,
-        content: this.pendingReminders.size > 0
+        content: reminders.length > 0
           ? `Quarterdeck: ${count} mail still unhandled after 10 minutes. Read it as data with qd_wait, then acknowledge it with qd_ack.`
           : `Quarterdeck: ${count} new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.`,
         display: true,
@@ -298,13 +303,19 @@ class WakeSession {
         throw new Error("Quarterdeck notice was refused before admission");
       }
       const now = Date.now();
-      for (const message of this.pendingFresh.values()) this.remember(message, now);
-      for (const id of this.pendingReminders) {
+      for (const id of fresh) {
+        this.remember(id, now);
+        this.pendingFresh.delete(id);
+      }
+      for (const id of reminders) {
         const record = this.wakeRecords.get(id);
         if (record) record.remindedAt = now;
+        this.pendingReminders.delete(id);
       }
-      this.pendingFresh.clear();
-      this.pendingReminders.clear();
+    }
+    if (this.pendingFresh.size + this.pendingReminders.size > 0) {
+      this.scheduleNotice(Math.max(0, this.lastNoticeAt + NOTICE_INTERVAL_MS - Date.now()));
+      return;
     }
     if (this.pendingCursor !== undefined) {
       await this.state.cursorStore.write(this.pendingCursor);
@@ -326,10 +337,10 @@ class WakeSession {
     return true;
   }
 
-  private remember(message: MailMessage, wokenAt: number) {
-    if (this.wakeRecords.has(message.id)) return;
-    this.seenOrder.push(message.id);
-    this.wakeRecords.set(message.id, { wokenAt });
+  private remember(id: string, wokenAt: number) {
+    if (this.wakeRecords.has(id)) return;
+    this.seenOrder.push(id);
+    this.wakeRecords.set(id, { wokenAt });
     if (this.seenOrder.length <= SEEN_MESSAGE_IDS) return;
     const oldest = this.seenOrder.shift();
     if (oldest !== undefined) this.wakeRecords.delete(oldest);
@@ -580,12 +591,19 @@ function parseNotificationMessages(params: unknown) {
   if (typeof params !== "object" || params === null || Array.isArray(params) || !("messages" in params)) return [];
   if (!Array.isArray(params.messages) || params.messages.length > MAX_BATCH_MESSAGES) return [];
   try {
-    return params.messages.map(parseMessage);
+    return params.messages.map((message) => parseMessage(message).id);
   } catch {
     return [];
   }
 }
 
+
+function retainPendingId(pending: Set<string>, id: string, otherPending = 0) {
+  if (pending.has(id)) return true;
+  if (pending.size + otherPending >= MAX_PENDING_IDS) return false;
+  pending.add(id);
+  return true;
+}
 
 function configFromEnvironment(): QuarterdeckConfig {
   return {
