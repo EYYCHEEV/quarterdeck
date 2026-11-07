@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 
 type Response = {
   exitCode?: number;
@@ -35,8 +35,13 @@ try {
 const callIndex = state.calls;
 state.calls += 1;
 state.invocations.push({ argv: process.argv.slice(2), at: Date.now() });
-writeFileSync(scenario.statePath, JSON.stringify(state), { mode: 0o600 });
-if (scenario.envPath) writeFileSync(scenario.envPath, JSON.stringify(Object.keys(process.env).sort()), { mode: 0o600 });
+const writeAtomic = (path: string, text: string) => {
+  const temporary = `${path}.${process.pid}.tmp`;
+  writeFileSync(temporary, text, { mode: 0o600 });
+  renameSync(temporary, path);
+};
+if (scenario.envPath) writeAtomic(scenario.envPath, JSON.stringify(Object.keys(process.env).sort()));
+writeAtomic(scenario.statePath, JSON.stringify(state));
 
 const response = scenario.responses[Math.min(callIndex, scenario.responses.length - 1)] ?? { holdMs: 300_000 };
 const markStopped = () => {
