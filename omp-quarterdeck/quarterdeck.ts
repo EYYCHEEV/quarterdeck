@@ -318,9 +318,10 @@ class WakeSession {
       return;
     }
     if (this.pendingCursor !== undefined) {
-      await this.state.cursorStore.write(this.pendingCursor);
-      this.cursor = this.pendingCursor;
-      this.pendingCursor = undefined;
+      const written = this.pendingCursor;
+      await this.state.cursorStore.write(written);
+      this.cursor = written;
+      if (this.pendingCursor === written) this.pendingCursor = undefined;
     }
   }
 
