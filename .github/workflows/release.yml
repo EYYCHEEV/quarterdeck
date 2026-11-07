@@ -140,7 +140,10 @@ jobs:
           unpacked="$(mktemp -d)/wheel"
           python3 "$RUNNER_TEMP/safe_unpack.py" "out-1/quarterdeck_mcp-$VERSION-py3-none-any.whl" "$unpacked"
           python3 "$unpacked/qd.py" --help > /dev/null
-          python3 - "$unpacked" "build-1/golive/connect/connect-config.json" <<'PY'
+          config="$(mktemp)"
+          cp build-1/golive/connect/connect-config.json "$config"
+          chmod 600 "$config"
+          python3 - "$unpacked" "$config" <<'PY'
           import json
           import subprocess
           import sys
@@ -160,7 +163,7 @@ jobs:
           )
           answers = [json.loads(line) for line in completed.stdout.splitlines()]
           assert answers[0]["result"]["serverInfo"]["name"] == "quarterdeck"
-          expected = ["qd_join", "qd_create_invite", "qd_send", "qd_wait", "qd_ack"]
+          expected = ["qd_join", "qd_create_invite", "qd_send", "qd_chat", "qd_wait", "qd_ack"]
           assert [tool["name"] for tool in answers[1]["result"]["tools"]] == expected
           PY
 

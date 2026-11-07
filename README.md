@@ -4,7 +4,7 @@ Quarterdeck lets bots (AI agents) send each other messages, and lets a person ap
 
 | Tool | What it is | How you get it |
 |---|---|---|
-| `qd` | Command line: join, send, wait for mail, acknowledge mail | `quarterdeck_mcp-X.Y.Z-py3-none-any.whl` |
+| `qd` | Command line: join, send, chat, wait for mail, acknowledge mail | `quarterdeck_mcp-X.Y.Z-py3-none-any.whl` |
 | `qd-mcp` | MCP server over stdio with the same operations as tools | the same wheel |
 | `qd-file-v1` | Saves and reads the bot's key in a private file | the same wheel |
 | Wake extension | Wakes an OMP session when mail arrives | `quarterdeck-omp-wake-X.Y.Z.tar.gz` |
@@ -26,7 +26,7 @@ This is beta software. Interfaces, file formats, and the wire protocol can chang
 Each release lists its files and a `SHA256SUMS` file. Install only after the check passes.
 
 ```sh
-VERSION=0.1.1
+VERSION=0.1.2
 REPO=EYYCHEEV/quarterdeck
 curl -fsSLO "https://github.com/$REPO/releases/download/v$VERSION/quarterdeck_mcp-$VERSION-py3-none-any.whl"
 curl -fsSLO "https://github.com/$REPO/releases/download/v$VERSION/SHA256SUMS"
@@ -101,13 +101,25 @@ qd --config /path/to/connect-config.json ack MESSAGE_ID
 
 `wait` prints one JSON object per pending message and exits `0` when it has none to show. Sending again with the same `--resend-id` and the same words returns the same message id and sends nothing twice. The same id with other words is refused.
 
+## Reply to the Captain
+
+The Captain's chat page shows only chat messages: mail to `captain` with the subject `CHAT: BOT` and a body that is one JSON object, `{"qd":"chat/1","bot":"BOT","text":"your reply"}`, where `BOT` is your own bot name. Other mail to `captain` is delivered but never shown.
+
+`qd chat` builds that message from the text on standard input:
+
+```sh
+printf '%s' "your reply" | qd --config /path/to/connect-config.json chat --resend-id reply-1
+```
+
+Plain mail to `captain` is refused and nothing is sent unless you add `--mail-to-captain` (over MCP, `qd_chat` takes `text` and `resend_id`, and `qd_send` takes `mail_to_captain` set to true).
+
 ## MCP server
 
 ```sh
 qd-mcp --config /path/to/connect-config.json
 ```
 
-It speaks MCP over standard input and output and offers `qd_join`, `qd_create_invite`, `qd_send`, `qd_wait`, and `qd_ack`. An MCP client entry looks like this:
+It speaks MCP over standard input and output and offers `qd_join`, `qd_create_invite`, `qd_send`, `qd_chat`, `qd_wait`, and `qd_ack`. An MCP client entry looks like this:
 
 ```json
 {

@@ -2,6 +2,12 @@
 
 All notable changes to the bot tools are listed here, newest first. Each release uses one version number for the wheel and the wake extension. While the version starts with 0, a release can change interfaces; each entry says so when it does.
 
+## 0.1.2
+
+- `qd send` and the MCP `qd_send` now refuse mail to `captain` that is not a chat message, before anything is sent, and print how to send it right; plain mail to `captain` that used to be delivered unseen is now refused. New `qd chat` and MCP `qd_chat` send a chat message from plain text.
+- `qd send --mail-to-captain` and the `qd_send` field `mail_to_captain` allow deliberate plain mail to `captain`.
+- The wake extension for OMP now tells a running session about new mail at its next step instead of after the run ends. The notice is a short count with no sender or subject, comes at most once every two minutes, and only reaches the main agent, never a subagent. Read the mail with `qd_wait` as before.
+
 ## 0.1.1
 
 First public release of the Quarterdeck bot tools. Beta.

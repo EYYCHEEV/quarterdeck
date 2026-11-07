@@ -1,9 +1,15 @@
+import ast
 import io
 import sys
 import unittest
+from pathlib import Path
 from unittest import mock
 
 import qd_mcp
+
+
+ROOT = Path(__file__).resolve().parent
+RELEASE_WORKFLOW = ROOT.parents[1] / ".github" / "workflows" / "release.yml"
 
 
 class FakeService:
@@ -17,9 +23,14 @@ class FakeService:
         self.calls.append(("create-invite", bot))
         return "two-step stand-in prompt"
 
-    def send(self, recipient, subject, body, resend_key):
+    def send(self, recipient, subject, body, resend_key, mail_to_captain=False):
         self.calls.append(("send", recipient, subject, body, resend_key))
+        self.mail_to_captain = mail_to_captain
         return "message-id"
+
+    def chat(self, text, resend_id):
+        self.calls.append(("chat", text, resend_id))
+        return "chat-message-id"
 
     def wait(self, after, timeout):
         self.calls.append(("wait", after, timeout))
@@ -30,14 +41,46 @@ class FakeService:
 
 
 class McpTests(unittest.TestCase):
-    def test_lists_join_invite_send_wait_and_ack(self):
+    def test_lists_join_invite_send_chat_wait_and_ack(self):
         server = qd_mcp.Server(FakeService())
         response = server.handle({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}})
         names = [tool["name"] for tool in response["result"]["tools"]]
         self.assertEqual(
             names,
-            ["qd_join", "qd_create_invite", "qd_send", "qd_wait", "qd_ack"],
+            ["qd_join", "qd_create_invite", "qd_send", "qd_chat", "qd_wait", "qd_ack"],
         )
+
+    def test_the_release_workflow_expects_exactly_the_servers_tool_list(self):
+        lines = [
+            line.strip()
+            for line in RELEASE_WORKFLOW.read_text(encoding="utf-8").splitlines()
+            if line.strip().startswith("expected = [")
+        ]
+        self.assertEqual(len(lines), 1)
+        expected = ast.literal_eval(lines[0].partition("=")[2].strip())
+        response = qd_mcp.Server(FakeService()).handle(
+            {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}
+        )
+        names = [tool["name"] for tool in response["result"]["tools"]]
+        self.assertEqual(expected, names)
+
+    def test_the_release_workflow_hands_the_wheel_test_a_private_copy_of_the_settings(self):
+        text = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+        start = text.index("      - name: Test the wheel after unpacking it into an empty folder\n")
+        end = text.index("\n      - name:", start + 1)
+        step = [line.strip() for line in text[start:end].splitlines()]
+        committed = "build-1/golive/connect/connect-config.json"
+        calls = [index for index, line in enumerate(step) if line.startswith("python3 - ")]
+        self.assertEqual(len(calls), 1)
+        call = step[calls[0]]
+        self.assertNotIn(committed, call)
+        self.assertTrue(call.startswith('python3 - "$unpacked" "$config" '), call)
+        before = step[: calls[0]]
+        self.assertEqual(before.count('config="$(mktemp)"'), 1)
+        made = before.index('config="$(mktemp)"')
+        self.assertEqual([line for line in step if committed in line], [f'cp {committed} "$config"'])
+        self.assertLess(made, before.index(f'cp {committed} "$config"'))
+        self.assertLess(before.index(f'cp {committed} "$config"'), before.index('chmod 600 "$config"'))
 
     def test_dispatches_each_tool_without_accepting_a_credential(self):
         service = FakeService()
@@ -52,6 +95,7 @@ class McpTests(unittest.TestCase):
             ),
             ("qd_create_invite", {"bot": "next-bot"}),
             ("qd_send", {"to": "other", "subject": "s", "body": "b", "resend_id": "r"}),
+            ("qd_chat", {"text": "hello", "resend_id": "r"}),
             ("qd_wait", {"after": None, "timeout": 1.0}),
             ("qd_ack", {"id": "message-id"}),
         ]
@@ -75,6 +119,7 @@ class McpTests(unittest.TestCase):
                 ),
                 ("create-invite", "next-bot"),
                 ("send", "other", "s", "b", "r"),
+                ("chat", "hello", "r"),
                 ("wait", None, 1.0),
                 ("ack", "message-id"),
             ],
@@ -82,6 +127,24 @@ class McpTests(unittest.TestCase):
         listed_schema = server.handle({"jsonrpc": "2.0", "id": 9, "method": "tools/list", "params": {}})
         self.assertNotIn("key", str(listed_schema).lower())
         self.assertNotIn("credential", str(listed_schema).lower())
+
+    def test_send_passes_mail_to_captain_to_the_service_only_when_given(self):
+        for extra, expected in (({}, False), ({"mail_to_captain": False}, False), ({"mail_to_captain": True}, True)):
+            with self.subTest(extra=extra):
+                service = FakeService()
+                response = qd_mcp.Server(service).handle(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "tools/call",
+                        "params": {
+                            "name": "qd_send",
+                            "arguments": {"to": "captain", "subject": "s", "body": "b", "resend_id": "r", **extra},
+                        },
+                    }
+                )
+                self.assertFalse(response["result"].get("isError", False))
+                self.assertIs(service.mail_to_captain, expected)
 
     def test_create_invite_accepts_no_target_bot_and_exposes_no_key_field(self):
         service = FakeService()

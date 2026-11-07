@@ -28,6 +28,8 @@ MAX_CONFIG_BYTES = 65536
 MAX_HTTP_BODY_BYTES = 8192
 REQUEST_PATH = "/qd/join/request"
 COLLECT_PATH = "/qd/join/collect"
+CAPTAIN = "captain"
+CHAT_SCHEMA = "chat/1"
 
 
 class ConnectRefused(RuntimeError):
@@ -68,6 +70,60 @@ def validate_api_key(value: bytearray) -> None:
 
 class JoinPending(ConnectRefused):
     pass
+
+
+class MailRefused(ConnectRefused):
+    RESEND = {
+        "cli": "Send it with: printf '%s' \"your reply\" | qd --config CONFIG chat --resend-id ID",
+        "mcp": "Send it with the qd_chat tool (text, resend_id).",
+    }
+    FLAG = {
+        "cli": "Deliberate plain mail to captain: add --mail-to-captain.",
+        "mcp": "Deliberate plain mail to captain: set mail_to_captain to true.",
+    }
+
+    def __init__(self, bot: str | None = None, *, empty_chat: bool = False) -> None:
+        super().__init__("mail to captain refused")
+        self.bot = bot if bot is not None else "<bot>"
+        self.empty_chat = empty_chat
+
+    def text(self, surface: str) -> str:
+        if self.empty_chat:
+            return "qd: refused: chat text is empty."
+        shape = json.dumps(
+            {"qd": CHAT_SCHEMA, "bot": self.bot, "text": "your reply"},
+            separators=(",", ":"),
+        )
+        return "\n".join(
+            [
+                "qd: refused: mail to captain must be a chat message, or he never sees it.",
+                self.RESEND[surface],
+                f'That sends subject "CHAT: {self.bot}" and body {shape}.',
+                f'Recipe: "Reply to the Captain" in the Quarterdeck README. {self.FLAG[surface]}',
+            ]
+        )
+
+
+def _no_constant(name: str) -> None:
+    raise ValueError(name)
+
+
+def is_chat_message(bot: str, subject: Any, body: Any) -> bool:
+    if subject != f"CHAT: {bot}" or not isinstance(body, str):
+        return False
+    try:
+        document = json.loads(body, parse_constant=_no_constant)
+    except (ValueError, RecursionError):
+        return False
+    if not isinstance(document, dict):
+        return False
+    text = document.get("text")
+    return (
+        document.get("qd") == CHAT_SCHEMA
+        and document.get("bot") == bot
+        and isinstance(text, str)
+        and text.strip() != ""
+    )
 
 
 @dataclass(slots=True)
@@ -677,8 +733,36 @@ class ConnectService:
             elif isinstance(key, bytearray):
                 clear(key)
 
-    def send(self, recipient: str, subject: str, body: str, resend_id: str) -> str:
+    def _own_bot(self) -> str | None:
+        bot = getattr(self.adapter, "bot_name", None)
+        if isinstance(bot, str) and BOT_NAME.fullmatch(bot) is not None:
+            return bot
+        return None
+
+    def send(
+        self,
+        recipient: str,
+        subject: str,
+        body: str,
+        resend_id: str,
+        *,
+        mail_to_captain: bool = False,
+    ) -> str:
+        if recipient == CAPTAIN and mail_to_captain is not True:
+            bot = self._own_bot()
+            if bot is None or not is_chat_message(bot, subject, body):
+                raise MailRefused(bot)
         return self._mail(lambda mailbox: mailbox.send(recipient, subject, body, resend_id))
+
+    def chat(self, text: str, resend_id: str) -> str:
+        bot = self._own_bot()
+        if bot is None:
+            raise MailRefused()
+        text = text.rstrip()
+        if not text:
+            raise MailRefused(bot, empty_chat=True)
+        body = json.dumps({"qd": CHAT_SCHEMA, "bot": bot, "text": text}, ensure_ascii=False)
+        return self.send(CAPTAIN, f"CHAT: {bot}", body, resend_id)
 
     def wait(self, after: str | None, timeout: float | None) -> list[dict[str, Any]]:
         return self._mail(lambda mailbox: qd_jmap.wait(mailbox, after, timeout))
