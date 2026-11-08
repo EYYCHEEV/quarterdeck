@@ -30,6 +30,8 @@ Say how you found the problem, how you checked the change, and what you saw. Giv
 
 ## Set up and check
 
+### Bot tools
+
 You need Python 3.11 or newer, Bun, and `flock`. Run the same checks as CI from the repository root:
 
 ```sh
@@ -42,24 +44,84 @@ python3 -m unittest discover -s qd-client-wheel -p 'test_*.py'
 
 Tests use in-process stand-ins. A test must never reach a real server, a real mailbox, or a real key.
 
+### Web app
+
+You need Node 22 and npm. The exact Node version CI uses is in `tools/ci/pins.json`. Start here:
+
+```sh
+cd apps/web
+npm ci --ignore-scripts
+npm run build:app
+npm run serve:app
+```
+
+`npm run serve:app` serves the build on your own machine and prints the address to open. The layout follows the window width.
+
+Before a pull request, run the checks for what you changed:
+
+| Command | What it proves |
+|---|---|
+| `npm run lint` | The web app's lint rules pass, including no comments |
+| `npm run typecheck` | The app type-checks |
+| `npm run test:data` | The data, domain, platform, UI and tool unit tests pass |
+| `npm run test:taskcard` | The task card and answer rules hold |
+| `npm run test:app` | The app shell works in a browser |
+| `npm run test:chat` | The chat screens work in a browser |
+| `npm run design:check` | Every screen and pop-up at 390, 744x1133, 1133x744 and 1512: locked rules, close paths, layout, and the first screen on a slow phone |
+| `npm run build:app` | The app builds. CI also builds `npm run build:app -- --server` and `npm run build:app -- --server --chat` |
+
+CI runs all of them on every pull request, so you do not have to run each one. The browser checks need the pinned Chrome for Testing browser, set through `QD_CHROME`. Never run `npx playwright install`. If you cannot run a browser check, say so in the pull request. See [docs/operations/CI.md](docs/operations/CI.md).
+
 ## Code rules
 
-- No comments in code, no docstrings, and no commented-out code. If code needs explaining, give it a better name or add a test. License and notice text is not a comment and stays. The `no-comments` check in CI fails a pull request that adds one.
+- No comments in code, no docstrings, and no commented-out code. If code needs explaining, give it a better name or add a test. License and notice text is not a comment and stays. There is no keep-list and no exception list. The `no-comments` check in CI fails a pull request that adds one.
 - The client uses only the Python standard library. Adding a dependency needs a proposal first.
 - Do not change a wire field, a configuration key, or an error message that a test compares without saying so in the pull request.
-- Keep secrets out of everything: code, tests, fixtures, issues, logs, and commit messages. Use `bot-a`, `bot-b`, and `bot-c` for bot names and `example.com` or `example.test` for hosts.
+- New or changed behavior comes with a test that fails without the change.
+- Never commit screenshots. A screenshot that CI makes is a short-lived artifact made from fixture data.
+- Keep secrets out of everything: code, tests, fixtures, issues, logs, and commit messages. Use `bot-a`, `bot-b`, and `bot-c` for bot names and `example.com` or `example.test` for hosts. The web app's fixtures use the one-word fictional names Alba, Dale and Iris, so that avatar initials stay single letters.
+- The engineering rules behind these are in [docs/internals/ENGINEERING.md](docs/internals/ENGINEERING.md).
 
 ## Pull request rules
 
 - Use a conventional commit title in plain words, for example `fix(qd): refuse an empty invite`. Maintainers squash-merge and use the title as the commit message.
 - Fill in the pull request template.
-- The required checks must pass on the final commit.
-- Keep your branch current with `main`.
+- The required checks must pass on the final commit: `qd-check`, `qd-review` and `pr-title`. A maintainer posts `qd-review` when the review of the current head is done.
+- Keep your branch current with `main` by merging `main` into it. Never rebase or force-push a branch you have pushed.
+- Nobody pushes to `main` directly.
+- One maintainer, the integration owner, merges when the required checks are green on the current head. Pull requests are merged one at a time.
 - Add a line to [CHANGELOG.md](CHANGELOG.md) under the next version for any change a user can see.
+
+## Commit messages and pull request titles
+
+Use [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/): `type(scope): summary`.
+
+- Types: `feat`, `fix`, `docs`, `test`, `ci`, `chore`, `refactor`, `perf`, `build`.
+- Scopes we use: `qd`, `web`, `chat`, `tokens`, `data`, `task-card`, `design-check`, `build`. A short lowercase word that names the part you changed is also fine.
+- Example: `feat(chat): show "bot-a is writing" while a reply is in progress`.
+
+## Pull request text
+
+- The template's Screens section holds what is on screen, which screens to open, the widths you checked and the first-screen number. Do not repeat them as separate lines elsewhere.
+- Say "a maintainer", not a person's name.
+- Do not refer to private repositories, internal records, or private conversations, and do not name people.
+- Keep keys, invites, tokens, message bodies, machine names, user names, file paths, and network addresses out of the title, the description, and every comment.
+
+## Third-party code
+
+Borrowed code or values keep their license. Add them to [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), put the full license text in [licenses](licenses), and credit them in the Attribution section at the end of [README.md](README.md). Credit does not go in file headers. A new package is its own pull request that names the lock file change.
+
+## Issues
+
+Report app and server bugs as public issues, with the public bug form. Choose the area: web, server, bot tools, or docs. Propose features with the feature proposal form. Security reports go through private vulnerability reporting, as [SECURITY.md](SECURITY.md) describes.
+
+## How releases work
+
+See [docs/operations](docs/operations): [LIFECYCLE.md](docs/operations/LIFECYCLE.md) for how a change becomes a release, [CI.md](docs/operations/CI.md) for the checks and pins, and [RELEASES.md](docs/operations/RELEASES.md) for releases.
 
 ## If an agent helped
 
-You may use an agent. You are responsible for every line you submit, so read it and run it. Name the model and tool in the pull request template.
+You may use an agent. You are responsible for every line you submit, so read it and run it. Name the model and tool in the pull request template. Agents follow [AGENTS.md](AGENTS.md).
 
 ## Your contribution and the license
 

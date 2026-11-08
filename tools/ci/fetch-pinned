@@ -1,0 +1,133 @@
+import hashlib
+import json
+import os
+import pathlib
+import shutil
+import stat
+import subprocess
+import sys
+import tarfile
+import tempfile
+import urllib.request
+import zipfile
+
+PINS_FILE = pathlib.Path(__file__).resolve().with_name("pins.json")
+ATTEMPTS = 2
+CHUNK = 1 << 20
+
+
+class PinMismatch(Exception):
+    pass
+
+
+def open_url(url):
+    return urllib.request.urlopen(url, timeout=120)
+
+
+def sha256_of(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for block in iter(lambda: handle.read(CHUNK), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def download(name, pin, target):
+    last = None
+    for attempt in range(ATTEMPTS):
+        try:
+            with open_url(pin["url"]) as response, open(target, "wb") as out:
+                shutil.copyfileobj(response, out, CHUNK)
+            check_archive(name, pin, target)
+            return
+        except (OSError, PinMismatch) as error:
+            last = error
+    reason = str(last) if isinstance(last, PinMismatch) else type(last).__name__
+    raise PinMismatch(f"{name}: download failed after {ATTEMPTS} attempts: {reason}")
+
+
+def check_archive(name, pin, target):
+    size = os.path.getsize(target)
+    if pin.get("bytes") is not None and size != pin["bytes"]:
+        raise PinMismatch(f"{name}: size differs from the pin")
+    if sha256_of(target) != pin["sha256"]:
+        raise PinMismatch(f"{name}: archive sha256 differs from the pin")
+
+
+def inside(base, candidate):
+    base = os.path.realpath(base)
+    candidate = os.path.realpath(candidate)
+    return candidate == base or candidate.startswith(base + os.sep)
+
+
+def extract(name, pin, archive, destination):
+    destination.mkdir(parents=True, exist_ok=True)
+    if pin["format"] == "zip":
+        with zipfile.ZipFile(archive) as bundle:
+            for member in bundle.infolist():
+                if not inside(destination, destination / member.filename):
+                    raise PinMismatch(f"{name}: archive member leaves the target folder")
+            bundle.extractall(destination)
+            for member in bundle.infolist():
+                bits = (member.external_attr >> 16) & 0o111
+                if bits and not member.is_dir():
+                    target = destination / member.filename
+                    target.chmod(target.stat().st_mode | bits)
+        return
+    mode = {"tar.xz": "r:xz", "tar.gz": "r:gz"}[pin["format"]]
+    with tarfile.open(archive, mode) as bundle:
+        for member in bundle.getmembers():
+            if not inside(destination, destination / member.name):
+                raise PinMismatch(f"{name}: archive member leaves the target folder")
+            if member.issym() or member.islnk():
+                if not inside(destination, (destination / member.name).parent / member.linkname):
+                    raise PinMismatch(f"{name}: archive link leaves the target folder")
+        bundle.extractall(destination, filter="data")
+
+
+def verify_binary(name, pin, root):
+    binary = root / pin["binary"]
+    if not binary.is_file():
+        raise PinMismatch(f"{name}: the pinned binary is missing")
+    if pin.get("binary_sha256") is not None and sha256_of(binary) != pin["binary_sha256"]:
+        raise PinMismatch(f"{name}: binary sha256 differs from the pin")
+    binary.chmod(binary.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    if pin.get("version_output") is not None:
+        shown = subprocess.run([str(binary), *pin["version_args"]], capture_output=True, text=True, timeout=60)
+        if shown.stdout.strip() != pin["version_output"]:
+            raise PinMismatch(f"{name}: the binary reports a different version")
+    return binary
+
+
+def fetch(name, pin, root):
+    with tempfile.TemporaryDirectory() as scratch:
+        archive = pathlib.Path(scratch) / "download"
+        download(name, pin, archive)
+        extract(name, pin, archive, root / pin["extract_dir"])
+    return verify_binary(name, pin, root)
+
+
+def pinned_root():
+    base = os.environ.get("RUNNER_TEMP") or tempfile.gettempdir()
+    return pathlib.Path(base) / "pinned"
+
+
+def main(argv):
+    pins = json.loads(PINS_FILE.read_text(encoding="utf-8"))
+    names = argv[1:]
+    if not names or any(name not in pins for name in names):
+        print("usage: fetch-pinned NAME... where NAME is one of: " + ", ".join(sorted(pins)), file=sys.stderr)
+        return 2
+    root = pinned_root()
+    for name in names:
+        try:
+            binary = fetch(name, pins[name], root)
+        except PinMismatch as error:
+            print(f"fetch-pinned: FAIL {error}", file=sys.stderr)
+            return 1
+        print(f"fetch-pinned: ok {name} {pins[name]['version']} {binary}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

@@ -1,0 +1,86 @@
+import hashlib
+import os
+import pathlib
+import subprocess
+import sys
+
+REGULAR_MODES = {"100644", "100755"}
+BINARIES_FILE = "tools/ci/binaries.txt"
+
+
+def tracked_entries(root):
+    listed = subprocess.run(["git", "ls-files", "-s", "-z"], cwd=root, capture_output=True, check=True)
+    entries = []
+    for record in listed.stdout.decode("utf-8").split("\0"):
+        if not record:
+            continue
+        meta, name = record.split("\t", 1)
+        entries.append((meta.split()[0], name))
+    return entries
+
+
+def is_binary(data):
+    if b"\0" in data:
+        return True
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        return True
+    return False
+
+
+def read_allowlist(root):
+    path = root / BINARIES_FILE
+    allowed = {}
+    if not path.is_file():
+        return allowed
+    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip():
+            continue
+        digest, _, name = line.partition("  ")
+        if len(digest) != 64 or not name:
+            allowed[f"{BINARIES_FILE}:{number}"] = "malformed"
+            continue
+        allowed[name] = digest
+    return allowed
+
+
+def findings(root):
+    found = []
+    allowed = read_allowlist(root)
+    seen = set()
+    for mode, name in tracked_entries(root):
+        if mode not in REGULAR_MODES:
+            found.append((name, "special-or-symlink" if mode == "120000" else "not-a-regular-file"))
+            continue
+        full = root / name
+        if full.is_symlink() or not full.is_file():
+            found.append((name, "not-a-regular-file"))
+            continue
+        data = full.read_bytes()
+        if not is_binary(data):
+            continue
+        seen.add(name)
+        if name not in allowed:
+            found.append((name, "binary-not-listed"))
+        elif allowed[name] != hashlib.sha256(data).hexdigest():
+            found.append((name, "binary-hash-differs"))
+    for name, value in allowed.items():
+        if value == "malformed":
+            found.append((name, "binaries-list-malformed"))
+        elif name not in seen:
+            found.append((name, "binaries-list-entry-without-binary"))
+    return sorted(found)
+
+
+def main():
+    root = pathlib.Path(os.environ.get("FILE_KINDS_ROOT") or ".").resolve()
+    found = findings(root)
+    for name, kind in found:
+        print(f"{name} {kind}")
+    print(f"file-kinds: {len(found)} finding(s)")
+    return 1 if found else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
