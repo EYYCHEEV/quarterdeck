@@ -1,0 +1,51 @@
+.sheet{max-height:94dvh;border-top-left-radius:28px;border-top-right-radius:28px}
+.sheet-narrow{max-width:480px}
+.sheet-wide{max-width:560px}
+.sheet-handle{height:var(--spacing);width:calc(var(--spacing)*10);background-color:var(--color-line-3)}
+.sheet-top{padding-top:calc(var(--spacing)*4)}
+.sheet-body{padding-bottom:max(20px,env(safe-area-inset-bottom))}
+.sheet-toast{top:max(16px,env(safe-area-inset-top));z-index:60}
+.sheet-danger{border-color:var(--color-red)}
+.join-code{font-size:var(--text-screen-wide);line-height:1.15;letter-spacing:.1em}
+:where(.settings-rows>:not(:last-child)){border-top-width:0;border-bottom:1px solid var(--color-line)}
+.settings-row{min-height:calc(var(--spacing)*13)}
+.settings-row-md{min-height:62px}
+.settings-row-lg{min-height:66px}
+.settings-badge{background-color:var(--color-brass-soft)}
+.settings-switch{width:60px}
+.settings-track{height:calc(var(--spacing)*8);width:calc(var(--spacing)*14);padding:calc(var(--spacing)*.5)}
+.settings-knob{background-color:var(--color-ink-2)}
+.settings-knob.is-on{translate:calc(var(--spacing)*6) 0;background-color:var(--color-brass-ink)}
+.settings-choices{padding:var(--spacing)}
+.settings-columns{gap:calc(var(--spacing)*8)}
+.settings-files{padding-block:calc(var(--spacing)*3.5)}
+.settings-bar,.settings-bar>span{height:calc(var(--spacing)*2)}
+.settings-bar>span{width:32%}
+.settings-toast{bottom:calc(var(--spacing)*6)}
+.settings-mac{grid-template-columns:256px minmax(0,1fr)}
+.settings-main{padding-inline:calc(var(--spacing)*8);padding-top:calc(var(--spacing)*6)}
+.settings-page{max-width:920px}
+.settings-lead{padding-bottom:calc(var(--spacing)*5)}
+.settings-title{padding-bottom:calc(var(--spacing)*5);font-size:var(--text-screen-wide)}
+.settings-crumb{margin-right:calc(var(--spacing)*2)}
+.settings-narrow{max-width:660px}
+.settings-phone{padding-bottom:calc(var(--spacing)*20)}
+.signed-out{padding-inline:calc(var(--spacing)*6)}
+.signed-out-box{max-width:360px}
+.signed-out-mark{width:calc(var(--spacing)*14);height:calc(var(--spacing)*14)}
+@media not all and (min-width:700px){
+.sheet-act,.sheet-act-end,.sheet-act-start{width:100%}
+}
+@media(min-width:700px){
+.sheet{max-height:calc(100dvh - 48px);border-radius:var(--radius-card)}
+.sheet-handle{display:none}
+.sheet-act-end{justify-self:flex-end}
+.sheet-act-start{justify-self:flex-start}
+.settings-row{min-height:calc(var(--spacing)*16)}
+.settings-files{padding-block:calc(var(--spacing)*4)}
+}
+@media(min-width:1000px){
+.settings-split{grid-template-columns:repeat(2,minmax(0,1fr))}
+.settings-span{grid-column:span 2/span 2}
+.settings-main{padding-inline:calc(var(--spacing)*10)}
+}

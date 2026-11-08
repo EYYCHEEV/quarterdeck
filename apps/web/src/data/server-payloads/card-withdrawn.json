@@ -1,0 +1,19 @@
+{
+  "card": {
+    "id": "shelvorn-6",
+    "project": "quarterdeck",
+    "lane": "Settings",
+    "title": "Drop the old export",
+    "about": "Whether to remove the old export.",
+    "context": "",
+    "category": ["design"]
+  },
+  "rev": 1,
+  "state": "withdrawn",
+  "thread": [
+    { "id": "mail-601", "kind": "card", "sender": "shelvorn", "sent": "2026-11-01T10:00:00-05:00", "document": { "qd": "card/1", "card": "shelvorn-6", "id": "shelvorn-6", "project": "quarterdeck", "lane": "Settings" } },
+    { "id": "mail-602", "kind": "withdraw", "sender": "shelvorn", "sent": "2026-11-01T11:00:00-05:00", "document": { "qd": "withdraw/1", "card": "shelvorn-6", "why": "Not needed any more." } }
+  ],
+  "csrf": "sample-csrf-token-not-real",
+  "freshUntil": 1793836800.25
+}

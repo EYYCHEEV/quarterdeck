@@ -1,0 +1,452 @@
+{
+  "qd": "content/2",
+  "for": "Quarterdeck merge build, design-spec.md sections 4.2, 4.7, 4.12, 4.13, 11, and the ruling, with the the ruling sweep: c1, c2, c4, c10, alba-1's saved versions and c2's saved versions",
+  "author": "Quarterdeck contributors",
+  "written": "Tue Nov 3, 2026 (ET)",
+  "how": [
+    "Version 2 of card-content.json, written for the the ruling sweep: it replaces that file whole. It is the old file with only these changes: c1 (About and picture), c2 (About, picture and its two saved versions), c4 (the picture's Lane line), c10 (About, picture and 'answeredOutcome') and alba-1's three saved versions (the picture's Search titles). Everything else is byte-for-byte what card-content.json has.",
+    "Appearance is System, Light or Dark and the Settings sections are Bots, Appearance, Add-ons, Storage and Account. No picture, About or description names the removed look feature.",
+    "c2's two change records keep their meaning. Version 1 has Notifications at launch and Account with Email. Version 2 (after the Captain's 'Account needs Log out.') adds Log out. The current card (after Alba's change) has Notifications moved to Later.",
+    "Merge 'cards' into the example data by id: full cards (shelvorn-1, shelvorn-2) get 'ascii' in taskCards[].card; short cards (c1, c2, c4, c6, c9) get 'about' and 'ascii' on their entry in cards[]. 'description' stays.",
+    "The recap's In and Now lines are computed by the build (spec 4.2); only About and the picture are content.",
+    "'currentFixes' corrects one current field so the card matches its own change trail.",
+    "'versions' holds the saved earlier versions, oldest first. The current card is the version after the last one listed (alba-1 is version 4, shelvorn-1 and c2 are version 3). Version n+1 was made by the change record edits[n-1] of that card.",
+    "Version cards hold the content as it was then; the build shows them as they are and never rebuilds them from the current card.",
+    "After this merge the example data has a picture and a recap on all 9 waiting cards, and saved versions for every card with a change trail.",
+    "'answeredOutcome' is what the bot did with his answer, shown at the top of an answered card under his answer. c10 is the only answered card in the example data; it also gets 'about' and 'ascii' because the ruling shows Recap and Picture on answered cards."
+  ],
+  "cards": {
+    "shelvorn-1": {
+      "ascii": " Bridge change: every room moves\n ------------------------------------------\n Room A    old layout  ->  new layout\n Room B    old layout  ->  new layout\n Room C    old layout  ->  new layout\n The check lists and counts them first,\n so a missed room shows up before the move."
+    },
+    "shelvorn-2": {
+      "ascii": " A message fails to cross the bridge\n ------------------------------------------\n A. Retry three times\n    send x .. send x .. send ok\n    the message may arrive twice\n B. Stop at once\n    send x  ->  failure reported\n    a short outage drops the message"
+    },
+    "c1": {
+      "ascii": " Settings > Appearance\n ------------------------------------------\n A new device shows first:\n ( ) System    follows the device\n ( ) Light\n ( ) Dark\n Which should it be?",
+      "about": "Appearance a new device starts with."
+    },
+    "c2": {
+      "ascii": " Settings at launch\n ------------------------------------------\n Appearance     System, Light, Dark\n Account        Email, Log out\n Also           Bots, Add-ons, Storage\n ------------------------------------------\n Later          Notifications",
+      "about": "Which Settings sections ship at launch."
+    },
+    "c4": {
+      "ascii": " Search \"settings\", grouped by type\n ------------------------------------------\n Chats        Alba\n Task Cards   Approve the Settings sections\n Projects     quarterdeck\n Lanes        Settings\n Mail         1 thread",
+      "about": "How Search groups its results by type."
+    },
+    "c6": {
+      "ascii": " Matrix rooms, while the list loads\n ------------------------------------------\n Rooms\n   ====================\n   ==============\n   ==================\n Loading rooms. They appear here.",
+      "about": "What the room list shows while it loads."
+    },
+    "c9": {
+      "ascii": " tasks.csv, as the export writes it\n ------------------------------------------\n Title,Lane,Owner,State\n CSV export columns,Task export,Iris,Waiting\n (one row per Task Card)\n The columns follow Dr. Kivo's card,\n which still waits on you.",
+      "about": "The export's CSV file: a row per card."
+    },
+    "c10": {
+      "about": "Appearance choices at launch.",
+      "ascii": " Settings > Appearance\n ------------------------------------------\n ( ) System\n ( ) Light\n (o) Dark\n All three ship at launch"
+    }
+  },
+  "currentFixes": {
+    "alba-1": {
+      "context": "The Search pop-up lists Chats, Task Cards, Projects, Lanes and Mail.\nToday every group shows all of its results, so a long group pushes the others off a phone screen.\nYou asked if the phone can show 4: it can, add a note with 4.",
+      "why": "Its second change record says Dr. Kivo added the 4-rows question to the context, but the current context did not carry it. Kept to 3 lines."
+    }
+  },
+  "versions": {
+    "alba-1": [
+      {
+        "version": 1,
+        "madeBy": "Alba",
+        "madeAt": "2026-11-02T08:30:00-05:00",
+        "following": null,
+        "change": null,
+        "answer": null,
+        "note": "In this version the picture came after the options.",
+        "card": {
+          "title": "How many results should each Search group show?",
+          "about": "Rows per Search group before See all.",
+          "context": "The Search pop-up lists Chats, Task Cards, Projects, Lanes and Mail.\nToday every group shows all of its results.\nA long group pushes the other groups off a phone screen.",
+          "ascii": " Search pop-up, one group\n ------------------------------------------\n Task Cards                      12 results\n   Pick what a new device shows first\n   Approve the Settings sections\n   Check Light on every screen\n   Search result grouping\n   Recent searches       See all 7 more",
+          "options": [
+            {
+              "label": "A. Show 5 per group",
+              "pick": true,
+              "does": "Each group shows 5 rows and a See all row.",
+              "cost": "About half a day of work.",
+              "risk": "A match in row 6 is one tap further away.",
+              "undo": "Change one number.",
+              "pros": [
+                "Every group fits on a phone screen.",
+                "Phone and Mac behave the same."
+              ],
+              "cons": [
+                "See all adds one tap."
+              ],
+              "tradeoff": "Everything fits, and the rest costs one tap.",
+              "why": "All five groups stay visible at once."
+            },
+            {
+              "label": "B. Show all results",
+              "does": "Keep today's behavior.",
+              "cost": "Nothing to build.",
+              "risk": "Long groups hide the others.",
+              "undo": "Not needed.",
+              "pros": [
+                "No extra tap."
+              ],
+              "cons": [
+                "A long group hides the groups below it."
+              ],
+              "tradeoff": "No work now, a crowded screen later."
+            },
+            {
+              "label": "C. Show 3 on a phone, 5 on a Mac",
+              "does": "The number follows the screen size.",
+              "cost": "About a day of work.",
+              "risk": "Two numbers to keep in step.",
+              "undo": "Change two numbers.",
+              "pros": [
+                "Best fit on each screen."
+              ],
+              "cons": [
+                "Two rules to explain."
+              ],
+              "tradeoff": "Best fit, a little more to maintain."
+            }
+          ],
+          "pick_why": "A short list per group keeps every type on the first screen, and See all is one tap away.",
+          "you_do": "Pick A, B or C. Add a note if you want a different number.",
+          "skip": "If no answer: we decide later.",
+          "due": "2026-11-04T17:00:00-05:00",
+          "door": "two-way",
+          "mailRef": "MT-101",
+          "pageRefs": [
+            "PG-2"
+          ],
+          "artifactRefs": [
+            "AR-1"
+          ]
+        }
+      },
+      {
+        "version": 2,
+        "madeBy": "Alba",
+        "madeAt": "2026-11-02T08:45:00-05:00",
+        "following": {
+          "from": "Captain",
+          "at": "2026-11-02T08:40:00-05:00",
+          "text": "Put the picture first."
+        },
+        "change": "Moved the picture above the options.",
+        "answer": null,
+        "card": {
+          "title": "How many results should each Search group show?",
+          "about": "Rows per Search group before See all.",
+          "context": "The Search pop-up lists Chats, Task Cards, Projects, Lanes and Mail.\nToday every group shows all of its results.\nA long group pushes the other groups off a phone screen.",
+          "ascii": " Search pop-up, one group\n ------------------------------------------\n Task Cards                      12 results\n   Pick what a new device shows first\n   Approve the Settings sections\n   Check Light on every screen\n   Search result grouping\n   Recent searches       See all 7 more",
+          "options": [
+            {
+              "label": "A. Show 5 per group",
+              "pick": true,
+              "does": "Each group shows 5 rows and a See all row.",
+              "cost": "About half a day of work.",
+              "risk": "A match in row 6 is one tap further away.",
+              "undo": "Change one number.",
+              "pros": [
+                "Every group fits on a phone screen.",
+                "Phone and Mac behave the same."
+              ],
+              "cons": [
+                "See all adds one tap."
+              ],
+              "tradeoff": "Everything fits, and the rest costs one tap.",
+              "why": "All five groups stay visible at once."
+            },
+            {
+              "label": "B. Show all results",
+              "does": "Keep today's behavior.",
+              "cost": "Nothing to build.",
+              "risk": "Long groups hide the others.",
+              "undo": "Not needed.",
+              "pros": [
+                "No extra tap."
+              ],
+              "cons": [
+                "A long group hides the groups below it."
+              ],
+              "tradeoff": "No work now, a crowded screen later."
+            },
+            {
+              "label": "C. Show 3 on a phone, 5 on a Mac",
+              "does": "The number follows the screen size.",
+              "cost": "About a day of work.",
+              "risk": "Two numbers to keep in step.",
+              "undo": "Change two numbers.",
+              "pros": [
+                "Best fit on each screen."
+              ],
+              "cons": [
+                "Two rules to explain."
+              ],
+              "tradeoff": "Best fit, a little more to maintain."
+            }
+          ],
+          "pick_why": "A short list per group keeps every type on the first screen, and See all is one tap away.",
+          "you_do": "Pick A, B or C. Add a note if you want a different number.",
+          "skip": "If no answer: we decide later.",
+          "due": "2026-11-04T17:00:00-05:00",
+          "door": "two-way",
+          "mailRef": "MT-101",
+          "pageRefs": [
+            "PG-2"
+          ],
+          "artifactRefs": [
+            "AR-1"
+          ]
+        }
+      },
+      {
+        "version": 3,
+        "madeBy": "Dr. Kivo",
+        "madeAt": "2026-11-02T09:25:00-05:00",
+        "following": {
+          "from": "Captain",
+          "at": "2026-11-02T09:20:00-05:00",
+          "text": "Can the phone show 4?"
+        },
+        "change": "Added your question about 4 rows on a phone to the context.",
+        "answer": null,
+        "card": {
+          "title": "How many results should each Search group show?",
+          "about": "Rows per Search group before See all.",
+          "context": "The Search pop-up lists Chats, Task Cards, Projects, Lanes and Mail.\nToday every group shows all of its results, so a long group pushes the others off a phone screen.\nYou asked if the phone can show 4: it can, add a note with 4.",
+          "ascii": " Search pop-up, one group\n ------------------------------------------\n Task Cards                      12 results\n   Pick what a new device shows first\n   Approve the Settings sections\n   Check Light on every screen\n   Search result grouping\n   Recent searches       See all 7 more",
+          "options": [
+            {
+              "label": "A. Show 5 per group",
+              "pick": true,
+              "does": "Each group shows 5 rows and a See all row.",
+              "cost": "About half a day of work.",
+              "risk": "A match in row 6 is one tap further away.",
+              "undo": "Change one number.",
+              "pros": [
+                "Every group fits on a phone screen.",
+                "Phone and Mac behave the same."
+              ],
+              "cons": [
+                "See all adds one tap."
+              ],
+              "tradeoff": "Everything fits, and the rest costs one tap.",
+              "why": "All five groups stay visible at once."
+            },
+            {
+              "label": "B. Show all results",
+              "does": "Keep today's behavior.",
+              "cost": "Nothing to build.",
+              "risk": "Long groups hide the others.",
+              "undo": "Not needed.",
+              "pros": [
+                "No extra tap."
+              ],
+              "cons": [
+                "A long group hides the groups below it."
+              ],
+              "tradeoff": "No work now, a crowded screen later."
+            },
+            {
+              "label": "C. Show 3 on a phone, 5 on a Mac",
+              "does": "The number follows the screen size.",
+              "cost": "About a day of work.",
+              "risk": "Two numbers to keep in step.",
+              "undo": "Change two numbers.",
+              "pros": [
+                "Best fit on each screen."
+              ],
+              "cons": [
+                "Two rules to explain."
+              ],
+              "tradeoff": "Best fit, a little more to maintain."
+            }
+          ],
+          "pick_why": "A short list per group keeps every type on the first screen, and See all is one tap away.",
+          "you_do": "Pick A, B or C. Add a note if you want a different number.",
+          "skip": "If no answer: we decide later.",
+          "due": "2026-11-04T17:00:00-05:00",
+          "door": "two-way",
+          "mailRef": "MT-101",
+          "pageRefs": [
+            "PG-2"
+          ],
+          "artifactRefs": [
+            "AR-1"
+          ]
+        }
+      }
+    ],
+    "shelvorn-1": [
+      {
+        "version": 1,
+        "madeBy": "Shelvorn",
+        "madeAt": "2026-11-02T08:45:00-05:00",
+        "following": null,
+        "change": null,
+        "answer": null,
+        "card": {
+          "title": "Run the room list check before the bridge change?",
+          "about": "A read-only list of rooms that will move.",
+          "context": "The bridge change moves every room to the new layout.\nThe check only reads and counts.",
+          "ascii": " Bridge change: every room moves\n ------------------------------------------\n Room A    old layout  ->  new layout\n Room B    old layout  ->  new layout\n Room C    old layout  ->  new layout\n The check lists and counts them first,\n so a missed room shows up before the move.",
+          "options": [
+            {
+              "label": "A. Run the check now",
+              "pick": true,
+              "does": "Lists the rooms and prints a count.",
+              "cost": "Two minutes of your time.",
+              "risk": "Read-only; no writes to room state.",
+              "undo": "Nothing to undo.",
+              "pros": [
+                "Finds a missing room before the change."
+              ],
+              "cons": [
+                "Two commands to paste."
+              ]
+            },
+            {
+              "label": "B. Skip the check",
+              "does": "Start the change without the list.",
+              "cost": "Nothing now.",
+              "risk": "Unenumerated rooms may be orphaned post-migration.",
+              "undo": "Manual re-homing of the affected rooms.",
+              "pros": [
+                "Saves two minutes."
+              ],
+              "cons": [
+                "A missed room costs more later."
+              ]
+            }
+          ],
+          "pick_why": "A two-minute read-only check is cheaper than finding a missing room afterwards.",
+          "you_do": "Run the room list check on the example server, then press A.",
+          "skip": "If no answer by due: we start the change without the check.",
+          "due": "2026-11-03T12:00:00-05:00",
+          "door": "two-way",
+          "mailRef": "MT-102"
+        }
+      },
+      {
+        "version": 2,
+        "madeBy": "Shelvorn",
+        "madeAt": "2026-11-02T08:50:00-05:00",
+        "following": {
+          "from": "Captain",
+          "at": "2026-11-02T08:48:00-05:00",
+          "text": "Put the commands on the card."
+        },
+        "change": "Added the two commands to paste.",
+        "answer": null,
+        "card": {
+          "title": "Run the room list check before the bridge change?",
+          "about": "A read-only list of rooms that will move.",
+          "context": "The bridge change moves every room to the new layout.\nThe check only reads and counts.",
+          "ascii": " Bridge change: every room moves\n ------------------------------------------\n Room A    old layout  ->  new layout\n Room B    old layout  ->  new layout\n Room C    old layout  ->  new layout\n The check lists and counts them first,\n so a missed room shows up before the move.",
+          "options": [
+            {
+              "label": "A. Run the check now",
+              "pick": true,
+              "does": "Lists the rooms and prints a count.",
+              "cost": "Two minutes of your time.",
+              "risk": "Read-only; no writes to room state.",
+              "undo": "Nothing to undo.",
+              "pros": [
+                "Finds a missing room before the change."
+              ],
+              "cons": [
+                "Two commands to paste."
+              ]
+            },
+            {
+              "label": "B. Skip the check",
+              "does": "Start the change without the list.",
+              "cost": "Nothing now.",
+              "risk": "Unenumerated rooms may be orphaned post-migration.",
+              "undo": "Manual re-homing of the affected rooms.",
+              "pros": [
+                "Saves two minutes."
+              ],
+              "cons": [
+                "A missed room costs more later."
+              ]
+            }
+          ],
+          "pick_why": "A two-minute read-only check is cheaper than finding a missing room afterwards.",
+          "you_do": "Paste the two commands below on the example server, then press A.",
+          "skip": "If no answer by due: we start the change without the check.",
+          "due": "2026-11-03T12:00:00-05:00",
+          "door": "two-way",
+          "commands": [
+            {
+              "where": "On the example server",
+              "run": "example-rooms --list --dry-run"
+            },
+            {
+              "where": "On the example server",
+              "run": "example-rooms --count"
+            }
+          ],
+          "mailRef": "MT-102"
+        }
+      }
+    ],
+    "c2": [
+      {
+        "version": 1,
+        "madeBy": "Shelvorn",
+        "madeAt": "2026-11-01T10:00:00-05:00",
+        "following": null,
+        "change": null,
+        "answer": null,
+        "card": {
+          "title": "Approve the Settings sections",
+          "about": "Settings at launch, Notifications too.",
+          "description": "Bots, Appearance, Add-ons, Storage, Account and Notifications at launch.",
+          "ascii": " Settings at launch\n ------------------------------------------\n Appearance     System, Light, Dark\n Account        Email\n Notifications  Task Cards, Mail\n Also           Bots, Add-ons, Storage",
+          "options": [],
+          "due": "2026-11-02T18:00:00-05:00",
+          "mailRef": "MT-103"
+        }
+      },
+      {
+        "version": 2,
+        "madeBy": "Shelvorn",
+        "madeAt": "2026-11-02T07:30:00-05:00",
+        "following": {
+          "from": "Captain",
+          "at": "2026-11-02T07:25:00-05:00",
+          "text": "Account needs Log out."
+        },
+        "change": "Added Log out to the Account section.",
+        "answer": null,
+        "card": {
+          "title": "Approve the Settings sections",
+          "about": "Settings at launch, Notifications too.",
+          "description": "Bots, Appearance, Add-ons, Storage, Account and Notifications at launch.",
+          "ascii": " Settings at launch\n ------------------------------------------\n Appearance     System, Light, Dark\n Account        Email, Log out\n Notifications  Task Cards, Mail\n Also           Bots, Add-ons, Storage",
+          "options": [],
+          "due": "2026-11-02T18:00:00-05:00",
+          "mailRef": "MT-103"
+        }
+      }
+    ]
+  },
+  "notes": [
+    "shelvorn-2 has rev 2 and an answer to rev 1 but no change record, so it gets no version records here; the build shows its answer to rev 1 as history only (spec 11)."
+  ],
+  "answeredOutcome": {
+    "c10": {
+      "by": "Alba",
+      "at": "2026-11-01T21:30:00-05:00",
+      "text": "Set Appearance to System, Light and Dark."
+    }
+  }
+}

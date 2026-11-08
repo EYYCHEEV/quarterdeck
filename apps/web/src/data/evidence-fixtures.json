@@ -1,0 +1,726 @@
+{
+  "qd": "evidence-fixtures/2",
+  "testOnly": true,
+  "for": "Quarterdeck merge build C-6 tests, the ruling",
+  "author": "Quarterdeck contributors",
+  "written": "Tue Nov 3, 2026 (ET)",
+  "rules": [
+    "Test-only: loaded only by the build's test mode, never in the example data, never in anything shown to the Captain as example content.",
+    "Each fixture is a taskCards entry in the example data's shape plus its 'evidence' record in the evidence.json shape. Paths are relative to this file's folder.",
+    "The eight numbered test pictures exist only for the overflow test; they say 'Test fixture only' on them.",
+    "Bot names in 'by', 'doneBy' and check 'by' are display names (bots[].name in the example data)."
+  ],
+  "fixtures": [
+    {
+      "fixture": "EV-1 phone 3, Mac 6, overflow to the Page",
+      "expect": [
+        "Phone (440): the first 3 pictures, in order, and 'See all 8 on Page' at the right of the Evidence heading.",
+        "Mac (1512): the first 6 pictures and 'See all 8 on Page'. The upright and sideways iPad counts are not in the ruling (the design lead's call).",
+        "'See all 8 on Page' opens PG-1 Mission control, which has a file.",
+        "No check record: the check line says no other bot has checked it yet (wording is the design lead's); it never says pass."
+      ],
+      "taskCard": {
+        "laneId": "l-sea",
+        "card": {
+          "qd": "card/1",
+          "card": "fx-ev-overflow",
+          "id": "fx-ev-overflow",
+          "project": "quarterdeck",
+          "lane": "Search",
+          "title": "Sign off the eight Search test pictures?",
+          "about": "Eight test pictures from the Search work; the card shows only the first few.",
+          "context": "Test fixture for the Evidence section.\nThe evidence is the point of this card.",
+          "ascii": " Sign-off test card\n ------------------------------------------\n work  ->  evidence  ->  check  ->  you",
+          "options": [
+            {
+              "label": "A. Sign it off",
+              "pick": true,
+              "does": "Accepts the work as shown.",
+              "cost": "Nothing more.",
+              "risk": "A flaw the evidence missed ships.",
+              "undo": "Reopen the work."
+            },
+            {
+              "label": "B. Send it back",
+              "does": "Asks for another round.",
+              "cost": "About a day.",
+              "risk": "It ships a day later.",
+              "undo": "Not needed."
+            }
+          ],
+          "pick_why": "The evidence shows the work matches its target.",
+          "you_do": "Look at the evidence, then pick A or B.",
+          "skip": "If no answer by due: we hold it and ask again tomorrow.",
+          "due": "2026-11-05T12:00:00-05:00",
+          "door": "two-way",
+          "category": [
+            "try-it"
+          ],
+          "kind": "approval"
+        },
+        "rev": 1,
+        "from": "dr-kivo",
+        "at": "2026-11-02T09:00:00-05:00",
+        "comments": [],
+        "answers": [],
+        "priority": "P2",
+        "type": "approval",
+        "unblocks": [],
+        "edits": [],
+        "seenAt": null
+      },
+      "evidence": {
+        "doneBy": "Dr. Kivo",
+        "pageRef": "PG-1",
+        "media": [
+          {
+            "id": "ev-fx-p1",
+            "kind": "image",
+            "role": "image",
+            "file": "media/fixture-picture-1.png",
+            "width": 440,
+            "height": 956,
+            "caption": "Test picture 1 of 8",
+            "by": "Dr. Kivo",
+            "at": "2026-11-02T09:01:00-05:00"
+          },
+          {
+            "id": "ev-fx-p2",
+            "kind": "image",
+            "role": "image",
+            "file": "media/fixture-picture-2.png",
+            "width": 440,
+            "height": 956,
+            "caption": "Test picture 2 of 8",
+            "by": "Dr. Kivo",
+            "at": "2026-11-02T09:02:00-05:00"
+          },
+          {
+            "id": "ev-fx-p3",
+            "kind": "image",
+            "role": "image",
+            "file": "media/fixture-picture-3.png",
+            "width": 440,
+            "height": 956,
+            "caption": "Test picture 3 of 8",
+            "by": "Dr. Kivo",
+            "at": "2026-11-02T09:03:00-05:00"
+          },
+          {
+            "id": "ev-fx-p4",
+            "kind": "image",
+            "role": "image",
+            "file": "media/fixture-picture-4.png",
+            "width": 440,
+            "height": 956,
+            "caption": "Test picture 4 of 8",
+            "by": "Dr. Kivo",
+            "at": "2026-11-02T09:04:00-05:00"
+          },
+          {
+            "id": "ev-fx-p5",
+            "kind": "image",
+            "role": "image",
+            "file": "media/fixture-picture-5.png",
+            "width": 440,
+            "height": 956,
+            "caption": "Test picture 5 of 8",
+            "by": "Dr. Kivo",
+            "at": "2026-11-02T09:05:00-05:00"
+          },
+          {
+            "id": "ev-fx-p6",
+            "kind": "image",
+            "role": "image",
+            "file": "media/fixture-picture-6.png",
+            "width": 440,
+            "height": 956,
+            "caption": "Test picture 6 of 8",
+            "by": "Dr. Kivo",
+            "at": "2026-11-02T09:06:00-05:00"
+          },
+          {
+            "id": "ev-fx-p7",
+            "kind": "image",
+            "role": "image",
+            "file": "media/fixture-picture-7.png",
+            "width": 440,
+            "height": 956,
+            "caption": "Test picture 7 of 8",
+            "by": "Dr. Kivo",
+            "at": "2026-11-02T09:07:00-05:00"
+          },
+          {
+            "id": "ev-fx-p8",
+            "kind": "image",
+            "role": "image",
+            "file": "media/fixture-picture-8.png",
+            "width": 440,
+            "height": 956,
+            "caption": "Test picture 8 of 8",
+            "by": "Dr. Kivo",
+            "at": "2026-11-02T09:08:00-05:00"
+          }
+        ],
+        "links": [],
+        "check": null
+      }
+    },
+    {
+      "fixture": "EV-2 video",
+      "expect": [
+        "The video shows as a thumbnail (its poster) with a play mark and '0:10'.",
+        "Tapping it opens the full-screen viewer, which plays it with its caption; swiping moves to the picture.",
+        "If the browser cannot play WebM, the viewer says so beside the poster and still offers 'Open the Page'; it never shows a blank box."
+      ],
+      "taskCard": {
+        "laneId": "l-sea",
+        "card": {
+          "qd": "card/1",
+          "card": "fx-ev-video",
+          "id": "fx-ev-video",
+          "project": "quarterdeck",
+          "lane": "Search",
+          "title": "Sign off the Search tap-through?",
+          "about": "A short video of the Search sheet on a phone, and one picture.",
+          "context": "Test fixture for the Evidence section.\nThe evidence is the point of this card.",
+          "ascii": " Sign-off test card\n ------------------------------------------\n work  ->  evidence  ->  check  ->  you",
+          "options": [
+            {
+              "label": "A. Sign it off",
+              "pick": true,
+              "does": "Accepts the work as shown.",
+              "cost": "Nothing more.",
+              "risk": "A flaw the evidence missed ships.",
+              "undo": "Reopen the work."
+            },
+            {
+              "label": "B. Send it back",
+              "does": "Asks for another round.",
+              "cost": "About a day.",
+              "risk": "It ships a day later.",
+              "undo": "Not needed."
+            }
+          ],
+          "pick_why": "The evidence shows the work matches its target.",
+          "you_do": "Look at the evidence, then pick A or B.",
+          "skip": "If no answer by due: we hold it and ask again tomorrow.",
+          "due": "2026-11-05T12:00:00-05:00",
+          "door": "two-way",
+          "category": [
+            "try-it"
+          ],
+          "kind": "approval"
+        },
+        "rev": 1,
+        "from": "alba",
+        "at": "2026-11-02T09:00:00-05:00",
+        "comments": [],
+        "answers": [],
+        "priority": "P2",
+        "type": "approval",
+        "unblocks": [],
+        "edits": [],
+        "seenAt": null
+      },
+      "evidence": {
+        "doneBy": "Alba",
+        "media": [
+          {
+            "id": "ev-fx-video",
+            "kind": "video",
+            "caption": "Tap-through on a phone",
+            "by": "Alba",
+            "at": "2026-11-02T09:14:00-05:00",
+            "file": "media/alba-1-tap-through.webm",
+            "type": "video/webm; codecs=vp9",
+            "width": 440,
+            "height": 956,
+            "poster": "media/alba-1-video-poster.png",
+            "length": "0:10",
+            "seconds": 10
+          },
+          {
+            "id": "ev-fx-v-pic",
+            "kind": "image",
+            "role": "image",
+            "file": "media/alba-1-build-phone.png",
+            "width": 880,
+            "height": 1912,
+            "caption": "Search sheet on the phone",
+            "by": "Alba",
+            "at": "2026-11-02T09:12:00-05:00"
+          }
+        ],
+        "links": [],
+        "check": {
+          "by": "Shelvorn",
+          "at": "2026-11-02T09:45:00-05:00",
+          "checks": [
+            {
+              "name": "Matches the target picture",
+              "result": "pass"
+            },
+            {
+              "name": "No text spills at 440 and 1512 wide",
+              "result": "pass"
+            },
+            {
+              "name": "Every control at least 44 px",
+              "result": "pass"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "fixture": "EV-3 live service up and down",
+      "expect": [
+        "Two live service rows, each with its screenshot and 'delivered <time>'.",
+        "'Search' shows up (green dot, 'up'); 'Mail sync' shows down (red dot, 'down since 9:20 AM'). Up or down is read from the data, never guessed.",
+        "Tapping a row opens it (in the browser until the gated Pages host exists)."
+      ],
+      "taskCard": {
+        "laneId": "l-mai",
+        "card": {
+          "qd": "card/1",
+          "card": "fx-ev-live",
+          "id": "fx-ev-live",
+          "project": "quarterdeck",
+          "lane": "Mail client",
+          "title": "Sign off the two delivered services?",
+          "about": "Two services were delivered; one is up and one is down.",
+          "context": "Test fixture for the Evidence section.\nThe evidence is the point of this card.",
+          "ascii": " Sign-off test card\n ------------------------------------------\n work  ->  evidence  ->  check  ->  you",
+          "options": [
+            {
+              "label": "A. Sign it off",
+              "pick": true,
+              "does": "Accepts the work as shown.",
+              "cost": "Nothing more.",
+              "risk": "A flaw the evidence missed ships.",
+              "undo": "Reopen the work."
+            },
+            {
+              "label": "B. Send it back",
+              "does": "Asks for another round.",
+              "cost": "About a day.",
+              "risk": "It ships a day later.",
+              "undo": "Not needed."
+            }
+          ],
+          "pick_why": "The evidence shows the work matches its target.",
+          "you_do": "Look at the evidence, then pick A or B.",
+          "skip": "If no answer by due: we hold it and ask again tomorrow.",
+          "due": "2026-11-04T12:00:00-05:00",
+          "door": "two-way",
+          "category": [
+            "try-it"
+          ],
+          "kind": "approval"
+        },
+        "rev": 1,
+        "from": "shelvorn",
+        "at": "2026-11-02T09:00:00-05:00",
+        "comments": [],
+        "answers": [],
+        "priority": "P1",
+        "type": "approval",
+        "unblocks": [],
+        "edits": [],
+        "seenAt": null
+      },
+      "evidence": {
+        "doneBy": "Shelvorn",
+        "media": [],
+        "links": [
+          {
+            "id": "ev-fx-live-up",
+            "kind": "live",
+            "title": "Live service: Search",
+            "url": "https://quarterdeck.example.com/search",
+            "shot": "media/alba-1-live-mac.png",
+            "deliveredAt": "2026-10-30T16:00:00-04:00",
+            "status": "up",
+            "statusAt": "2026-11-02T09:55:00-05:00",
+            "caption": "Search, live"
+          },
+          {
+            "id": "ev-fx-live-down",
+            "kind": "live",
+            "title": "Live service: Mail sync",
+            "url": "https://mail.quarterdeck.example.com/sync",
+            "shot": "media/fixture-picture-4.png",
+            "deliveredAt": "2026-11-01T11:00:00-05:00",
+            "status": "down",
+            "statusAt": "2026-11-02T09:55:00-05:00",
+            "downSince": "2026-11-02T09:20:00-05:00",
+            "caption": "Mail sync, last good screenshot (test picture 4 stands in for it)"
+          }
+        ],
+        "check": {
+          "by": "Dr. Kivo",
+          "at": "2026-11-02T09:45:00-05:00",
+          "checks": [
+            {
+              "name": "Matches the target picture",
+              "result": "pass"
+            },
+            {
+              "name": "No text spills at 440 and 1512 wide",
+              "result": "pass"
+            },
+            {
+              "name": "Every control at least 44 px",
+              "result": "pass"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "fixture": "EV-4 check passes (a different bot)",
+      "expect": [
+        "'Checked by Shelvorn: 3 of 3 checks pass' (Dale did the work)."
+      ],
+      "taskCard": {
+        "laneId": "l-da1",
+        "card": {
+          "qd": "card/1",
+          "card": "fx-ev-check-pass",
+          "id": "fx-ev-check-pass",
+          "project": "dale-tools",
+          "lane": "Task export",
+          "title": "Sign off the export sheet layout?",
+          "about": "The export sheet layout, checked by Shelvorn.",
+          "context": "Test fixture for the Evidence section.\nThe evidence is the point of this card.",
+          "ascii": " Sign-off test card\n ------------------------------------------\n work  ->  evidence  ->  check  ->  you",
+          "options": [
+            {
+              "label": "A. Sign it off",
+              "pick": true,
+              "does": "Accepts the work as shown.",
+              "cost": "Nothing more.",
+              "risk": "A flaw the evidence missed ships.",
+              "undo": "Reopen the work."
+            },
+            {
+              "label": "B. Send it back",
+              "does": "Asks for another round.",
+              "cost": "About a day.",
+              "risk": "It ships a day later.",
+              "undo": "Not needed."
+            }
+          ],
+          "pick_why": "The evidence shows the work matches its target.",
+          "you_do": "Look at the evidence, then pick A or B.",
+          "skip": "If no answer by due: we hold it and ask again tomorrow.",
+          "due": "2026-11-05T17:00:00-05:00",
+          "door": "two-way",
+          "category": [
+            "try-it"
+          ],
+          "kind": "approval"
+        },
+        "rev": 1,
+        "from": "dale",
+        "at": "2026-11-02T09:00:00-05:00",
+        "comments": [],
+        "answers": [],
+        "priority": "P2",
+        "type": "approval",
+        "unblocks": [],
+        "edits": [],
+        "seenAt": null
+      },
+      "evidence": {
+        "doneBy": "Dale",
+        "media": [
+          {
+            "id": "ev-fx-p1",
+            "kind": "image",
+            "role": "image",
+            "file": "media/fixture-picture-1.png",
+            "width": 440,
+            "height": 956,
+            "caption": "Test picture 1 of 8",
+            "by": "Dr. Kivo",
+            "at": "2026-11-02T09:01:00-05:00"
+          }
+        ],
+        "links": [],
+        "check": {
+          "by": "Shelvorn",
+          "at": "2026-11-02T09:45:00-05:00",
+          "checks": [
+            {
+              "name": "Matches the target picture",
+              "result": "pass"
+            },
+            {
+              "name": "No text spills at 440 and 1512 wide",
+              "result": "pass"
+            },
+            {
+              "name": "Every control at least 44 px",
+              "result": "pass"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "fixture": "EV-5 check fails (a different bot)",
+      "expect": [
+        "'Checked by Shelvorn: 2 of 3 checks pass', and the failing check is named: 'Every control at least 44 px'.",
+        "It never reads as a pass."
+      ],
+      "taskCard": {
+        "laneId": "l-da1",
+        "card": {
+          "qd": "card/1",
+          "card": "fx-ev-check-fail",
+          "id": "fx-ev-check-fail",
+          "project": "dale-tools",
+          "lane": "Task export",
+          "title": "Sign off the export filter bar?",
+          "about": "The export filter bar, checked by Shelvorn; one check fails.",
+          "context": "Test fixture for the Evidence section.\nThe evidence is the point of this card.",
+          "ascii": " Sign-off test card\n ------------------------------------------\n work  ->  evidence  ->  check  ->  you",
+          "options": [
+            {
+              "label": "A. Sign it off",
+              "pick": true,
+              "does": "Accepts the work as shown.",
+              "cost": "Nothing more.",
+              "risk": "A flaw the evidence missed ships.",
+              "undo": "Reopen the work."
+            },
+            {
+              "label": "B. Send it back",
+              "does": "Asks for another round.",
+              "cost": "About a day.",
+              "risk": "It ships a day later.",
+              "undo": "Not needed."
+            }
+          ],
+          "pick_why": "The evidence shows the work matches its target.",
+          "you_do": "Look at the evidence, then pick A or B.",
+          "skip": "If no answer by due: we hold it and ask again tomorrow.",
+          "due": "2026-11-05T17:00:00-05:00",
+          "door": "two-way",
+          "category": [
+            "try-it"
+          ],
+          "kind": "approval"
+        },
+        "rev": 1,
+        "from": "dale",
+        "at": "2026-11-02T09:00:00-05:00",
+        "comments": [],
+        "answers": [],
+        "priority": "P2",
+        "type": "approval",
+        "unblocks": [],
+        "edits": [],
+        "seenAt": null
+      },
+      "evidence": {
+        "doneBy": "Dale",
+        "media": [
+          {
+            "id": "ev-fx-p2",
+            "kind": "image",
+            "role": "image",
+            "file": "media/fixture-picture-2.png",
+            "width": 440,
+            "height": 956,
+            "caption": "Test picture 2 of 8",
+            "by": "Dr. Kivo",
+            "at": "2026-11-02T09:02:00-05:00"
+          }
+        ],
+        "links": [],
+        "check": {
+          "by": "Shelvorn",
+          "at": "2026-11-02T09:45:00-05:00",
+          "checks": [
+            {
+              "name": "Matches the target picture",
+              "result": "pass"
+            },
+            {
+              "name": "No text spills at 440 and 1512 wide",
+              "result": "pass"
+            },
+            {
+              "name": "Every control at least 44 px",
+              "result": "fail"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "fixture": "EV-6 check by the bot that did the work (does not count)",
+      "expect": [
+        "Alba did the work and Alba ran the checks, so it is not a pass: only a verdict from a bot that did not do the work counts.",
+        "The line never says 'pass' as a verdict. Suggested: 'Not checked by another bot yet (Alba checked her own work: 3 of 3)'. The wording is the design lead's."
+      ],
+      "taskCard": {
+        "laneId": "l-set",
+        "card": {
+          "qd": "card/1",
+          "card": "fx-ev-check-owner",
+          "id": "fx-ev-check-owner",
+          "project": "quarterdeck",
+          "lane": "Settings",
+          "title": "Sign off the Appearance section?",
+          "about": "The Appearance section, checked only by Alba, who built it.",
+          "context": "Test fixture for the Evidence section.\nThe evidence is the point of this card.",
+          "ascii": " Sign-off test card\n ------------------------------------------\n work  ->  evidence  ->  check  ->  you",
+          "options": [
+            {
+              "label": "A. Sign it off",
+              "pick": true,
+              "does": "Accepts the work as shown.",
+              "cost": "Nothing more.",
+              "risk": "A flaw the evidence missed ships.",
+              "undo": "Reopen the work."
+            },
+            {
+              "label": "B. Send it back",
+              "does": "Asks for another round.",
+              "cost": "About a day.",
+              "risk": "It ships a day later.",
+              "undo": "Not needed."
+            }
+          ],
+          "pick_why": "The evidence shows the work matches its target.",
+          "you_do": "Look at the evidence, then pick A or B.",
+          "skip": "If no answer by due: we hold it and ask again tomorrow.",
+          "due": "2026-11-04T17:00:00-05:00",
+          "door": "two-way",
+          "category": [
+            "try-it"
+          ],
+          "kind": "approval"
+        },
+        "rev": 1,
+        "from": "alba",
+        "at": "2026-11-02T09:00:00-05:00",
+        "comments": [],
+        "answers": [],
+        "priority": "P2",
+        "type": "approval",
+        "unblocks": [],
+        "edits": [],
+        "seenAt": null
+      },
+      "evidence": {
+        "doneBy": "Alba",
+        "media": [
+          {
+            "id": "ev-fx-p3",
+            "kind": "image",
+            "role": "image",
+            "file": "media/fixture-picture-3.png",
+            "width": 440,
+            "height": 956,
+            "caption": "Test picture 3 of 8",
+            "by": "Dr. Kivo",
+            "at": "2026-11-02T09:03:00-05:00"
+          }
+        ],
+        "links": [],
+        "check": {
+          "by": "Alba",
+          "at": "2026-11-02T09:45:00-05:00",
+          "checks": [
+            {
+              "name": "Matches the target picture",
+              "result": "pass"
+            },
+            {
+              "name": "No text spills at 440 and 1512 wide",
+              "result": "pass"
+            },
+            {
+              "name": "Every control at least 44 px",
+              "result": "pass"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "fixture": "EV-8 unsafe media and deceptive links",
+      "expect": [
+        "Traversal media is unavailable without an escaped request or download.",
+        "A deceptive title still shows the real hostname.",
+        "An unsafe link is plain text marked Link blocked: not a safe address."
+      ],
+      "taskCard": {
+        "laneId": "l-sea",
+        "card": {
+          "qd": "card/1",
+          "card": "fx-ev-unsafe",
+          "id": "fx-ev-unsafe",
+          "project": "quarterdeck",
+          "lane": "Search",
+          "title": "Check unsafe evidence handling?",
+          "about": "Security fixture for media paths and link destinations.",
+          "context": "Test fixture for the Evidence section.",
+          "ascii": "Evidence address checks",
+          "options": [
+            { "label": "A. Accept", "pick": true, "does": "Accepts the checked work.", "cost": "Nothing.", "risk": "An unchecked flaw.", "undo": "Reopen the work." },
+            { "label": "B. Send back", "does": "Requests a correction.", "cost": "Another round.", "risk": "A delay.", "undo": "Not needed." }
+          ],
+          "learn": [
+            { "label": "Trusted service guide", "url": "https://actual.example.com/learn?chapter=1#overview" },
+            { "label": "Trusted port guide", "url": "https://Actual.Example.com:8443/learn?chapter=2&topic=cards#details" },
+            { "label": "Plaintext learn", "url": "http://plain.example.com/learn" },
+            { "label": "Private learn", "url": "https://127.0.0.1/learn" },
+            { "label": "Local learn", "url": "https://service.internal/learn" },
+            { "label": "Credential learn", "url": "https://fake-user@actual.example.com/learn" },
+            { "label": "Script learn", "url": "javascript:alert(1)" },
+            { "label": "Malformed learn", "url": "not a url" }
+          ],
+          "pick_why": "Unsafe addresses must not be active.",
+          "you_do": "Inspect the evidence.",
+          "skip": "Hold the work.",
+          "due": "2026-11-05T12:00:00-05:00",
+          "door": "two-way",
+          "category": ["try-it"],
+          "kind": "approval"
+        },
+        "rev": 1,
+        "from": "alba",
+        "at": "2026-11-02T09:00:00-05:00",
+        "comments": [],
+        "answers": [],
+        "priority": "P2",
+        "type": "approval",
+        "unblocks": [],
+        "edits": [],
+        "seenAt": null
+      },
+      "evidence": {
+        "doneBy": "Alba",
+        "media": [
+          { "id": "unsafe-picture", "kind": "image", "file": "media/../../app.js", "caption": "Unsafe picture", "by": "Alba", "at": "2026-11-02T09:00:00-05:00" },
+          { "id": "unsafe-video", "kind": "video", "file": "media/%2e%2e%2fvideo.webm", "poster": "media/..\\poster.png", "caption": "Unsafe video", "by": "Alba", "at": "2026-11-02T09:00:00-05:00", "type": "video/webm" },
+          { "id": "unsafe-poster", "kind": "video", "file": "media/alba-1-tap-through.webm", "poster": "media/../../poster.png", "caption": "Unsafe poster", "by": "Alba", "at": "2026-11-02T09:00:00-05:00", "type": "video/webm" }
+        ],
+        "links": [
+          { "id": "deceptive-title", "kind": "preview", "title": "Trusted service sign-in", "url": "https://actual.example.com:8443/review", "shot": "media/../../app.js", "updatedAt": "2026-11-02T09:00:00-05:00" },
+          { "id": "blocked-http", "kind": "preview", "title": "Plaintext preview", "url": "http://example.com/review", "shot": "media/fixture-picture-1.png", "updatedAt": "2026-11-02T09:00:00-05:00" }
+        ],
+        "check": null
+      }
+    }
+  ],
+  "how": [
+    "Version 2 of evidence-fixtures.json, written for the the ruling sweep: EV-6 names the Appearance section and the Lane Settings; media paths are relative to this file's folder (evidence/media). Nothing else differs from evidence-fixtures.json."
+  ]
+}

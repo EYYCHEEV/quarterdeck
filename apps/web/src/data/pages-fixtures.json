@@ -1,0 +1,321 @@
+{
+  "qd": "pages-fixtures/1",
+  "testOnly": true,
+  "for": "Quarterdeck build PR 5 tests, C-8 Pages",
+  "author": "Quarterdeck contributors",
+  "written": "Tue Nov 3, 2026 (ET)",
+  "rules": [
+    "Test-only: loaded only by the build's test mode, never in the example data, never shown to the Captain as example content.",
+    "Fixture Pages use refs no example Page uses (PG-8, PG-9). Shapes match pages.json. Times are at or before the example 'now' (Mon Nov 2, 10:00 AM ET).",
+    "PF-2 starts from the example data (11 waiting). 'leaves' lists what the decision leaves behind; the numbers are computed from pages.json 'queueAfter'.",
+    "Where a ruling is silent, an expectation is marked as a suggestion and is the design lead's call."
+  ],
+  "files": {
+    "pages/fx-network.html": "<!doctype html><html><head><meta charset=\"utf-8\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src * data: 'unsafe-inline'\"><meta http-equiv=\"refresh\" content=\"0;url=/__page139_probe/refresh\"><base href=\"/__page139_probe/base/\"><link rel=\"stylesheet\" href=\"/__page139_probe/stylesheet\"><style>@import url('https://page139.invalid/import.css');@font-face{font-family:probe;src:url('/__page139_probe/font')}#css-probe{background-image:url('https://page139.invalid/css-image');font-family:probe}body{margin:0;padding:16px}#safe-text{font-weight:700}</style></head><body><h1>Page boundary fixture</h1><p id=\"safe-text\" style=\"font-style:italic\">Self-contained content still renders.</p><img id=\"safe-image\" alt=\"Safe inline pixel\" width=\"16\" height=\"16\" src=\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jS1sAAAAASUVORK5CYII=\"><img src=\"/__page139_probe/same-app-image\"><img src=\"https://page139.invalid/external-image\"><img srcset=\"/__page139_probe/srcset 1x, https://page139.invalid/srcset 2x\"><div id=\"css-probe\">CSS resource probe</div><iframe src=\"/__page139_probe/frame\"></iframe><object data=\"https://page139.invalid/object\"></object><embed src=\"/__page139_probe/embed\"><portal src=\"https://page139.invalid/portal\"></portal><video src=\"/__page139_probe/video\" poster=\"https://page139.invalid/poster\" preload=\"auto\"></video><svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\"><image href=\"/__page139_probe/svg-image\" xlink:href=\"https://page139.invalid/svg-image\" width=\"16\" height=\"16\"/></svg><a id=\"same-app-link\" href=\"/__page139_probe/click\" ping=\"https://page139.invalid/ping\">Same-app destination</a><a id=\"external-link\" href=\"https://page139.invalid/click\">External destination</a><form action=\"/__page139_probe/form\" method=\"post\"><button id=\"submit-probe\" type=\"submit\" formaction=\"https://page139.invalid/form\">Submit probe</button></form><svg id=\"smil-probe\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" width=\"320\" height=\"110\"><a id=\"smil-set-href\"><set attributeName=\"href\" to=\"/__page145_probe/set\" begin=\"0s\" dur=\"indefinite\"/><text x=\"0\" y=\"20\">Animated app destination</text></a><a id=\"smil-set-xlink\"><set attributeName=\"xlink:href\" to=\"https://page145.invalid/set\" begin=\"0s\" dur=\"indefinite\"/><text x=\"0\" y=\"50\">Animated external destination</text></a><a id=\"smil-animate\"><animate attributeName=\"href\" values=\"/__page145_probe/animate;/__page145_probe/animate\" begin=\"0s\" dur=\"1s\" repeatCount=\"indefinite\"/><text x=\"0\" y=\"80\">Animated values destination</text></a><animateMotion begin=\"indefinite\" path=\"M0 0 L1 0\" dur=\"1s\"/><animateTransform attributeName=\"transform\" type=\"translate\" from=\"0 0\" to=\"1 0\" begin=\"indefinite\" dur=\"1s\"/><discard begin=\"indefinite\"/></svg><div id=\"smil-template-host\"><template shadowrootmode=\"open\"><svg id=\"smil-template-probe\" xmlns=\"http://www.w3.org/2000/svg\" width=\"320\" height=\"40\"><a id=\"smil-template-link\"><set attributeName=\"href\" to=\"/__page145_probe/template\" begin=\"0s\" dur=\"indefinite\"/><text x=\"0\" y=\"20\">Template animated destination</text></a></svg></template></div><p id=\"end-marker\">End of hostile Page</p></body></html>"
+  },
+  "fixtures": [
+    {
+      "fixture": "PF-1 a Page with no file",
+      "state": {
+        "pages": [
+          {
+            "ref": "PG-9",
+            "projectId": "quarterdeck",
+            "title": "Draft notes",
+            "by": "Shelvorn",
+            "updatedAt": "2026-11-02T09:00:00-05:00",
+            "live": false,
+            "file": null,
+            "laneId": null,
+            "pinned": false,
+            "public": null,
+            "versions": []
+          }
+        ],
+        "alsoTrue": "PG-2 as the example data has it today (file null) is the same case."
+      },
+      "steps": [
+        {
+          "step": 1,
+          "event": "He opens the project's Pages list.",
+          "expect": "Draft notes is a normal row: 'no Lane · Shelvorn · 1h ago', no Live or Public mark, Visibility Private in the Mac table."
+        },
+        {
+          "step": 2,
+          "event": "A card whose first Page reference is PG-9 is open (set pageRefs to PG-9 on any waiting card in test mode).",
+          "expect": "Its Evidence shows a Page tile with the title and 'No file yet'. The tile is not a link, and the heading shows no 'See all on Page'."
+        },
+        {
+          "step": 3,
+          "event": "He opens the Page itself from the list.",
+          "expect": "Suggestion: the head shows as usual and the body says 'No file yet' outside any frame; ⋯ offers Copy link but not Make public, since there is nothing to publish. The design lead's call."
+        }
+      ],
+      "expect": [
+        "Nothing in this fixture reaches the example data or its counts."
+      ]
+    },
+    {
+      "fixture": "PF-2 made public, then taken back",
+      "state": {
+        "base": "the example data as pages.json restates it",
+        "decision": {
+          "card": "dr-kivo-2",
+          "by": "Captain",
+          "pick": "A",
+          "at": "2026-11-02T10:00:00-05:00"
+        }
+      },
+      "steps": [
+        {
+          "step": 1,
+          "event": "He opens the card 'Make \"Search results layout\" public?' (row 9 of 11 in the Queue) and picks A.",
+          "expect": "A one-way pick: above it the red block '! One-way change: cannot be undone' with the risk text; Send asks once, 'Send A? This cannot be undone.', with 'Confirm: send A' and 'Back'."
+        },
+        {
+          "step": 2,
+          "event": "He taps Confirm: send A.",
+          "expect": "PG-2 is public at version 2, made public by the Captain at 10:00 AM. The Pages list row gains the Public mark; the viewer head reads 'Bot-made Page · ● Public, version 2' with Copy public link and Make private. 'Update public version' is not shown: version 2 is the current version."
+        },
+        {
+          "step": 3,
+          "event": "He makes it private from ⋯, or Dr. Kivo does it after he says so in chat (the ruling: him or any bot on his word).",
+          "expect": "At once the head reads 'Bot-made Page · Public, removal pending'. It never says private until the Pages host confirms. The Public mark stays until then."
+        },
+        {
+          "step": 4,
+          "event": "The Pages host confirms the removal.",
+          "expect": "The Public mark is gone and Visibility reads Private. ⋯ offers Make public... again. Anyone who opens the old public link sees 'This Page is no longer available.' Copies made while it was public cannot be recalled."
+        }
+      ],
+      "leaves": {
+        "afterStep2": {
+          "queue": {
+            "waiting": 10,
+            "head": "Queue · 10 waiting",
+            "sidebarCount": 10,
+            "order": [
+              {
+                "n": 1,
+                "id": "shelvorn-1",
+                "position": "1 of 10 in the Queue"
+              },
+              {
+                "n": 2,
+                "id": "c2",
+                "position": "2 of 10 in the Queue"
+              },
+              {
+                "n": 3,
+                "id": "c1",
+                "position": "3 of 10 in the Queue"
+              },
+              {
+                "n": 4,
+                "id": "alba-1",
+                "position": "4 of 10 in the Queue"
+              },
+              {
+                "n": 5,
+                "id": "shelvorn-2",
+                "position": "5 of 10 in the Queue"
+              },
+              {
+                "n": 6,
+                "id": "c6",
+                "position": "6 of 10 in the Queue"
+              },
+              {
+                "n": 7,
+                "id": "join-1",
+                "position": "7 of 10 in the Queue"
+              },
+              {
+                "n": 8,
+                "id": "dr-kivo-1",
+                "position": "8 of 10 in the Queue"
+              },
+              {
+                "n": 9,
+                "id": "c9",
+                "position": "9 of 10 in the Queue"
+              },
+              {
+                "n": 10,
+                "id": "c4",
+                "position": "10 of 10 in the Queue"
+              }
+            ]
+          },
+          "waitingByLane": {
+            "l-set": 3,
+            "l-sea": 2,
+            "l-mai": 0,
+            "l-sid": 0,
+            "l-sw1": 2,
+            "l-sw2": 1,
+            "l-da1": 2,
+            "l-da2": 0
+          },
+          "waitingByProject": {
+            "heron-forge": 3,
+            "quarterdeck": 5,
+            "dale-tools": 2
+          },
+          "pageRow": {
+            "ref": "PG-2",
+            "marks": [
+              "Public"
+            ],
+            "visibility": "Public"
+          },
+          "answeredView": "dr-kivo-2 is listed as 'You: A · 10:00 AM · Dr. Kivo' (suggestion)"
+        },
+        "afterStep4": {
+          "pageRow": {
+            "ref": "PG-2",
+            "marks": [],
+            "visibility": "Private"
+          },
+          "queue": "unchanged from after step 2"
+        }
+      },
+      "expect": [
+        "The answered card stays in the Answered view after the Page goes private again; making it private is not an answer to a card."
+      ]
+    },
+    {
+      "fixture": "PF-3 a version that fails to load",
+      "state": {
+        "pages": [
+          {
+            "ref": "PG-8",
+            "projectId": "quarterdeck",
+            "title": "Load test",
+            "by": "Dr. Kivo",
+            "updatedAt": "2026-11-02T08:00:00-05:00",
+            "live": false,
+            "file": "pages/fx-missing-page.html",
+            "laneId": "l-sea",
+            "pinned": false,
+            "public": null,
+            "current": 1,
+            "versions": [
+              {
+                "n": 1,
+                "madeAt": "2026-11-02T08:00:00-05:00",
+                "madeBy": "Dr. Kivo",
+                "file": "pages/fx-missing-page.html",
+                "kept": true
+              }
+            ]
+          }
+        ],
+        "alsoTrue": "PG-3's version 2 file set to pages/fx-missing-v2.html (also absent) is the second case.",
+        "missingFiles": [
+          "pages/fx-missing-page.html",
+          "pages/fx-missing-v2.html"
+        ]
+      },
+      "steps": [
+        {
+          "step": 1,
+          "event": "He opens PG-8.",
+          "expect": "The head (title, Lane, maker, updated, Bot-made Page) shows as usual. Where the Page would be: 'This Page did not load.' with a working Try again button. Loading kept the frame's size."
+        },
+        {
+          "step": 2,
+          "event": "He taps Try again while the file is still missing.",
+          "expect": "The same message returns; no success is reported; the button stays."
+        },
+        {
+          "step": 3,
+          "event": "(Second case, from the example data with PG-3's version 2 file missing.) He is reading PG-3 version 1 and taps Show on 'Version 2 is ready.'",
+          "expect": "Version 2 does not load: 'This Page did not load.' with Try again. Suggestion: version 1 stays readable behind it until he leaves, and the 'Version 2 is ready' line stays so he can try again."
+        }
+      ],
+      "expect": [
+        "the design spec puts Try again inside the frame; the flow draws it outside the Page. The design lead's call.",
+        "The two missing file paths do not exist on purpose; no other fixture or example file points to them."
+      ]
+    },
+    {
+      "fixture": "PF-4 a newer version arrives while he reads",
+      "state": {
+        "base": "the example data as pages.json restates it (PG-3 open at version 1)"
+      },
+      "steps": [
+        {
+          "step": 1,
+          "event": "At 10:00 AM he returns to PG-3, still open at version 1 (opened 9:20 AM).",
+          "expect": "A calm line 'Version 2 is ready.' with [ Show ] sits above the Page. The text he was reading has not moved; nothing jumps."
+        },
+        {
+          "step": 2,
+          "event": "He taps Show.",
+          "expect": "The Page frame now shows version 2 (pages/bridge-runbook.html, with the step 'Undo a batch that fails.'). The line is gone. The head's updated time reads 'updated 9:35 AM'."
+        },
+        {
+          "step": 3,
+          "event": "He opens PG-3 fresh from the list instead.",
+          "expect": "It opens at version 2 with no 'Version N is ready' line: that line shows only to someone already reading an older version."
+        }
+      ],
+      "expect": [
+        "Version 1 stays kept as a file, so step 1 shows version 1 as it was."
+      ]
+    },
+    {
+      "fixture": "PF-5 a newer private version than the public one",
+      "state": {
+        "base": "the example data as pages.json restates it (PG-3 public at version 1, version 2 private)"
+      },
+      "steps": [
+        {
+          "step": 1,
+          "event": "He opens PG-3 and looks at the Public line.",
+          "expect": "'Bot-made Page · ● Public, version 1', Copy public link, Make private, then 'Version 2 is newer and still private.' and [ Update public version ]."
+        },
+        {
+          "step": 2,
+          "event": "He taps Update public version.",
+          "expect": "Only he can do this. It asks once, like Make public, for the exact version: '! Make version 2 public?' with the same three warnings, the private-data check and a public preview. A bot that wants it updated asks with a one-way Task Card instead."
+        },
+        {
+          "step": 3,
+          "event": "He confirms.",
+          "expect": "The public line reads 'Public, version 2' and the 'newer and still private' line is gone. Whether the version 1 link keeps working is not ruled (the design lead's call)."
+        }
+      ],
+      "expect": [
+        "The Queue is unchanged by this fixture: no card is involved when he does it himself."
+      ]
+    },
+    {
+      "fixture": "PF-139 a Page that tries network access and navigation",
+      "state": {
+        "pages": [
+          {
+            "ref": "PG-139",
+            "projectId": "quarterdeck",
+            "title": "Page boundary fixture",
+            "by": "Shelvorn",
+            "updatedAt": "2026-11-02T08:00:00-05:00",
+            "live": false,
+            "file": "pages/fx-network.html",
+            "laneId": null,
+            "pinned": false,
+            "public": null,
+            "current": 1,
+            "versions": []
+          }
+        ]
+      },
+      "expect": [
+        "No network requests or frame navigation, including clicked links and submitted forms.",
+        "Safe text, inline styles and the inline data image still render.",
+        "Loaded only in the fixture build; no example content or sample Page bytes change."
+      ]
+    }
+  ]
+}

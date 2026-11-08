@@ -1,0 +1,50 @@
+{
+  "projects": [
+    {
+      "name": "quarterdeck",
+      "lanes": [
+        {
+          "name": "Search",
+          "cards": [
+            { "id": "alba-1", "title": "How many results should each Search group show?", "project": "quarterdeck", "lane": "Search", "due": "2026-11-03T17:00:00-05:00", "state": "open", "changed-at": "2026-11-02T09:40:00-05:00", "from": "alba", "rev": 3, "answer": null, "waitsOn": null },
+            { "id": "alba-2", "title": "Pick what a new device shows first", "project": "quarterdeck", "lane": "Search", "due": null, "state": "open", "changed-at": "2026-11-02T08:30:00-05:00", "from": "alba", "rev": 1, "answer": null, "waitsOn": null },
+            { "id": "kivo-3", "title": "Search result grouping", "project": "quarterdeck", "lane": "Search", "due": "2026-11-06T12:00:00-05:00", "state": "open", "changed-at": "2026-11-01T16:00:00-05:00", "from": "kivo", "rev": 1, "answer": null, "waitsOn": null }
+          ]
+        },
+        {
+          "name": "Settings",
+          "cards": [
+            { "id": "alba-9", "title": "Which Appearance choices ship at launch?", "project": "quarterdeck", "lane": "Settings", "due": null, "state": "done", "changed-at": "2026-11-01T21:10:00-05:00", "from": "alba", "rev": 1, "answer": { "pick": "none", "at": "2026-11-01T21:10:00-05:00" }, "waitsOn": "alba" },
+            { "id": "kivo-10", "title": "Name the export button", "project": "quarterdeck", "lane": "Settings", "due": null, "state": "done", "changed-at": "2026-11-02T07:20:00-05:00", "from": "kivo", "rev": 2, "answer": { "pick": "cant-decide", "at": "2026-11-02T07:20:00-05:00" }, "waitsOn": "kivo" },
+            { "id": "shelvorn-4", "title": "Approve the Settings sections", "project": "quarterdeck", "lane": "Settings", "due": "2026-11-02T18:00:00-05:00", "state": "open", "changed-at": "2026-11-02T08:45:00-05:00", "from": "shelvorn", "rev": 1, "answer": null, "waitsOn": null },
+            { "id": "shelvorn-5", "title": "Make Storage a Settings section", "project": "quarterdeck", "lane": "Settings", "due": null, "state": "done", "changed-at": "2026-11-02T09:00:00-05:00", "from": "shelvorn", "rev": 2, "answer": { "pick": "A", "at": "2026-11-02T09:00:00-05:00" }, "waitsOn": "shelvorn" },
+            { "id": "shelvorn-6", "title": "Drop the old export", "project": "quarterdeck", "lane": "Settings", "due": null, "state": "withdrawn", "changed-at": "2026-11-01T10:00:00-05:00", "from": "shelvorn", "rev": 1, "answer": null, "waitsOn": null }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "heron-forge",
+      "lanes": [
+        {
+          "name": "Bridge",
+          "cards": [
+            { "id": "shelvorn-7", "title": "Run the room list check before the bridge change?", "project": "heron-forge", "lane": "Bridge", "due": "2026-11-03T12:00:00-05:00", "state": "open", "changed-at": "2026-11-02T08:45:00-05:00", "from": "shelvorn", "rev": 1, "answer": null, "waitsOn": null }
+          ]
+        },
+        {
+          "name": "Search",
+          "cards": [
+            { "id": "kivo-8", "title": "Should the bridge retry a failed message?", "project": "heron-forge", "lane": "Search", "due": null, "state": "open", "changed-at": "2026-11-02T09:55:00-05:00", "from": "kivo", "rev": 1, "answer": null, "waitsOn": null }
+          ]
+        }
+      ]
+    }
+  ],
+  "plainMail": [
+    { "id": "plain-mail-1", "sender": "alba", "subject": "CARD: Pick a colour", "sent": "2026-11-02T09:10:00-05:00", "buttons": false, "errors": ["card body is invalid"] }
+  ],
+  "truncated": false,
+  "csrf": "sample-csrf-token-not-real",
+  "freshUntil": 1793836800.25
+}

@@ -1,0 +1,4 @@
+{
+ "why": "Layout and UX problems already on main when each check landed. Fix one, then delete its line. New problems fail the check.",
+ "known": []
+}

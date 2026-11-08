@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en" data-appearance="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="dark light">
+<title>Quarterdeck</title>
+<script>
+(function () {
+  var look = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  try {
+    var saved = JSON.parse(localStorage.getItem("qd.settings") || "null");
+    if (saved && (saved.appearance === "light" || saved.appearance === "dark")) look = saved.appearance;
+  } catch (error) {}
+  document.documentElement.setAttribute("data-appearance", look);
+  if (navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches) document.documentElement.setAttribute("data-standalone", "");
+})();
+</script>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div class="status-strip" aria-hidden="true"></div>
+<div id="root"></div>
+<script type="module" src="/app.js"></script>
+</body>
+</html>

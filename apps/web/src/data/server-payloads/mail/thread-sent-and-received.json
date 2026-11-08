@@ -1,0 +1,74 @@
+{
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Content-Security-Policy": "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+    "Referrer-Policy": "strict-origin",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Content-Length": "843"
+  },
+  "body": {
+    "thread": {
+      "ref": "MT-3",
+      "subject": "Release window",
+      "project": null,
+      "lane": null,
+      "card": null,
+      "bots": [
+        "bot-b",
+        "account-user"
+      ],
+      "lastAt": "2026-11-04T07:00:00-05:00",
+      "count": 3,
+      "omitted": 0,
+      "mails": [
+        {
+          "ref": "MT-3.1",
+          "from": "bot-b",
+          "to": [
+            "account-user"
+          ],
+          "cc": [],
+          "at": "2026-11-03T13:00:00-05:00",
+          "text": "Can we release on Thursday?",
+          "cut": false,
+          "refs": [],
+          "attachments": []
+        },
+        {
+          "ref": "MT-3.2",
+          "from": "account-user",
+          "to": [
+            "bot-b"
+          ],
+          "cc": [],
+          "at": "2026-11-03T13:20:00-05:00",
+          "text": "Thursday works.\nPlease confirm the build is green first.\nThanks.",
+          "cut": false,
+          "refs": [],
+          "attachments": []
+        },
+        {
+          "ref": "MT-3.3",
+          "from": "bot-b",
+          "to": [
+            "account-user"
+          ],
+          "cc": [],
+          "at": "2026-11-04T07:00:00-05:00",
+          "text": "The build is green. See PG-7 for the checklist and AR-12 for the notes.",
+          "cut": false,
+          "refs": [
+            "AR-12",
+            "PG-7"
+          ],
+          "attachments": []
+        }
+      ]
+    },
+    "csrf": "csrf-placeholder",
+    "freshUntil": 0
+  }
+}

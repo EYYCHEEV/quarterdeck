@@ -1,0 +1,262 @@
+@import "tailwindcss" source("..");
+@source not "./document-style.ts";
+@source not "../**/*_test.mjs";
+@source not "../**/*.md";
+
+@theme {
+  --color-*: initial;
+  --color-page: #0a0a0b;
+  --color-panel: #131315;
+  --color-control: #1a1a1d;
+  --color-raised: #232327;
+  --color-well: #0e0e10;
+  --color-side: #0f0f11;
+  --color-bubble: #26262b;
+  --color-hover: #161619;
+  --color-line: rgb(255 255 255 / 0.07);
+  --color-line-2: rgb(255 255 255 / 0.11);
+  --color-line-3: rgb(255 255 255 / 0.4);
+  --color-ink: #ececef;
+  --color-ink-2: #a9a9b2;
+  --color-ink-3: #8a8a93;
+  --color-brass: #e8b35d;
+  --color-brass-ink: #1c1408;
+  --color-brass-edge: rgb(232 179 93 / 0.56);
+  --color-red: #f07b86;
+  --color-red-soft: rgb(240 123 134 / 0.12);
+  --color-p0: #ff96a0;
+  --color-p0-soft: rgb(240 123 134 / 0.16);
+  --color-p1: #e8b35d;
+  --color-p1-soft: rgb(232 179 93 / 0.15);
+  --color-green: #62d39c;
+  --color-green-soft: rgb(98 211 156 / 0.11);
+  --color-blue: #7db8ff;
+  --color-blue-soft: rgb(125 184 255 / 0.11);
+  --color-violet: #b79cff;
+  --color-violet-soft: rgb(183 156 255 / 0.12);
+  --color-link: #9cc3ff;
+  --color-paper: #ffffff;
+  --color-scrim: rgb(0 0 0 / 0.55);
+  --color-shadow: rgb(0 0 0 / 0.7);
+  --color-frost: rgb(30 30 34 / 0.88);
+  --color-you: #d8d8de;
+  --color-code-ink: #d9dae0;
+  --color-picture-ink: #d6d7dd;
+  --color-paper-ink: #3b3b42;
+  --color-paper-ink-2: #55555c;
+
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "DejaVu Sans", sans-serif;
+  --font-mono: ui-monospace, "DejaVu Sans Mono", monospace;
+
+  --text-screen: 28px;
+  --text-screen--line-height: 1.2;
+  --text-card: 23px;
+  --text-card--line-height: 1.28;
+  --text-row: 16px;
+  --text-row--line-height: 1.35;
+  --text-body: 15px;
+  --text-body--line-height: 1.5;
+  --text-meta: 13.5px;
+  --text-meta--line-height: 1.45;
+  --text-small: 13px;
+  --text-small--line-height: 1.4;
+  --text-caps: 11.5px;
+  --text-caps--line-height: 1.3;
+  --text-picture: 12.5px;
+  --text-picture--line-height: 1.5;
+  --text-tag: 12.5px;
+  --text-code: 13px;
+  --text-note: 14px;
+  --text-prose: 14.5px;
+  --text-lead: 15.5px;
+  --text-title: 22px;
+  --text-screen-wide: 30px;
+  --text-initial-xs: 9px;
+  --text-initial-sm: 10px;
+  --text-initial-xl: 17px;
+
+  --shadow-pop: 0 20px 40px -20px var(--color-shadow);
+
+  --radius-tile: 7px;
+  --radius-small: 12px;
+  --radius-control: 14px;
+  --radius-panel: 18px;
+  --radius-card: 20px;
+
+  --breakpoint-upright: 700px;
+  --breakpoint-wide: 1000px;
+  --breakpoint-mac: 1300px;
+
+  --transition-duration-quick: 100ms;
+  --transition-duration-standard: 200ms;
+  --transition-duration-screen: 240ms;
+  --ease-arrive: cubic-bezier(0.2, 0, 0, 1);
+  --ease-leave: cubic-bezier(0.4, 0, 1, 1);
+  --default-transition-duration: var(--transition-duration-standard);
+  --default-transition-timing-function: var(--ease-arrive);
+}
+
+@theme static {
+  --color-brass-soft: rgb(232 179 93 / 0.11);
+  --color-lanes-edge: #71717b;
+  --color-avatar-1: #5fcfc4;
+  --color-avatar-2: #b79cff;
+  --color-avatar-3: #f2a865;
+  --color-avatar-4: #7db8ff;
+  --color-avatar-5: #f28bb0;
+  --color-chat-accent: #90601e;
+  --color-chat-on-accent: #fffaf0;
+  --color-chat-bot: #26262b;
+  --color-chat-bot-ink: #ececef;
+  --color-chat-bot-muted: #a9a9b2;
+  --color-chat-bot-inset: #1a1a1d;
+  --color-chat-bot-line: rgb(255 255 255 / 0.11);
+  --color-chat-bot-link: #e8b35d;
+  --text-title-lg: 26px;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+:root[data-appearance="light"] {
+  color-scheme: light;
+  --color-page: #f6f6f4;
+  --color-panel: #ffffff;
+  --color-control: #efeeea;
+  --color-raised: #e6e5e0;
+  --color-well: #f0efeb;
+  --color-side: #f0efec;
+  --color-bubble: #e4e3de;
+  --color-hover: #f1f0ec;
+  --color-line: rgb(0 0 0 / 0.08);
+  --color-line-2: rgb(0 0 0 / 0.13);
+  --color-line-3: rgb(0 0 0 / 0.55);
+  --color-ink: #16161a;
+  --color-ink-2: #4b4b54;
+  --color-ink-3: #63636d;
+  --color-brass: #8a5a00;
+  --color-brass-ink: #fff9ec;
+  --color-brass-soft: rgb(138 90 0 / 0.1);
+  --color-brass-edge: rgb(138 90 0 / 0.78);
+  --color-red: #b3262f;
+  --color-red-soft: rgb(179 38 47 / 0.09);
+  --color-p0: #b3262f;
+  --color-p0-soft: rgb(179 38 47 / 0.11);
+  --color-p1: #7f5300;
+  --color-p1-soft: rgb(138 90 0 / 0.12);
+  --color-green: #16703f;
+  --color-green-soft: rgb(22 112 63 / 0.1);
+  --color-blue: #1d5bb8;
+  --color-blue-soft: rgb(29 91 184 / 0.1);
+  --color-violet: #6a3fc0;
+  --color-violet-soft: rgb(106 63 192 / 0.1);
+  --color-link: #1d5bb8;
+  --color-scrim: rgb(20 20 26 / 0.42);
+  --color-shadow: rgb(20 20 30 / 0.28);
+  --color-frost: rgb(255 255 255 / 0.88);
+  --color-you: #2a2a31;
+  --color-code-ink: #2a2a31;
+  --color-picture-ink: #2a2a31;
+  --color-avatar-1: #0d6b63;
+  --color-avatar-2: #6a3fc0;
+  --color-avatar-3: #935010;
+  --color-avatar-4: #1d5bb8;
+  --color-avatar-5: #a8315a;
+  --color-lanes-edge: #85857e;
+  --color-chat-accent: #805318;
+  --color-chat-on-accent: #fffaf0;
+  --color-chat-bot: #e8e8e3;
+  --color-chat-bot-ink: #25262a;
+  --color-chat-bot-muted: #505158;
+  --color-chat-bot-inset: #f8f8f4;
+  --color-chat-bot-line: #7b7d76;
+  --color-chat-bot-link: #654600;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    background: var(--color-page);
+  }
+  body {
+    margin: 0;
+    background: var(--color-page);
+    color: var(--color-ink);
+    font: 15px/1.5 var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-brass);
+    outline-offset: 2px;
+  }
+  ::placeholder {
+    color: var(--color-ink-3);
+  }
+  svg {
+    flex: none;
+  }
+  .status-strip {
+    display: none;
+  }
+  :root[data-standalone] .status-strip {
+    display: block;
+    position: fixed;
+    inset: 0 0 auto;
+    z-index: 2147483647;
+    height: 11px;
+    pointer-events: none;
+    background-color: var(--color-page);
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
+}
+
+@utility brass-fill {
+  background: var(--color-brass);
+  color: var(--color-brass-ink);
+}
+
+@utility frost {
+  background: var(--color-frost);
+  box-shadow:
+    inset 0 0 0 1px var(--color-line-3),
+    0 6px 18px -10px var(--color-shadow);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  backdrop-filter: blur(18px) saturate(1.5);
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    background: var(--color-raised);
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    background: var(--color-raised);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@utility eyebrow {
+  font-size: 11.5px;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-ink-3);
+}
+
+@utility stretch {
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,211 @@
+{
+  "qd": "seen-fixtures/1",
+  "testOnly": true,
+  "for": "Quarterdeck merge build C-8 tests, the ruling",
+  "author": "the content lead",
+  "written": "Tue Nov 3, 2026 (ET)",
+  "rules": [
+    "Test-only: loaded only by the build's test mode, never in the example data, never shown to the Captain as example content.",
+    "One fixture project, 'test-catch-up', with four Lanes in the example data's Lane shape; each carries its last-looked time for the Captain and its expected result. Times are before the example 'now' (Mon Nov 2, 10:00 AM ET).",
+    "Project expectation: the 'test-catch-up' row shows '● 6 new' (0 + 2 + 3 + 1) and the sidebar's Projects dot is on; opening 'Some new' drops it to '● 4 new'."
+  ],
+  "project": {
+    "id": "fx-catch-up",
+    "name": "test-catch-up",
+    "lead": "Alba",
+    "lastActivity": "15m",
+    "description": "Test fixture only. Not example data."
+  },
+  "projectNewCount": 6,
+  "lanes": [
+    {
+      "lane": {
+        "id": "fx-l-none",
+        "projectId": "fx-catch-up",
+        "name": "Nothing new",
+        "status": "Active",
+        "lead": "Alba",
+        "now": "Alba is idle.",
+        "activity": [
+          {
+            "at": "2026-11-02T08:20:00-05:00",
+            "bot": "Alba",
+            "text": "Closed the old plan.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          },
+          {
+            "at": "2026-11-01T15:00:00-05:00",
+            "bot": "Alba",
+            "text": "Wrote the plan.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          }
+        ],
+        "waiting": 0
+      },
+      "lastLooked": "2026-11-02T09:00:00-05:00",
+      "expect": [
+        "No '● N new' on this Lane's row; it adds 0 to the project's count.",
+        "Inside the Lane: no 'You last looked' line (nothing is new). Suggested; the ruling only places the line between new and seen, so this is the design lead's call."
+      ],
+      "newCount": 0
+    },
+    {
+      "lane": {
+        "id": "fx-l-some",
+        "projectId": "fx-catch-up",
+        "name": "Some new",
+        "status": "Active",
+        "lead": "Alba",
+        "now": "Shelvorn is checking the phone layout.",
+        "activity": [
+          {
+            "at": "2026-11-02T09:50:00-05:00",
+            "bot": "Shelvorn",
+            "text": "3 of 3 checks pass.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          },
+          {
+            "at": "2026-11-02T09:20:00-05:00",
+            "bot": "Alba",
+            "text": "Built the phone layout.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          },
+          {
+            "at": "2026-11-02T08:10:00-05:00",
+            "bot": "Alba",
+            "text": "Sent the plan.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          },
+          {
+            "at": "2026-11-01T16:00:00-05:00",
+            "bot": "Alba",
+            "text": "Opened the Lane.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          }
+        ],
+        "waiting": 0
+      },
+      "lastLooked": "2026-11-02T08:30:00-05:00",
+      "expect": [
+        "Lane row: '● 2 new'.",
+        "Inside the Lane: the 9:50 and 9:20 AM lines, then 'You last looked: 8:30 AM', then the 8:10 AM line and the older one.",
+        "Opening the Lane clears its 2: the Lane row shows no count afterwards and the project's count drops by 2."
+      ],
+      "newCount": 2
+    },
+    {
+      "lane": {
+        "id": "fx-l-never",
+        "projectId": "fx-catch-up",
+        "name": "Never opened",
+        "status": "Active",
+        "lead": "Alba",
+        "now": "Dr. Kivo is mapping the rooms.",
+        "activity": [
+          {
+            "at": "2026-11-02T09:40:00-05:00",
+            "bot": "Dr. Kivo",
+            "text": "Mapped the first ten rooms.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          },
+          {
+            "at": "2026-11-02T07:30:00-05:00",
+            "bot": "Dr. Kivo",
+            "text": "Started the room map.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          },
+          {
+            "at": "2026-11-01T18:00:00-05:00",
+            "bot": "Dale",
+            "text": "Set up the Lane.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          }
+        ],
+        "waiting": 0
+      },
+      "lastLooked": null,
+      "expect": [
+        "lastLooked is null: he has never opened this Lane, so every Activity line is new: '● 3 new' (as a never-opened card counts as changed, the ruling).",
+        "Inside the Lane: no 'You last looked' line, since there is no time to show; all 3 lines are new. Suggested; the design lead's call.",
+        "Opening it sets the time to that moment and clears the 3."
+      ],
+      "newCount": 3
+    },
+    {
+      "lane": {
+        "id": "fx-l-after",
+        "projectId": "fx-catch-up",
+        "name": "Bot update after he looked",
+        "status": "Active",
+        "lead": "Alba",
+        "now": "Alba is answering his note.",
+        "activity": [
+          {
+            "at": "2026-11-02T09:45:00-05:00",
+            "bot": "Alba",
+            "text": "Answered your note on the plan.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          },
+          {
+            "at": "2026-11-02T09:10:00-05:00",
+            "bot": "Alba",
+            "text": "Posted the plan.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          }
+        ],
+        "waiting": 0
+      },
+      "lastLooked": "2026-11-02T09:30:00-05:00",
+      "expect": [
+        "He opened the Lane at 9:30 AM; Alba added a line at 9:45 AM. The bot's update does not move his time: '● 1 new'.",
+        "Inside the Lane: the 9:45 AM line, then 'You last looked: 9:30 AM', then the 9:10 AM line."
+      ],
+      "steps": [
+        {
+          "step": 1,
+          "at": "2026-11-02T09:30:00-05:00",
+          "event": "He opens the Lane.",
+          "lastLooked": "2026-11-02T09:30:00-05:00",
+          "newCount": 0
+        },
+        {
+          "step": 2,
+          "at": "2026-11-02T09:45:00-05:00",
+          "event": "Alba adds 'Answered your note on the plan.'",
+          "lastLooked": "2026-11-02T09:30:00-05:00",
+          "newCount": 1
+        },
+        {
+          "step": 3,
+          "at": "2026-11-02T09:58:00-05:00",
+          "event": "He opens the Lane again.",
+          "lastLooked": "2026-11-02T09:58:00-05:00",
+          "newCount": 0
+        }
+      ],
+      "newCount": 1
+    }
+  ]
+}

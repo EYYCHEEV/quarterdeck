@@ -1,0 +1,555 @@
+{
+  "qd": "pages/1",
+  "for": "Quarterdeck build PR 5, C-8 Pages: list, viewer, make public (the ruling, the ruling, the ruling, the ruling; previews p1-make-public.txt, p2-pages-list.txt, p3-page-viewer.txt)",
+  "author": "Quarterdeck contributors",
+  "written": "Tue Nov 3, 2026 (ET)",
+  "now": "2026-11-02T10:00:00-05:00",
+  "how": [
+    "Example data. 'pages' gives, for each example Page, the fields the Pages list and the Page viewer need beyond what the example data has: 'laneId', 'pinned', 'public', and for PG-2 and PG-3 a 'file' and 'versions'. Merge by ref; every field not given stays as in the example data. A 'laneId' of null prints 'no Lane'.",
+    "PG-1 (Mission control) is given only 'laneId' null, 'pinned' true and 'public' null. Its file and its text are the example data's own and are not copied, restated or edited here; item 6 writes its newer version. This item refers to PG-1 by id only.",
+    "PG-2 (Search results layout, Dr. Kivo) gets a file, so once it is merged alba-1's Evidence shows 'See all on Page': its Page tile stops reading 'No file yet'. The Page is in Lane l-sea (Search), private, version 2 current, last updated Mon 7:00 AM.",
+    "PG-3 (Bridge runbook, Shelvorn) gets a file and a newer version. Version 1 (Sun 3:00 PM) was made public by the Captain on Sun at 5:30 PM, so it carries the Public mark. Version 2 was made Mon 9:35 AM and is private. 'updatedAt' of PG-3 moves from Sun 3:00 PM to Mon 9:35 AM (the example data's own value is kept as 'updatedAtWas'); nothing else in the content files mentions it.",
+    "One newer version waiting: the Captain opened PG-3 at version 1 at 9:20 AM ('captainOpened'); version 2 landed at 9:35 AM. At 'now' his viewer shows 'Version 2 is ready. Show' and the version he is reading stays until he taps Show. The same fact gives 'Version 2 is newer and still private. Update public version' next to the Public mark.",
+    "Pinned: PG-1 only. Live: PG-1 only (from the example data). Public: PG-3 only. 'listViews' is the Pages list as the phone and the Mac table show it, newest first with pinned on top, and 'headers' is the viewer's head for each Page; the words are suggestions from the flow and the design lead's call.",
+    "Local files: pages/search-results-layout.html (PG-2 version 2), pages/bridge-runbook.html (PG-3 version 2) and pages/bridge-runbook-v1.html (PG-3 version 1). Each is plain local HTML with no comment and no outside request, in B's dark colours. PG-2 version 1 is not kept as a file ('kept' false).",
+    "The make-public card 'dr-kivo-2' is one Task Card in the example data's taskCards shape; merge it into taskCards by id. 'queueAdd' is its queue[] entry (append). Dr. Kivo asks to make PG-2 version 2 public, for a tester. Only the Captain can make a Page public, so it is a one-way card: option A is the one-way pick with the risk in plain words, option B keeps the Page private. 'makePublic' names the exact version and holds the confirm the Captain sees after he picks A. Its 'evidenceAdd' is the exact public version's preview: a picture of the Page file in B's dark colours (media/pg-2-v2-public-preview-phone.png).",
+    "Calls made here, the content lead's and the design lead's to change: (a) the card has options A and B like the tested one-way card F-1, not the flow's Approve and Reject buttons, so the one-way block, the risk and 'Send A? This cannot be undone.' come from the existing rules; (b) priority P2, due Thu Nov 5 5 PM (as the flow draws it), no task unblocked, in Lane l-sea because PG-2 is in it; the card adds no blocker and no Activity line to that Lane.",
+    "'queueAfter' restates the Queue for 11 waiting cards by the strict rule (priority, then task-only unblocks high to low, then soonest due, no due last; the design spec) and every count that follows it: the Queue head, the sidebar count, 'N of 11 in the Queue' on each card, and the waiting counts per Lane and per Project. It replaces item 4's 10-card table, which already holds the Join card.",
+    "Times: PG-2 and PG-3 times, the card (Mon 9:30 AM) and the preview (Mon 9:28 AM) are at or before now. Every bot act here is at or before that bot's last-active time in bots.json (Dr. Kivo 9:55 AM, Shelvorn 9:40 AM), so item 4 does not change."
+  ],
+  "pages": [
+    {
+      "ref": "PG-1",
+      "laneId": null,
+      "pinned": true,
+      "public": null,
+      "note": "Only these marks are given. Every other field, the file and its text stay as in the example data."
+    },
+    {
+      "ref": "PG-2",
+      "laneId": "l-sea",
+      "pinned": false,
+      "file": "pages/search-results-layout.html",
+      "public": null,
+      "current": 2,
+      "versions": [
+        {
+          "n": 1,
+          "madeAt": "2026-11-01T16:00:00-05:00",
+          "madeBy": "Dr. Kivo",
+          "file": null,
+          "kept": false
+        },
+        {
+          "n": 2,
+          "madeAt": "2026-11-02T07:00:00-05:00",
+          "madeBy": "Dr. Kivo",
+          "file": "pages/search-results-layout.html",
+          "kept": true
+        }
+      ]
+    },
+    {
+      "ref": "PG-3",
+      "laneId": "l-sw2",
+      "pinned": false,
+      "file": "pages/bridge-runbook.html",
+      "updatedAt": "2026-11-02T09:35:00-05:00",
+      "updatedAtWas": "2026-11-01T15:00:00-05:00",
+      "public": {
+        "version": 1,
+        "madeBy": "Captain",
+        "madeAt": "2026-11-01T17:30:00-05:00",
+        "privateDataCheck": {
+          "by": "the Pages host",
+          "at": "2026-11-01T17:29:00-05:00",
+          "result": "pass"
+        },
+        "link": "https://pages-public.example.com/p/aaaqeayeaudaocajbifqydiob4"
+      },
+      "current": 2,
+      "versions": [
+        {
+          "n": 1,
+          "madeAt": "2026-11-01T15:00:00-05:00",
+          "madeBy": "Shelvorn",
+          "file": "pages/bridge-runbook-v1.html",
+          "kept": true
+        },
+        {
+          "n": 2,
+          "madeAt": "2026-11-02T09:35:00-05:00",
+          "madeBy": "Shelvorn",
+          "file": "pages/bridge-runbook.html",
+          "kept": true
+        }
+      ],
+      "captainOpened": {
+        "version": 1,
+        "at": "2026-11-02T09:20:00-05:00"
+      }
+    }
+  ],
+  "addOn": {
+    "name": "Pages",
+    "state": "On",
+    "source": "US-29: off by default, on for our dogfood"
+  },
+  "listViews": {
+    "quarterdeck": {
+      "sort": "Last updated (default), pinned on top",
+      "rows": [
+        {
+          "ref": "PG-1",
+          "title": "Mission control",
+          "marks": [
+            "● Live"
+          ],
+          "pinned": true,
+          "phoneLine": "no Lane · Alba · 2m ago",
+          "table": {
+            "Title": "Mission control ●",
+            "Lane": "(no Lane)",
+            "Made by": "Alba",
+            "Updated": "2m ago",
+            "Visibility": "Private"
+          }
+        },
+        {
+          "ref": "PG-2",
+          "title": "Search results layout",
+          "marks": [],
+          "pinned": false,
+          "phoneLine": "Search · Dr. Kivo · 3h ago",
+          "table": {
+            "Title": "Search results layout",
+            "Lane": "Search",
+            "Made by": "Dr. Kivo",
+            "Updated": "3h ago",
+            "Visibility": "Private"
+          }
+        }
+      ]
+    },
+    "heron-forge": {
+      "sort": "Last updated (default), pinned on top",
+      "rows": [
+        {
+          "ref": "PG-3",
+          "title": "Bridge runbook",
+          "marks": [
+            "Public"
+          ],
+          "pinned": false,
+          "phoneLine": "Bridge · Shelvorn · 25m ago",
+          "table": {
+            "Title": "Bridge runbook",
+            "Lane": "Bridge",
+            "Made by": "Shelvorn",
+            "Updated": "25m ago",
+            "Visibility": "Public"
+          }
+        }
+      ]
+    }
+  },
+  "headers": {
+    "PG-1": {
+      "ref": "PG-1",
+      "title": "Mission control",
+      "line": "no Lane · Alba · updated 9:58 AM",
+      "botMade": "Bot-made Page",
+      "marks": [
+        "● Live"
+      ],
+      "buttons": [
+        "↗ New tab",
+        "⋯"
+      ],
+      "menu": [
+        "Copy link (Quarterdeck sign-in)",
+        "Open in browser  ↗",
+        "Make public..."
+      ]
+    },
+    "PG-2": {
+      "ref": "PG-2",
+      "title": "Search results layout",
+      "line": "Search · Dr. Kivo · updated 7:00 AM",
+      "botMade": "Bot-made Page",
+      "marks": [],
+      "buttons": [
+        "↗ New tab",
+        "⋯"
+      ],
+      "menu": [
+        "Copy link (Quarterdeck sign-in)",
+        "Open in browser  ↗",
+        "Make public..."
+      ]
+    },
+    "PG-3": {
+      "ref": "PG-3",
+      "title": "Bridge runbook",
+      "line": "Bridge · Shelvorn · updated 9:35 AM",
+      "botMade": "Bot-made Page",
+      "marks": [
+        "Public"
+      ],
+      "buttons": [
+        "↗ New tab",
+        "⋯"
+      ],
+      "menu": [
+        "Copy link (Quarterdeck sign-in)",
+        "Open in browser  ↗",
+        "Copy public link",
+        "Make private"
+      ]
+    }
+  },
+  "versionReady": {
+    "page": "PG-3",
+    "reading": 1,
+    "readingSince": "2026-11-02T09:20:00-05:00",
+    "ready": 2,
+    "readyAt": "2026-11-02T09:35:00-05:00",
+    "line": "Version 2 is ready.",
+    "button": "Show",
+    "publicLine": "Version 2 is newer and still private.",
+    "publicButton": "Update public version"
+  },
+  "taskCardsAdd": [
+    {
+      "laneId": "l-sea",
+      "card": {
+        "qd": "card/1",
+        "card": "dr-kivo-2",
+        "id": "dr-kivo-2",
+        "project": "quarterdeck",
+        "lane": "Search",
+        "title": "Make \"Search results layout\" public?",
+        "about": "Dr. Kivo asks to share a Page publicly.",
+        "context": "The Page shows how Search groups its results.\nA tester outside the team needs to read it.\nOnly you can make a Page public.",
+        "ascii": " Search results layout, version 2\n ------------------------------------------\n Chats          3 results\n Task Cards    12 results    5 shown\n Projects       2 results\n Lanes          1 result\n Anyone with the link would see this Page.",
+        "options": [
+          {
+            "label": "A. Make version 2 public",
+            "pick": true,
+            "door": "one-way",
+            "does": "Anyone with the link can read and copy version 2 of this Page, without signing in.",
+            "cost": "One tap and one confirm.",
+            "risk": "Anyone with the link can read and copy it, and copies cannot be recalled. It is not sent to search engines.",
+            "undo": "Cannot be undone. You can make the Page private again, but copies already made stay.",
+            "pros": [
+              "The tester can read it today."
+            ],
+            "cons": [
+              "Version 3 and later stay private until you update the public version."
+            ]
+          },
+          {
+            "label": "B. Keep it private",
+            "door": "two-way",
+            "does": "The Page stays private; only people signed in to Quarterdeck can open it.",
+            "cost": "The tester waits.",
+            "risk": "The tester cannot read the layout yet.",
+            "undo": "Ask again any time.",
+            "pros": [
+              "Nothing leaves Quarterdeck."
+            ],
+            "cons": [
+              "The tester stays blocked."
+            ]
+          }
+        ],
+        "pick_why": "The tester needs a link without signing in, and the host found no private data in this version.",
+        "you_do": "Open the public preview, then pick A or B.",
+        "skip": "If no answer by due: the Page stays private and the tester waits.",
+        "due": "2026-11-05T17:00:00-05:00",
+        "door": "one-way",
+        "category": [
+          "strategy"
+        ],
+        "kind": "decision",
+        "pageRefs": [
+          "PG-2"
+        ]
+      },
+      "rev": 1,
+      "from": "dr-kivo",
+      "at": "2026-11-02T09:30:00-05:00",
+      "comments": [],
+      "answers": [],
+      "priority": "P2",
+      "type": "approval",
+      "unblocks": [],
+      "edits": [],
+      "seenAt": null,
+      "makePublic": {
+        "pageRef": "PG-2",
+        "version": 2,
+        "versionMadeAt": "2026-11-02T07:00:00-05:00",
+        "previewId": "ev-d2-public-preview",
+        "confirm": {
+          "title": "! Make version 2 public?",
+          "lines": [
+            "Anyone with the link can read and copy this exact version, without signing in.",
+            "Not sent to search engines.",
+            "Copies cannot be recalled."
+          ],
+          "privateDataCheck": {
+            "by": "the Pages host",
+            "at": "2026-11-02T09:28:00-05:00",
+            "result": "pass"
+          },
+          "buttons": [
+            "Preview public version",
+            "Make public",
+            "Back"
+          ]
+        },
+        "afterApprove": "PG-2 is public, version 2: Public mark, Copy public link, Make private."
+      }
+    }
+  ],
+  "queueAdd": [
+    {
+      "id": "dr-kivo-2",
+      "from": "taskCards",
+      "title": "Make \"Search results layout\" public?",
+      "bot": "Dr. Kivo",
+      "projectId": "quarterdeck",
+      "laneId": "l-sea",
+      "lane": "Search",
+      "due": "2026-11-05T17:00:00-05:00",
+      "priority": "P2",
+      "type": "approval",
+      "unblocks": [],
+      "lastChange": null,
+      "seenAt": null,
+      "changedSinceSeen": false,
+      "score": 203,
+      "rank": 9
+    }
+  ],
+  "evidenceAdd": {
+    "dr-kivo-2": {
+      "doneBy": "Dr. Kivo",
+      "media": [],
+      "links": [
+        {
+          "id": "ev-d2-public-preview",
+          "kind": "preview",
+          "title": "Public preview: version 2",
+          "url": "https://preview.quarterdeck.example.com/pages/pg-2/version-2",
+          "shot": "media/pg-2-v2-public-preview-phone.png",
+          "width": 880,
+          "height": 1912,
+          "updatedAt": "2026-11-02T09:28:00-05:00",
+          "gated": true,
+          "caption": "Exactly what a reader would see, shown before it is public"
+        }
+      ]
+    }
+  },
+  "queueAfter": {
+    "waiting": 11,
+    "was": 10,
+    "wasOriginal": 9,
+    "head": "Queue · 11 waiting",
+    "sidebarCount": 11,
+    "filterLineExample": "3 of 11 waiting",
+    "rule": "priority first (P0 before P4), then task-only unblocks high to low, then soonest due, no due last; stable for exact ties",
+    "order": [
+      {
+        "n": 1,
+        "id": "shelvorn-1",
+        "title": "Run the room list check before the bridge change?",
+        "priority": "P0",
+        "unblocks": 4,
+        "due": "2026-11-03T12:00:00-05:00",
+        "dueText": "Tue Nov 3, 12 PM",
+        "position": "1 of 11 in the Queue"
+      },
+      {
+        "n": 2,
+        "id": "c2",
+        "title": "Approve the Settings sections",
+        "priority": "P0",
+        "unblocks": 2,
+        "due": "2026-11-02T18:00:00-05:00",
+        "dueText": "Mon Nov 2, 6 PM",
+        "position": "2 of 11 in the Queue"
+      },
+      {
+        "n": 3,
+        "id": "c1",
+        "title": "Pick what a new device shows first",
+        "priority": "P1",
+        "unblocks": 2,
+        "due": "2026-11-03T17:00:00-05:00",
+        "dueText": "Tue Nov 3, 5 PM",
+        "position": "3 of 11 in the Queue"
+      },
+      {
+        "n": 4,
+        "id": "alba-1",
+        "title": "How many results should each Search group show?",
+        "priority": "P1",
+        "unblocks": 2,
+        "due": "2026-11-04T17:00:00-05:00",
+        "dueText": "Wed Nov 4, 5 PM",
+        "position": "4 of 11 in the Queue"
+      },
+      {
+        "n": 5,
+        "id": "shelvorn-2",
+        "title": "Should the bridge retry a failed message?",
+        "priority": "P1",
+        "unblocks": 1,
+        "due": "2026-11-03T17:00:00-05:00",
+        "dueText": "Tue Nov 3, 5 PM",
+        "position": "5 of 11 in the Queue"
+      },
+      {
+        "n": 6,
+        "id": "c6",
+        "title": "Room list placeholder",
+        "priority": "P1",
+        "unblocks": 1,
+        "due": "2026-11-04T12:00:00-05:00",
+        "dueText": "Wed Nov 4, 12 PM",
+        "position": "6 of 11 in the Queue"
+      },
+      {
+        "n": 7,
+        "id": "join-1",
+        "title": "Fen wants to join",
+        "priority": "P1",
+        "unblocks": 0,
+        "due": null,
+        "dueText": "No due time",
+        "position": "7 of 11 in the Queue"
+      },
+      {
+        "n": 8,
+        "id": "dr-kivo-1",
+        "title": "Which columns should the Task Card export have?",
+        "priority": "P2",
+        "unblocks": 2,
+        "due": "2026-11-05T17:00:00-05:00",
+        "dueText": "Thu Nov 5, 5 PM",
+        "position": "8 of 11 in the Queue"
+      },
+      {
+        "n": 9,
+        "id": "dr-kivo-2",
+        "title": "Make \"Search results layout\" public?",
+        "priority": "P2",
+        "unblocks": 0,
+        "due": "2026-11-05T17:00:00-05:00",
+        "dueText": "Thu Nov 5, 5 PM",
+        "position": "9 of 11 in the Queue"
+      },
+      {
+        "n": 10,
+        "id": "c9",
+        "title": "CSV export columns",
+        "priority": "P3",
+        "unblocks": 1,
+        "due": "2026-11-09T12:00:00-05:00",
+        "dueText": "Mon Nov 9, 12 PM",
+        "position": "10 of 11 in the Queue"
+      },
+      {
+        "n": 11,
+        "id": "c4",
+        "title": "Search result grouping",
+        "priority": "P3",
+        "unblocks": 0,
+        "due": "2026-11-06T12:00:00-05:00",
+        "dueText": "Fri Nov 6, 12 PM",
+        "position": "11 of 11 in the Queue"
+      }
+    ],
+    "waitingByLane": {
+      "l-set": 3,
+      "l-sea": 3,
+      "l-mai": 0,
+      "l-sid": 0,
+      "l-sw1": 2,
+      "l-sw2": 1,
+      "l-da1": 2,
+      "l-da2": 0
+    },
+    "waitingByProject": {
+      "heron-forge": 3,
+      "quarterdeck": 6,
+      "dale-tools": 2
+    },
+    "answeredView": "unchanged: c10 and dale-1; decided Join and make-public cards join it"
+  },
+  "changesToEarlierFiles": [
+    {
+      "file": "frozen/B/data.js (example data)",
+      "path": "pages[1].file",
+      "was": null,
+      "becomes": "pages/search-results-layout.html"
+    },
+    {
+      "file": "frozen/B/data.js (example data)",
+      "path": "pages[2].file",
+      "was": null,
+      "becomes": "pages/bridge-runbook.html"
+    },
+    {
+      "file": "frozen/B/data.js (example data)",
+      "path": "pages[2].updatedAt",
+      "was": "2026-11-01T15:00:00-05:00",
+      "becomes": "2026-11-02T09:35:00-05:00"
+    },
+    {
+      "file": "evidence/evidence.json and item 6's evidence.v2.json",
+      "path": "how[5]",
+      "was": "says PG-2 has no file, so alba-1 shows no 'See all'",
+      "becomes": "PG-2 has a file; alba-1's Evidence shows 'See all on Page'"
+    },
+    {
+      "file": "design-spec.md",
+      "path": "section 4.3 (Page without a file) and section 11 last line",
+      "was": "PG-2 and PG-3 have no file and stay as they are",
+      "becomes": "PG-2 and PG-3 have files; the 'No file yet' state is tested by fixture PF-1"
+    },
+    {
+      "file": "design-spec.md",
+      "path": "section 4.11, lines 355 and 356 (the alba-1 phone card picture: its PG-2 Evidence tile)",
+      "was": "the PG-2 tile reads 'PG-2 Page' over 'No file yet' and is not a link; the Evidence heading above it (line 354) has no 'See all on Page'",
+      "becomes": "the PG-2 tile reads the Page's title, Search results layout, and 'By Dr. Kivo · Updated 7:00 AM' (clipped with an ellipsis, as section 4.3 says) instead of 'No file yet', and it is a link that opens the Page in the viewer; the Evidence heading on line 354 gains 'See all on Page' at the right"
+    },
+    {
+      "file": "design-spec.md",
+      "path": "section 11 result table and every '9 waiting'",
+      "was": "9 cards (item 4 restated 10)",
+      "becomes": "11 cards, the table in queueAfter.order"
+    },
+    {
+      "file": "lanes/lanes.json and bots/bots.json",
+      "path": "waitingByLane.l-sea and waitingTotal",
+      "was": "l-sea 2, total 9 (item 4: 10)",
+      "becomes": "l-sea 3, total 11; every other Lane count as in bots.json queueAfter"
+    },
+    {
+      "file": "bots/bots.json",
+      "path": "queueAfter",
+      "was": "10 cards",
+      "becomes": "superseded by this file's 11 cards"
+    }
+  ],
+  "notes": [
+    "The viewer's failure line and Try again are in the fixtures (PF-3). the design spec puts Try again inside the frame; the flow draws it outside the Page. The design lead's call.",
+    "The Make public confirm's private-data line is worded in the flow (pages.md); it is not copied here because that wording names the words this folder must not contain. The check itself is recorded as 'privateDataCheck'.",
+    "The Pages list's 'Added' filter and sort need an added-at time per Page; the example data has none, so the first version's time stands in for it (suggestion).",
+    "A newly public Page's link is an example address on example.com and never a working link."
+  ]
+}

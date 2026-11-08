@@ -1,0 +1,125 @@
+{
+  "bot": {
+    "id": "iris",
+    "note": "Export lead"
+  },
+  "messages": [
+    {
+      "id": "iris-m1",
+      "from": "captain",
+      "text": "Iris, question 1: is the export sheet ready?",
+      "at": "2026-11-06T00:01:00-05:00",
+      "refs": [],
+      "clientId": "client-iris-1"
+    },
+    {
+      "id": "iris-m2",
+      "from": "bot",
+      "text": "Answer 2: the export sheet is on its way.",
+      "at": "2026-11-06T00:02:00-05:00",
+      "refs": []
+    },
+    {
+      "id": "iris-m3",
+      "from": "captain",
+      "text": "Iris, question 3: is the export sheet ready?",
+      "at": "2026-11-06T00:03:00-05:00",
+      "refs": [],
+      "clientId": "client-iris-3"
+    },
+    {
+      "id": "iris-m4",
+      "from": "bot",
+      "text": "Answer 4: the export sheet is on its way.",
+      "at": "2026-11-06T00:04:00-05:00",
+      "refs": []
+    },
+    {
+      "id": "iris-m5",
+      "from": "captain",
+      "text": "Iris, question 5: is the export sheet ready?",
+      "at": "2026-11-06T00:05:00-05:00",
+      "refs": [],
+      "clientId": "client-iris-5"
+    },
+    {
+      "id": "iris-m6",
+      "from": "bot",
+      "text": "Answer 6: the export sheet is on its way.",
+      "at": "2026-11-06T00:06:00-05:00",
+      "refs": []
+    },
+    {
+      "id": "iris-m7",
+      "from": "captain",
+      "text": "Iris, question 7: is the export sheet ready?",
+      "at": "2026-11-06T00:07:00-05:00",
+      "refs": [],
+      "clientId": "client-iris-7"
+    },
+    {
+      "id": "iris-m8",
+      "from": "bot",
+      "text": "Answer 8: the export sheet is on its way.",
+      "at": "2026-11-06T00:08:00-05:00",
+      "refs": []
+    },
+    {
+      "id": "iris-m9",
+      "from": "captain",
+      "text": "Iris, question 9: is the export sheet ready?",
+      "at": "2026-11-06T00:09:00-05:00",
+      "refs": [],
+      "clientId": "client-iris-9"
+    },
+    {
+      "id": "iris-m10",
+      "from": "bot",
+      "text": "Answer 10: the export sheet is on its way.",
+      "at": "2026-11-06T00:10:00-05:00",
+      "refs": []
+    },
+    {
+      "id": "iris-m11",
+      "from": "captain",
+      "text": "Iris, question 11: is the export sheet ready?",
+      "at": "2026-11-06T00:11:00-05:00",
+      "refs": [],
+      "clientId": "client-iris-11"
+    },
+    {
+      "id": "iris-m12",
+      "from": "bot",
+      "text": "Answer 12: the export sheet is on its way.",
+      "at": "2026-11-06T00:12:00-05:00",
+      "refs": []
+    },
+    {
+      "id": "iris-m13",
+      "from": "captain",
+      "text": "Iris, question 13: is the export sheet ready?",
+      "at": "2026-11-06T00:13:00-05:00",
+      "refs": [],
+      "clientId": "client-iris-13"
+    },
+    {
+      "id": "iris-m14",
+      "from": "bot",
+      "text": "Answer 14: the export sheet is on its way.",
+      "at": "2026-11-06T00:14:00-05:00",
+      "refs": []
+    },
+    {
+      "id": "iris-m15",
+      "from": "captain",
+      "text": "Iris, question 15: is the export sheet ready?",
+      "at": "2026-11-06T00:15:00-05:00",
+      "refs": [],
+      "clientId": "client-iris-15"
+    }
+  ],
+  "seenUpTo": null,
+  "seenAt": null,
+  "working": null,
+  "older": false
+}

@@ -1,0 +1,510 @@
+{
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Content-Security-Policy": "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+    "Referrer-Policy": "strict-origin",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "ETag": "\"a75329ea7f84efdc973c20b710ba705904eb17bf3b008076c3ffb8cdc725481a\"",
+    "Content-Length": "7572"
+  },
+  "body": {
+    "projects": [
+      {
+        "name": "Crew",
+        "lanes": [
+          {
+            "name": "Launch",
+            "cards": [
+              {
+                "id": "bot-a-10",
+                "title": "Choose the release train day",
+                "project": "Crew",
+                "lane": "Launch",
+                "due": null,
+                "state": "open",
+                "changed-at": "2026-11-02T09:10:00-05:00",
+                "from": "bot-a",
+                "rev": 1,
+                "answer": null,
+                "waitsOn": null
+              },
+              {
+                "id": "bot-a-4",
+                "title": "Rotate the build agents",
+                "project": "Crew",
+                "lane": "Launch",
+                "due": null,
+                "state": "open",
+                "changed-at": "2026-11-02T09:04:00-05:00",
+                "from": "bot-a",
+                "rev": 1,
+                "answer": null,
+                "waitsOn": null
+              },
+              {
+                "id": "bot-a-5",
+                "title": "Name the launch checklist owner and a backup",
+                "project": "Crew",
+                "lane": "Launch",
+                "due": "2026-11-06T09:00:00-05:00",
+                "state": "open",
+                "changed-at": "2026-11-02T09:37:00-05:00",
+                "from": "bot-a",
+                "rev": 2,
+                "answer": null,
+                "waitsOn": null
+              },
+              {
+                "id": "bot-a-7",
+                "title": "Pick the rollout order",
+                "project": "Crew",
+                "lane": "Launch",
+                "due": null,
+                "state": "open",
+                "changed-at": "2026-11-02T09:07:00-05:00",
+                "from": "bot-a",
+                "rev": 1,
+                "answer": null,
+                "waitsOn": null
+              }
+            ]
+          },
+          {
+            "name": "Ops",
+            "cards": [
+              {
+                "id": "bot-a-1",
+                "title": "Pick the backup window",
+                "project": "Crew",
+                "lane": "Ops",
+                "due": "2026-11-04T09:00:00-05:00",
+                "state": "open",
+                "changed-at": "2026-11-02T09:01:00-05:00",
+                "from": "bot-a",
+                "rev": 1,
+                "answer": null,
+                "waitsOn": null
+              },
+              {
+                "id": "bot-a-2",
+                "title": "Approve the log retention change",
+                "project": "Crew",
+                "lane": "Ops",
+                "due": null,
+                "state": "open",
+                "changed-at": "2026-11-02T09:02:00-05:00",
+                "from": "bot-a",
+                "rev": 1,
+                "answer": null,
+                "waitsOn": null
+              },
+              {
+                "id": "bot-a-3",
+                "title": "Choose the alert channel",
+                "project": "Crew",
+                "lane": "Ops",
+                "due": null,
+                "state": "done",
+                "changed-at": "2026-11-02T09:36:00-05:00",
+                "from": "bot-a",
+                "rev": 1,
+                "answer": {
+                  "pick": "A",
+                  "at": "2026-11-02T09:35:40-05:00"
+                },
+                "waitsOn": "bot-a"
+              },
+              {
+                "id": "bot-a-6",
+                "title": "Set the status page wording",
+                "project": "Crew",
+                "lane": "Ops",
+                "due": null,
+                "state": "open",
+                "changed-at": "2026-11-02T09:06:00-05:00",
+                "from": "bot-a",
+                "rev": 1,
+                "answer": null,
+                "waitsOn": null
+              },
+              {
+                "id": "bot-a-8",
+                "title": "Retire the old dashboard",
+                "project": "Crew",
+                "lane": "Ops",
+                "due": null,
+                "state": "withdrawn",
+                "changed-at": "2026-11-02T09:39:00-05:00",
+                "from": "bot-a",
+                "rev": 1,
+                "answer": null,
+                "waitsOn": null
+              },
+              {
+                "id": "bot-a-9",
+                "title": "Decide the pager rota",
+                "project": "Crew",
+                "lane": "Ops",
+                "due": null,
+                "state": "open",
+                "changed-at": "2026-11-02T09:09:00-05:00",
+                "from": "bot-a",
+                "rev": 1,
+                "answer": null,
+                "waitsOn": null
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Repo",
+        "lanes": [
+          {
+            "name": "Launch",
+            "cards": [
+              {
+                "id": "repo-lead-10",
+                "title": "Choose the docs host",
+                "project": "Repo",
+                "lane": "Launch",
+                "due": null,
+                "state": "open",
+                "changed-at": "2026-11-02T09:20:00-05:00",
+                "from": "repo-lead",
+                "rev": 1,
+                "answer": null,
+                "waitsOn": null
+              },
+              {
+                "id": "repo-lead-3",
+                "title": "Choose the branch naming rule",
+                "project": "Repo",
+                "lane": "Launch",
+                "due": null,
+                "state": "open",
+                "changed-at": "2026-11-02T09:13:00-05:00",
+                "from": "repo-lead",
+                "rev": 1,
+                "answer": null,
+                "waitsOn": null
+              },
+              {
+                "id": "repo-lead-6",
+                "title": "Decide the changelog format",
+                "project": "Repo",
+                "lane": "Launch",
+                "due": null,
+                "state": "open",
+                "changed-at": "2026-11-02T09:16:00-05:00",
+                "from": "repo-lead",
+                "rev": 1,
+                "answer": null,
+                "waitsOn": null
+              }
+            ]
+          },
+          {
+            "name": "Review",
+            "cards": [
+              {
+                "id": "repo-lead-1",
+                "title": "Merge the queue rewrite",
+                "project": "Repo",
+                "lane": "Review",
+                "due": null,
+                "state": "open",
+                "changed-at": "2026-11-02T09:11:00-05:00",
+                "from": "repo-lead",
+                "rev": 1,
+                "answer": null,
+                "waitsOn": null
+              },
+              {
+                "id": "repo-lead-11",
+                "title": "Drop the legacy flag",
+                "project": "Repo",
+                "lane": "Review",
+                "due": null,
+                "state": "withdrawn",
+                "changed-at": "2026-11-02T09:46:00-05:00",
+                "from": "repo-lead",
+                "rev": 1,
+                "answer": null,
+                "waitsOn": null
+              },
+              {
+                "id": "repo-lead-4",
+                "title": "Pick the review depth",
+                "project": "Repo",
+                "lane": "Review",
+                "due": null,
+                "state": "done",
+                "changed-at": "2026-11-02T09:40:00-05:00",
+                "from": "repo-lead",
+                "rev": 1,
+                "answer": {
+                  "pick": "cant-decide",
+                  "at": "2026-11-02T09:39:40-05:00"
+                },
+                "waitsOn": "repo-lead"
+              },
+              {
+                "id": "repo-lead-5",
+                "title": "Approve the new lint rules",
+                "project": "Repo",
+                "lane": "Review",
+                "due": null,
+                "state": "open",
+                "changed-at": "2026-11-02T09:15:00-05:00",
+                "from": "repo-lead",
+                "rev": 1,
+                "answer": null,
+                "waitsOn": null
+              },
+              {
+                "id": "repo-lead-7",
+                "title": "Choose the release cut and its owner",
+                "project": "Repo",
+                "lane": "Review",
+                "due": "2026-11-04T18:00:00-05:00",
+                "state": "open",
+                "changed-at": "2026-11-02T09:38:00-05:00",
+                "from": "repo-lead",
+                "rev": 3,
+                "answer": null,
+                "waitsOn": null
+              }
+            ]
+          },
+          {
+            "name": "Ship",
+            "cards": [
+              {
+                "id": "repo-lead-12",
+                "title": "Name the next milestone",
+                "project": "Repo",
+                "lane": "Ship",
+                "due": null,
+                "state": "open",
+                "changed-at": "2026-11-02T09:22:00-05:00",
+                "from": "repo-lead",
+                "rev": 1,
+                "answer": null,
+                "waitsOn": null
+              },
+              {
+                "id": "repo-lead-2",
+                "title": "Run the data migration",
+                "project": "Repo",
+                "lane": "Ship",
+                "due": "2026-11-03T17:00:00-05:00",
+                "state": "open",
+                "changed-at": "2026-11-02T09:12:00-05:00",
+                "from": "repo-lead",
+                "rev": 1,
+                "answer": null,
+                "waitsOn": null
+              },
+              {
+                "id": "repo-lead-8",
+                "title": "Set the flaky test policy",
+                "project": "Repo",
+                "lane": "Ship",
+                "due": null,
+                "state": "open",
+                "changed-at": "2026-11-02T09:18:00-05:00",
+                "from": "repo-lead",
+                "rev": 1,
+                "answer": null,
+                "waitsOn": null
+              },
+              {
+                "id": "repo-lead-9",
+                "title": "Pick the hotfix process",
+                "project": "Repo",
+                "lane": "Ship",
+                "due": null,
+                "state": "done",
+                "changed-at": "2026-11-02T09:42:00-05:00",
+                "from": "repo-lead",
+                "rev": 1,
+                "answer": {
+                  "pick": "B",
+                  "at": "2026-11-02T09:41:40-05:00"
+                },
+                "waitsOn": "repo-lead"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Web",
+        "lanes": [
+          {
+            "name": "Docs",
+            "cards": [
+              {
+                "id": "bot-b-1",
+                "title": "Pick the docs theme",
+                "project": "Web",
+                "lane": "Docs",
+                "due": null,
+                "state": "open",
+                "changed-at": "2026-11-02T09:23:00-05:00",
+                "from": "bot-b",
+                "rev": 1,
+                "answer": null,
+                "waitsOn": null
+              },
+              {
+                "id": "bot-b-2",
+                "title": "Choose the search provider",
+                "project": "Web",
+                "lane": "Docs",
+                "due": null,
+                "state": "done",
+                "changed-at": "2026-11-02T09:43:00-05:00",
+                "from": "bot-b",
+                "rev": 1,
+                "answer": {
+                  "pick": "none",
+                  "at": "2026-11-02T09:42:40-05:00"
+                },
+                "waitsOn": "bot-b"
+              },
+              {
+                "id": "bot-b-3",
+                "title": "Approve the new landing copy",
+                "project": "Web",
+                "lane": "Docs",
+                "due": null,
+                "state": "open",
+                "changed-at": "2026-11-02T09:25:00-05:00",
+                "from": "bot-b",
+                "rev": 1,
+                "answer": null,
+                "waitsOn": null
+              },
+              {
+                "id": "bot-b-6",
+                "title": "Decide the image sizes",
+                "project": "Web",
+                "lane": "Docs",
+                "due": null,
+                "state": "open",
+                "changed-at": "2026-11-02T09:28:00-05:00",
+                "from": "bot-b",
+                "rev": 1,
+                "answer": null,
+                "waitsOn": null
+              },
+              {
+                "id": "bot-b-7",
+                "title": "Pick the font pairing",
+                "project": "Web",
+                "lane": "Docs",
+                "due": null,
+                "state": "withdrawn",
+                "changed-at": "2026-11-02T09:45:00-05:00",
+                "from": "bot-b",
+                "rev": 1,
+                "answer": {
+                  "pick": "A",
+                  "at": "2026-11-02T09:43:40-05:00"
+                },
+                "waitsOn": null
+              },
+              {
+                "id": "bot-b-9",
+                "title": "Name the help page",
+                "project": "Web",
+                "lane": "Docs",
+                "due": null,
+                "state": "open",
+                "changed-at": "2026-11-02T09:31:00-05:00",
+                "from": "bot-b",
+                "rev": 1,
+                "answer": null,
+                "waitsOn": null
+              }
+            ]
+          },
+          {
+            "name": "Ops",
+            "cards": [
+              {
+                "id": "bot-b-4",
+                "title": "Set the uptime target",
+                "project": "Web",
+                "lane": "Ops",
+                "due": "2026-11-05T09:00:00-05:00",
+                "state": "open",
+                "changed-at": "2026-11-02T09:47:00-05:00",
+                "from": "bot-b",
+                "rev": 2,
+                "answer": null,
+                "waitsOn": null
+              },
+              {
+                "id": "bot-b-5",
+                "title": "Choose the cache lifetime",
+                "project": "Web",
+                "lane": "Ops",
+                "due": "2026-11-05T12:00:00-05:00",
+                "state": "open",
+                "changed-at": "2026-11-02T09:27:00-05:00",
+                "from": "bot-b",
+                "rev": 1,
+                "answer": null,
+                "waitsOn": null
+              },
+              {
+                "id": "bot-b-8",
+                "title": "Choose the CDN plan",
+                "project": "Web",
+                "lane": "Ops",
+                "due": null,
+                "state": "open",
+                "changed-at": "2026-11-02T09:30:00-05:00",
+                "from": "bot-b",
+                "rev": 1,
+                "answer": null,
+                "waitsOn": null
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "plainMail": [
+      {
+        "id": "msg-032",
+        "sender": "bot-a",
+        "subject": "CARD: Broken card",
+        "sent": "2026-11-02T09:32:00-05:00",
+        "buttons": false,
+        "errors": [
+          "body: must be one JSON object (Expecting value at line 1 column 1)"
+        ]
+      },
+      {
+        "id": "msg-033",
+        "sender": "repo-lead",
+        "subject": "CARD: A title that is far too long to fit on one line of the card, so the checker refuses it",
+        "sent": "2026-11-02T09:33:00-05:00",
+        "buttons": false,
+        "errors": [
+          "title: 86 characters (budget 70)"
+        ]
+      }
+    ],
+    "truncated": false,
+    "csrf": "csrf-placeholder",
+    "freshUntil": 0
+  }
+}

@@ -1,0 +1,2130 @@
+{
+  "qd": "lanes-fixtures/1",
+  "testOnly": true,
+  "for": "Quarterdeck final design PR 3 tests: the Lane tracker (the ruling to the ruling)",
+  "author": "Quarterdeck contributors",
+  "written": "Tue Nov 3, 2026 (ET)",
+  "rules": [
+    "Test-only: loaded only by the build's test mode, never in the example data, never shown to the Captain as example content.",
+    "One fixture project, 'test-lane-tracker'. Each fixture holds a Lane in the example data's shape, its tracker in the lanes.json shape and its expected results. Times are before the example 'now' (Mon Nov 2, 10:00 AM ET).",
+    "LT-8 and LT-9 hold a second state ('afterSecondCheck', 'afterApprove'); LT-9 holds a waiting sign-off Task Card and its evidence.",
+    "LT-2 and LT-3 differ by one character, to test the 44 character line exactly."
+  ],
+  "project": {
+    "id": "fx-lane-tracker",
+    "name": "test-lane-tracker",
+    "lead": "Alba",
+    "lastActivity": "30m",
+    "description": "Test fixture only. Not example data."
+  },
+  "fixtures": {
+    "LT-1": {
+      "fixture": "A Lane with no steps (stages only)",
+      "expect": [
+        "The stage row is 'Plan, Execute, Check' with marks; there is no step line and no count line, because no bot added steps.",
+        "The Stages list shows each stage with its time and 'Done when', with nothing nested under Execute.",
+        "The Project view row is 'Execute (2 of 3)' with no 'step N of M' part.",
+        "Updated 30 minutes ago and no blocker: not quiet, so no 'No update' line."
+      ],
+      "lane": {
+        "id": "fx-l-nosteps",
+        "projectId": "fx-lane-tracker",
+        "name": "No steps",
+        "status": "Active",
+        "lead": "Alba",
+        "now": "Alba is building the first screen.",
+        "activity": [
+          {
+            "at": "2026-11-02T09:30:00-05:00",
+            "bot": "Alba",
+            "text": "Built the first screen.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          },
+          {
+            "at": "2026-11-01T10:00:00-05:00",
+            "bot": "Alba",
+            "text": "Set the stages. Plan done, Execute started.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          }
+        ],
+        "waiting": 0
+      },
+      "tracker": {
+        "lane": "No steps",
+        "project": "fx-lane-tracker",
+        "status": "Active",
+        "lead": "Alba",
+        "plan": {
+          "endsWithSignOff": false,
+          "doneBy": [
+            "Alba"
+          ],
+          "checkedBy": "Dr. Kivo"
+        },
+        "stages": [
+          {
+            "n": 1,
+            "name": "Plan",
+            "state": "done",
+            "startedAt": "2026-11-01T10:00:00-05:00",
+            "doneAt": "2026-11-01T10:00:00-05:00",
+            "time": "done Sun 10:00 AM",
+            "doneWhen": "The plan is written",
+            "steps": []
+          },
+          {
+            "n": 2,
+            "name": "Execute",
+            "state": "current",
+            "startedAt": "2026-11-01T10:00:00-05:00",
+            "doneAt": null,
+            "time": "since Sun 10:00 AM",
+            "doneWhen": "The first screen shows the example data",
+            "steps": []
+          },
+          {
+            "n": 3,
+            "name": "Check",
+            "state": "todo",
+            "startedAt": null,
+            "doneAt": null,
+            "time": null,
+            "doneWhen": "Dr. Kivo checks it on the phone",
+            "steps": []
+          }
+        ],
+        "stageCount": 3,
+        "currentStage": 2,
+        "currentStep": null,
+        "doneWhen": "The first screen shows the example data",
+        "now": "Alba is building the first screen.",
+        "next": "Shelvorn checks it on the phone.",
+        "blockers": [],
+        "updated": {
+          "at": "2026-11-02T09:30:00-05:00",
+          "by": "Alba",
+          "line": "Updated 9:30 AM by Alba"
+        },
+        "stagesChanged": {
+          "at": "2026-11-01T10:00:00-05:00",
+          "by": "Alba",
+          "what": "set the stages",
+          "line": "Changed by Alba Sun 10:00 AM: set the stages"
+        },
+        "stale": null,
+        "done": null,
+        "display": {
+          "stageRow": "✓ Plan  ● Execute  ○ Check",
+          "stageRowLength": 26,
+          "stageRowFolded": false,
+          "unfoldedRowLength": 26,
+          "stepLine": null,
+          "countLine": null,
+          "countLineFull": null,
+          "blockersHeading": "No blockers",
+          "projectLine": "Execute (2 of 3)",
+          "projectRow": "Execute (2 of 3)",
+          "projectMark": null,
+          "trackerLines": [
+            "✓ Plan  ● Execute  ○ Check",
+            "Done when: The first screen shows the example data",
+            "Now: Alba is building the first screen.",
+            "Next: Shelvorn checks it on the phone.",
+            "No blockers",
+            "Updated 9:30 AM by Alba"
+          ],
+          "stagesSheet": [
+            "Stages of No steps",
+            "✓ Plan  done Sun 10:00 AM",
+            "● Execute  since Sun 10:00 AM",
+            "  Done when: The first screen shows the example data",
+            "○ Check  Done when: Dr. Kivo checks it on the phone",
+            "Changed by Alba Sun 10:00 AM: set the stages"
+          ]
+        },
+        "changes": [
+          {
+            "at": "2026-11-01T10:00:00-05:00",
+            "by": "Alba",
+            "what": "Set the stages. Plan done, Execute started."
+          },
+          {
+            "at": "2026-11-02T09:30:00-05:00",
+            "by": "Alba",
+            "what": "Now set: Alba is building the first screen."
+          }
+        ]
+      }
+    },
+    "LT-2": {
+      "fixture": "A Lane whose stage names all fit on one line, exactly 44 characters",
+      "expect": [
+        "The unfolded row 'Plan, Execute, Check on iPhone and Mac' is exactly 44 characters, so it is shown by name and does not fold.",
+        "One character more folds it (LT-3)."
+      ],
+      "lane": {
+        "id": "fx-l-fit44",
+        "projectId": "fx-lane-tracker",
+        "name": "Names fit at 44",
+        "status": "Active",
+        "lead": "Alba",
+        "now": "Alba is building the first screen.",
+        "activity": [
+          {
+            "at": "2026-11-02T09:30:00-05:00",
+            "bot": "Alba",
+            "text": "Built the first screen.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          },
+          {
+            "at": "2026-11-01T10:00:00-05:00",
+            "bot": "Alba",
+            "text": "Set the stages. Plan done, Execute started.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          }
+        ],
+        "waiting": 0
+      },
+      "tracker": {
+        "lane": "Names fit at 44",
+        "project": "fx-lane-tracker",
+        "status": "Active",
+        "lead": "Alba",
+        "plan": {
+          "endsWithSignOff": false,
+          "doneBy": [
+            "Alba"
+          ],
+          "checkedBy": "Dr. Kivo"
+        },
+        "stages": [
+          {
+            "n": 1,
+            "name": "Plan",
+            "state": "done",
+            "startedAt": "2026-11-01T10:00:00-05:00",
+            "doneAt": "2026-11-01T10:00:00-05:00",
+            "time": "done Sun 10:00 AM",
+            "doneWhen": "The plan is written",
+            "steps": []
+          },
+          {
+            "n": 2,
+            "name": "Execute",
+            "state": "current",
+            "startedAt": "2026-11-01T10:00:00-05:00",
+            "doneAt": null,
+            "time": "since Sun 10:00 AM",
+            "doneWhen": "The first screen shows the example data",
+            "steps": []
+          },
+          {
+            "n": 3,
+            "name": "Check on iPhone and Mac",
+            "state": "todo",
+            "startedAt": null,
+            "doneAt": null,
+            "time": null,
+            "doneWhen": "Dr. Kivo checks it on the phone",
+            "steps": []
+          }
+        ],
+        "stageCount": 3,
+        "currentStage": 2,
+        "currentStep": null,
+        "doneWhen": "The first screen shows the example data",
+        "now": "Alba is building the first screen.",
+        "next": "Shelvorn checks it on the phone.",
+        "blockers": [],
+        "updated": {
+          "at": "2026-11-02T09:30:00-05:00",
+          "by": "Alba",
+          "line": "Updated 9:30 AM by Alba"
+        },
+        "stagesChanged": {
+          "at": "2026-11-01T10:00:00-05:00",
+          "by": "Alba",
+          "what": "set the stages",
+          "line": "Changed by Alba Sun 10:00 AM: set the stages"
+        },
+        "stale": null,
+        "done": null,
+        "display": {
+          "stageRow": "✓ Plan  ● Execute  ○ Check on iPhone and Mac",
+          "stageRowLength": 44,
+          "stageRowFolded": false,
+          "unfoldedRowLength": 44,
+          "stepLine": null,
+          "countLine": null,
+          "countLineFull": null,
+          "blockersHeading": "No blockers",
+          "projectLine": "Execute (2 of 3)",
+          "projectRow": "Execute (2 of 3)",
+          "projectMark": null,
+          "trackerLines": [
+            "✓ Plan  ● Execute  ○ Check on iPhone and Mac",
+            "Done when: The first screen shows the example data",
+            "Now: Alba is building the first screen.",
+            "Next: Shelvorn checks it on the phone.",
+            "No blockers",
+            "Updated 9:30 AM by Alba"
+          ],
+          "stagesSheet": [
+            "Stages of Names fit at 44",
+            "✓ Plan  done Sun 10:00 AM",
+            "● Execute  since Sun 10:00 AM",
+            "  Done when: The first screen shows the example data",
+            "○ Check on iPhone and Mac  Done when: Dr. Kivo checks it on the phone",
+            "Changed by Alba Sun 10:00 AM: set the stages"
+          ]
+        },
+        "changes": [
+          {
+            "at": "2026-11-01T10:00:00-05:00",
+            "by": "Alba",
+            "what": "Set the stages. Plan done, Execute started."
+          },
+          {
+            "at": "2026-11-02T09:30:00-05:00",
+            "by": "Alba",
+            "what": "Now set: Alba is building the first screen."
+          }
+        ]
+      }
+    },
+    "LT-3": {
+      "fixture": "The same Lane one character longer, 45 characters: it folds",
+      "expect": [
+        "The unfolded row is 45 characters, so it folds into '✓ N done · ● <current> · ○ N more' even though there are only three stages.",
+        "No bot added steps, so the line under the folded row is 'Stage 2 of 3' with no step part (suggested; the design lead's call)."
+      ],
+      "lane": {
+        "id": "fx-l-fit45",
+        "projectId": "fx-lane-tracker",
+        "name": "Names one over",
+        "status": "Active",
+        "lead": "Alba",
+        "now": "Alba is building the first screen.",
+        "activity": [
+          {
+            "at": "2026-11-02T09:30:00-05:00",
+            "bot": "Alba",
+            "text": "Built the first screen.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          },
+          {
+            "at": "2026-11-01T10:00:00-05:00",
+            "bot": "Alba",
+            "text": "Set the stages. Plan done, Execute started.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          }
+        ],
+        "waiting": 0
+      },
+      "tracker": {
+        "lane": "Names one over",
+        "project": "fx-lane-tracker",
+        "status": "Active",
+        "lead": "Alba",
+        "plan": {
+          "endsWithSignOff": false,
+          "doneBy": [
+            "Alba"
+          ],
+          "checkedBy": "Dr. Kivo"
+        },
+        "stages": [
+          {
+            "n": 1,
+            "name": "Plan",
+            "state": "done",
+            "startedAt": "2026-11-01T10:00:00-05:00",
+            "doneAt": "2026-11-01T10:00:00-05:00",
+            "time": "done Sun 10:00 AM",
+            "doneWhen": "The plan is written",
+            "steps": []
+          },
+          {
+            "n": 2,
+            "name": "Execute",
+            "state": "current",
+            "startedAt": "2026-11-01T10:00:00-05:00",
+            "doneAt": null,
+            "time": "since Sun 10:00 AM",
+            "doneWhen": "The first screen shows the example data",
+            "steps": []
+          },
+          {
+            "n": 3,
+            "name": "Check on iPhone and iPad",
+            "state": "todo",
+            "startedAt": null,
+            "doneAt": null,
+            "time": null,
+            "doneWhen": "Dr. Kivo checks it on the phone",
+            "steps": []
+          }
+        ],
+        "stageCount": 3,
+        "currentStage": 2,
+        "currentStep": null,
+        "doneWhen": "The first screen shows the example data",
+        "now": "Alba is building the first screen.",
+        "next": "Shelvorn checks it on the phone.",
+        "blockers": [],
+        "updated": {
+          "at": "2026-11-02T09:30:00-05:00",
+          "by": "Alba",
+          "line": "Updated 9:30 AM by Alba"
+        },
+        "stagesChanged": {
+          "at": "2026-11-01T10:00:00-05:00",
+          "by": "Alba",
+          "what": "set the stages",
+          "line": "Changed by Alba Sun 10:00 AM: set the stages"
+        },
+        "stale": null,
+        "done": null,
+        "display": {
+          "stageRow": "✓ 1 done · ● Execute · ○ 1 more",
+          "stageRowLength": 31,
+          "stageRowFolded": true,
+          "unfoldedRowLength": 45,
+          "stepLine": null,
+          "countLine": "Stage 2 of 3",
+          "countLineFull": "Stage 2 of 3",
+          "blockersHeading": "No blockers",
+          "projectLine": "Execute (2 of 3)",
+          "projectRow": "Execute (2 of 3)",
+          "projectMark": null,
+          "trackerLines": [
+            "✓ 1 done · ● Execute · ○ 1 more",
+            "Stage 2 of 3",
+            "Done when: The first screen shows the example data",
+            "Now: Alba is building the first screen.",
+            "Next: Shelvorn checks it on the phone.",
+            "No blockers",
+            "Updated 9:30 AM by Alba"
+          ],
+          "stagesSheet": [
+            "Stages of Names one over (3)",
+            "✓ Plan (1 done)  ▸",
+            "● Execute  since Sun 10:00 AM",
+            "  Done when: The first screen shows the example data",
+            "○ Check on iPhone and iPad  Done when: Dr. Kivo checks it on the phone",
+            "Changed by Alba Sun 10:00 AM: set the stages"
+          ]
+        },
+        "changes": [
+          {
+            "at": "2026-11-01T10:00:00-05:00",
+            "by": "Alba",
+            "what": "Set the stages. Plan done, Execute started."
+          },
+          {
+            "at": "2026-11-02T09:30:00-05:00",
+            "by": "Alba",
+            "what": "Now set: Alba is building the first screen."
+          }
+        ]
+      }
+    },
+    "LT-4": {
+      "fixture": "Five stages with short names still fit on one line",
+      "expect": [
+        "Five stages do not force a fold: the row is 41 characters, so every stage shows by name.",
+        "The rule is the length of the row, not the number of stages."
+      ],
+      "lane": {
+        "id": "fx-l-five",
+        "projectId": "fx-lane-tracker",
+        "name": "Five short stages",
+        "status": "Active",
+        "lead": "Alba",
+        "now": "Alba is building the first screen.",
+        "activity": [
+          {
+            "at": "2026-11-02T09:30:00-05:00",
+            "bot": "Alba",
+            "text": "Draft done, Build started.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          },
+          {
+            "at": "2026-11-01T10:00:00-05:00",
+            "bot": "Alba",
+            "text": "Set five stages. Plan done, Draft started.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          }
+        ],
+        "waiting": 0
+      },
+      "tracker": {
+        "lane": "Five short stages",
+        "project": "fx-lane-tracker",
+        "status": "Active",
+        "lead": "Alba",
+        "plan": {
+          "endsWithSignOff": false,
+          "doneBy": [
+            "Alba"
+          ],
+          "checkedBy": "Dr. Kivo"
+        },
+        "stages": [
+          {
+            "n": 1,
+            "name": "Plan",
+            "state": "done",
+            "startedAt": "2026-11-01T10:00:00-05:00",
+            "doneAt": "2026-11-01T10:00:00-05:00",
+            "time": "done Sun 10:00 AM",
+            "doneWhen": "The plan is written",
+            "steps": []
+          },
+          {
+            "n": 2,
+            "name": "Draft",
+            "state": "done",
+            "startedAt": "2026-11-01T10:00:00-05:00",
+            "doneAt": "2026-11-02T09:30:00-05:00",
+            "time": "done 9:30 AM",
+            "doneWhen": "A draft exists",
+            "steps": []
+          },
+          {
+            "n": 3,
+            "name": "Build",
+            "state": "current",
+            "startedAt": "2026-11-02T09:30:00-05:00",
+            "doneAt": null,
+            "time": "since 9:30 AM",
+            "doneWhen": "The first screen shows the example data",
+            "steps": []
+          },
+          {
+            "n": 4,
+            "name": "Check",
+            "state": "todo",
+            "startedAt": null,
+            "doneAt": null,
+            "time": null,
+            "doneWhen": "Dr. Kivo checks it on the phone",
+            "steps": []
+          },
+          {
+            "n": 5,
+            "name": "Ship",
+            "state": "todo",
+            "startedAt": null,
+            "doneAt": null,
+            "time": null,
+            "doneWhen": "It is live",
+            "steps": []
+          }
+        ],
+        "stageCount": 5,
+        "currentStage": 3,
+        "currentStep": null,
+        "doneWhen": "The first screen shows the example data",
+        "now": "Alba is building the first screen.",
+        "next": "Shelvorn checks it on the phone.",
+        "blockers": [],
+        "updated": {
+          "at": "2026-11-02T09:30:00-05:00",
+          "by": "Alba",
+          "line": "Updated 9:30 AM by Alba"
+        },
+        "stagesChanged": {
+          "at": "2026-11-01T10:00:00-05:00",
+          "by": "Alba",
+          "what": "set the stages",
+          "line": "Changed by Alba Sun 10:00 AM: set the stages"
+        },
+        "stale": null,
+        "done": null,
+        "display": {
+          "stageRow": "✓ Plan  ✓ Draft  ● Build  ○ Check  ○ Ship",
+          "stageRowLength": 41,
+          "stageRowFolded": false,
+          "unfoldedRowLength": 41,
+          "stepLine": null,
+          "countLine": null,
+          "countLineFull": null,
+          "blockersHeading": "No blockers",
+          "projectLine": "Build (3 of 5)",
+          "projectRow": "Build (3 of 5)",
+          "projectMark": null,
+          "trackerLines": [
+            "✓ Plan  ✓ Draft  ● Build  ○ Check  ○ Ship",
+            "Done when: The first screen shows the example data",
+            "Now: Alba is building the first screen.",
+            "Next: Shelvorn checks it on the phone.",
+            "No blockers",
+            "Updated 9:30 AM by Alba"
+          ],
+          "stagesSheet": [
+            "Stages of Five short stages",
+            "✓ Plan  done Sun 10:00 AM",
+            "✓ Draft  done 9:30 AM",
+            "● Build  since 9:30 AM",
+            "  Done when: The first screen shows the example data",
+            "○ Check  Done when: Dr. Kivo checks it on the phone",
+            "○ Ship  Done when: It is live",
+            "Changed by Alba Sun 10:00 AM: set the stages"
+          ]
+        },
+        "changes": [
+          {
+            "at": "2026-11-01T10:00:00-05:00",
+            "by": "Alba",
+            "what": "Set five stages. Plan done, Draft started."
+          },
+          {
+            "at": "2026-11-02T09:30:00-05:00",
+            "by": "Alba",
+            "what": "Draft done, Build started."
+          }
+        ]
+      }
+    },
+    "LT-5": {
+      "fixture": "Seven stages and no steps: the row folds and the count line has no step part",
+      "expect": [
+        "The unfolded row is longer than 44 characters, so it folds to '✓ 3 done · ● Execute · ○ 3 more'.",
+        "The line under it is 'Stage 4 of 7' (suggested: no step part when no bot added steps; the design lead's call).",
+        "The Project view row is 'Execute (4 of 7)'."
+      ],
+      "lane": {
+        "id": "fx-l-seven",
+        "projectId": "fx-lane-tracker",
+        "name": "Seven stages, no steps",
+        "status": "Active",
+        "lead": "Alba",
+        "now": "Alba is building the first screen.",
+        "activity": [
+          {
+            "at": "2026-11-02T09:30:00-05:00",
+            "bot": "Alba",
+            "text": "Prototype done, Execute started.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          },
+          {
+            "at": "2026-11-01T16:00:00-05:00",
+            "bot": "Alba",
+            "text": "Design done, Prototype started.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          },
+          {
+            "at": "2026-11-01T10:00:00-05:00",
+            "bot": "Alba",
+            "text": "Set seven stages. Plan done, Design started.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          }
+        ],
+        "waiting": 0
+      },
+      "tracker": {
+        "lane": "Seven stages, no steps",
+        "project": "fx-lane-tracker",
+        "status": "Active",
+        "lead": "Alba",
+        "plan": {
+          "endsWithSignOff": false,
+          "doneBy": [
+            "Alba"
+          ],
+          "checkedBy": "Dr. Kivo"
+        },
+        "stages": [
+          {
+            "n": 1,
+            "name": "Plan",
+            "state": "done",
+            "startedAt": "2026-11-01T10:00:00-05:00",
+            "doneAt": "2026-11-01T10:00:00-05:00",
+            "time": "done Sun 10:00 AM",
+            "doneWhen": "The plan is written",
+            "steps": []
+          },
+          {
+            "n": 2,
+            "name": "Design",
+            "state": "done",
+            "startedAt": "2026-11-01T10:00:00-05:00",
+            "doneAt": "2026-11-01T16:00:00-05:00",
+            "time": "done Sun 4:00 PM",
+            "doneWhen": "A design exists",
+            "steps": []
+          },
+          {
+            "n": 3,
+            "name": "Prototype",
+            "state": "done",
+            "startedAt": "2026-11-01T16:00:00-05:00",
+            "doneAt": "2026-11-02T09:30:00-05:00",
+            "time": "done 9:30 AM",
+            "doneWhen": "A prototype runs",
+            "steps": []
+          },
+          {
+            "n": 4,
+            "name": "Execute",
+            "state": "current",
+            "startedAt": "2026-11-02T09:30:00-05:00",
+            "doneAt": null,
+            "time": "since 9:30 AM",
+            "doneWhen": "It is built",
+            "steps": []
+          },
+          {
+            "n": 5,
+            "name": "Check",
+            "state": "todo",
+            "startedAt": null,
+            "doneAt": null,
+            "time": null,
+            "doneWhen": "Dr. Kivo checks it",
+            "steps": []
+          },
+          {
+            "n": 6,
+            "name": "Ship",
+            "state": "todo",
+            "startedAt": null,
+            "doneAt": null,
+            "time": null,
+            "doneWhen": "It is live",
+            "steps": []
+          },
+          {
+            "n": 7,
+            "name": "Watch",
+            "state": "todo",
+            "startedAt": null,
+            "doneAt": null,
+            "time": null,
+            "doneWhen": "No error for 7 days",
+            "steps": []
+          }
+        ],
+        "stageCount": 7,
+        "currentStage": 4,
+        "currentStep": null,
+        "doneWhen": "It is built",
+        "now": "Alba is building the first screen.",
+        "next": "Shelvorn checks it on the phone.",
+        "blockers": [],
+        "updated": {
+          "at": "2026-11-02T09:30:00-05:00",
+          "by": "Alba",
+          "line": "Updated 9:30 AM by Alba"
+        },
+        "stagesChanged": {
+          "at": "2026-11-01T10:00:00-05:00",
+          "by": "Alba",
+          "what": "set the stages",
+          "line": "Changed by Alba Sun 10:00 AM: set the stages"
+        },
+        "stale": null,
+        "done": null,
+        "display": {
+          "stageRow": "✓ 3 done · ● Execute · ○ 3 more",
+          "stageRowLength": 31,
+          "stageRowFolded": true,
+          "unfoldedRowLength": 66,
+          "stepLine": null,
+          "countLine": "Stage 4 of 7",
+          "countLineFull": "Stage 4 of 7",
+          "blockersHeading": "No blockers",
+          "projectLine": "Execute (4 of 7)",
+          "projectRow": "Execute (4 of 7)",
+          "projectMark": null,
+          "trackerLines": [
+            "✓ 3 done · ● Execute · ○ 3 more",
+            "Stage 4 of 7",
+            "Done when: It is built",
+            "Now: Alba is building the first screen.",
+            "Next: Shelvorn checks it on the phone.",
+            "No blockers",
+            "Updated 9:30 AM by Alba"
+          ],
+          "stagesSheet": [
+            "Stages of Seven stages, no steps (7)",
+            "✓ Plan, Design, Prototype (3 done)  ▸",
+            "● Execute  since 9:30 AM",
+            "  Done when: It is built",
+            "○ Check  Done when: Dr. Kivo checks it",
+            "○ Ship  Done when: It is live",
+            "○ Watch  Done when: No error for 7 days",
+            "Changed by Alba Sun 10:00 AM: set the stages"
+          ]
+        },
+        "changes": [
+          {
+            "at": "2026-11-01T10:00:00-05:00",
+            "by": "Alba",
+            "what": "Set seven stages. Plan done, Design started."
+          },
+          {
+            "at": "2026-11-01T16:00:00-05:00",
+            "by": "Alba",
+            "what": "Design done, Prototype started."
+          },
+          {
+            "at": "2026-11-02T09:30:00-05:00",
+            "by": "Alba",
+            "what": "Prototype done, Execute started."
+          }
+        ]
+      }
+    },
+    "LT-6": {
+      "fixture": "A blocker waiting on a bot, not on him",
+      "expect": [
+        "The blocker reads '! Waiting on Dale: The export folder is ready, since Sun 4:00 PM'. It has no link, because no Task Card is behind it.",
+        "The Project view row ends with '! Blocked: Dale' (the flow's wording).",
+        "Nothing reaches the Queue and the Lane's waiting count stays 0.",
+        "A blocker means the Lane is never quiet: no 'No update for N hours', even with no update for hours."
+      ],
+      "lane": {
+        "id": "fx-l-botblock",
+        "projectId": "fx-lane-tracker",
+        "name": "Blocked on a bot",
+        "status": "Active",
+        "lead": "Alba",
+        "now": "Alba is building the first screen.",
+        "activity": [
+          {
+            "at": "2026-11-02T09:30:00-05:00",
+            "bot": "Alba",
+            "text": "Built the first screen.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          },
+          {
+            "at": "2026-11-01T16:00:00-05:00",
+            "bot": "Alba",
+            "text": "Asked Dale for the export folder.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          }
+        ],
+        "waiting": 0
+      },
+      "tracker": {
+        "lane": "Blocked on a bot",
+        "project": "fx-lane-tracker",
+        "status": "Active",
+        "lead": "Alba",
+        "plan": {
+          "endsWithSignOff": false,
+          "doneBy": [
+            "Alba"
+          ],
+          "checkedBy": "Dr. Kivo"
+        },
+        "stages": [
+          {
+            "n": 1,
+            "name": "Plan",
+            "state": "done",
+            "startedAt": "2026-11-01T16:00:00-05:00",
+            "doneAt": "2026-11-01T16:00:00-05:00",
+            "time": "done Sun 4:00 PM",
+            "doneWhen": "The plan is written",
+            "steps": []
+          },
+          {
+            "n": 2,
+            "name": "Execute",
+            "state": "current",
+            "startedAt": "2026-11-01T16:00:00-05:00",
+            "doneAt": null,
+            "time": "since Sun 4:00 PM",
+            "doneWhen": "The first screen shows the example data",
+            "steps": []
+          },
+          {
+            "n": 3,
+            "name": "Check",
+            "state": "todo",
+            "startedAt": null,
+            "doneAt": null,
+            "time": null,
+            "doneWhen": "Dr. Kivo checks it on the phone",
+            "steps": []
+          }
+        ],
+        "stageCount": 3,
+        "currentStage": 2,
+        "currentStep": null,
+        "doneWhen": "The first screen shows the example data",
+        "now": "Alba is building the first screen.",
+        "next": "Shelvorn checks it on the phone.",
+        "blockers": [
+          {
+            "id": "fx-l-botblock-b1",
+            "what": "The export folder is ready",
+            "waitingOn": "Dale",
+            "waitingOnYou": false,
+            "since": "2026-11-01T16:00:00-05:00",
+            "sinceLine": "since Sun 4:00 PM",
+            "recordedBy": "Alba",
+            "taskCard": null,
+            "line": "! Waiting on Dale: The export folder is ready, since Sun 4:00 PM",
+            "projectMark": null
+          }
+        ],
+        "updated": {
+          "at": "2026-11-02T09:30:00-05:00",
+          "by": "Alba",
+          "line": "Updated 9:30 AM by Alba"
+        },
+        "stagesChanged": {
+          "at": "2026-11-01T16:00:00-05:00",
+          "by": "Alba",
+          "what": "set the stages",
+          "line": "Changed by Alba Sun 4:00 PM: set the stages"
+        },
+        "stale": null,
+        "done": null,
+        "display": {
+          "stageRow": "✓ Plan  ● Execute  ○ Check",
+          "stageRowLength": 26,
+          "stageRowFolded": false,
+          "unfoldedRowLength": 26,
+          "stepLine": null,
+          "countLine": null,
+          "countLineFull": null,
+          "blockersHeading": "Blockers (1)",
+          "projectLine": "Execute (2 of 3)",
+          "projectRow": "Execute (2 of 3) · ! Blocked: Dale",
+          "projectMark": "! Blocked: Dale",
+          "trackerLines": [
+            "✓ Plan  ● Execute  ○ Check",
+            "Done when: The first screen shows the example data",
+            "Now: Alba is building the first screen.",
+            "Next: Shelvorn checks it on the phone.",
+            "Blockers (1)",
+            "! Waiting on Dale: The export folder is ready, since Sun 4:00 PM",
+            "Updated 9:30 AM by Alba"
+          ],
+          "stagesSheet": [
+            "Stages of Blocked on a bot",
+            "✓ Plan  done Sun 4:00 PM",
+            "● Execute  since Sun 4:00 PM",
+            "  Done when: The first screen shows the example data",
+            "○ Check  Done when: Dr. Kivo checks it on the phone",
+            "Changed by Alba Sun 4:00 PM: set the stages"
+          ]
+        },
+        "changes": [
+          {
+            "at": "2026-11-01T16:00:00-05:00",
+            "by": "Alba",
+            "what": "Set the stages. Blocker added: Waiting on Dale: The export folder is ready."
+          },
+          {
+            "at": "2026-11-02T09:30:00-05:00",
+            "by": "Alba",
+            "what": "Now set: Alba is building the first screen."
+          }
+        ]
+      }
+    },
+    "LT-7": {
+      "fixture": "A Lane that turns quiet between two times (steps with times)",
+      "expect": [
+        "Last update 6:30 AM by Dr. Kivo. Active, no blocker. 'No update for N hours' shows from 2 hours (8:30 AM) and N is the whole hours since the last update; see 'timeline'.",
+        "A bot update resets it: after a 9:45 AM update the line is gone at 10:00 AM.",
+        "A new blocker also removes it: with a blocker added at 9:40 AM, no line shows at 10:00 AM and the Project view row shows the blocker instead.",
+        "Whole hours (3 hours at 9:30 AM, not 2.5) is suggested; the ruling says 'N hours' only (the design lead's call)."
+      ],
+      "lane": {
+        "id": "fx-l-quiet",
+        "projectId": "fx-lane-tracker",
+        "name": "Turns quiet",
+        "status": "Active",
+        "lead": "Dr. Kivo",
+        "now": "Dr. Kivo is mapping the rest of the rooms.",
+        "activity": [
+          {
+            "at": "2026-11-02T06:30:00-05:00",
+            "bot": "Dr. Kivo",
+            "text": "Mapped the first twenty rooms.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          },
+          {
+            "at": "2026-11-02T05:50:00-05:00",
+            "bot": "Dr. Kivo",
+            "text": "Started the room map.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          }
+        ],
+        "waiting": 0
+      },
+      "tracker": {
+        "lane": "Turns quiet",
+        "project": "fx-lane-tracker",
+        "status": "Active",
+        "lead": "Dr. Kivo",
+        "plan": {
+          "endsWithSignOff": false,
+          "doneBy": [
+            "Dr. Kivo"
+          ],
+          "checkedBy": "Shelvorn"
+        },
+        "stages": [
+          {
+            "n": 1,
+            "name": "Plan",
+            "state": "done",
+            "startedAt": "2026-11-02T05:50:00-05:00",
+            "doneAt": "2026-11-02T05:50:00-05:00",
+            "time": "done 5:50 AM",
+            "doneWhen": "The plan is written",
+            "steps": []
+          },
+          {
+            "n": 2,
+            "name": "Execute",
+            "state": "current",
+            "startedAt": "2026-11-02T05:50:00-05:00",
+            "doneAt": null,
+            "time": "since 5:50 AM",
+            "doneWhen": "Every room is on the map",
+            "steps": [
+              {
+                "n": 1,
+                "name": "Start the room map",
+                "state": "done",
+                "doneAt": "2026-11-02T05:50:00-05:00"
+              },
+              {
+                "n": 2,
+                "name": "Map the first twenty rooms",
+                "state": "done",
+                "doneAt": "2026-11-02T06:30:00-05:00"
+              },
+              {
+                "n": 3,
+                "name": "Map the rest",
+                "state": "current",
+                "doneAt": null
+              },
+              {
+                "n": 4,
+                "name": "Check the map",
+                "state": "todo",
+                "doneAt": null
+              }
+            ]
+          },
+          {
+            "n": 3,
+            "name": "Check",
+            "state": "todo",
+            "startedAt": null,
+            "doneAt": null,
+            "time": null,
+            "doneWhen": "Shelvorn checks the map",
+            "steps": []
+          }
+        ],
+        "stageCount": 3,
+        "currentStage": 2,
+        "currentStep": {
+          "n": 3,
+          "of": 4,
+          "name": "Map the rest"
+        },
+        "doneWhen": "Every room is on the map",
+        "now": "Dr. Kivo is mapping the rest of the rooms.",
+        "next": "Shelvorn checks the map.",
+        "blockers": [],
+        "updated": {
+          "at": "2026-11-02T06:30:00-05:00",
+          "by": "Dr. Kivo",
+          "line": "Updated 6:30 AM by Dr. Kivo"
+        },
+        "stagesChanged": {
+          "at": "2026-11-02T05:50:00-05:00",
+          "by": "Dr. Kivo",
+          "what": "set the stages",
+          "line": "Changed by Dr. Kivo 5:50 AM: set the stages"
+        },
+        "stale": {
+          "hours": 3,
+          "line": "No update for 3 hours"
+        },
+        "done": null,
+        "display": {
+          "stageRow": "✓ Plan  ● Execute  ○ Check",
+          "stageRowLength": 26,
+          "stageRowFolded": false,
+          "unfoldedRowLength": 26,
+          "stepLine": "Execute, step 3 of 4: Map the rest",
+          "countLine": null,
+          "countLineFull": null,
+          "blockersHeading": "No blockers",
+          "projectLine": "Execute (2 of 3) · step 3 of 4",
+          "projectRow": "Execute (2 of 3) · step 3 of 4\nNo update for 3 hours",
+          "projectMark": "No update for 3 hours",
+          "trackerLines": [
+            "✓ Plan  ● Execute  ○ Check",
+            "Execute, step 3 of 4: Map the rest",
+            "Done when: Every room is on the map",
+            "Now: Dr. Kivo is mapping the rest of the rooms.",
+            "Next: Shelvorn checks the map.",
+            "No blockers",
+            "Updated 6:30 AM by Dr. Kivo",
+            "No update for 3 hours."
+          ],
+          "stagesSheet": [
+            "Stages of Turns quiet",
+            "✓ Plan  done 5:50 AM",
+            "● Execute  since 5:50 AM",
+            "   ✓ Start the room map",
+            "   ✓ Map the first twenty rooms",
+            "   ● Map the rest",
+            "   ○ Check the map",
+            "  Done when: Every room is on the map",
+            "○ Check  Done when: Shelvorn checks the map",
+            "Changed by Dr. Kivo 5:50 AM: set the stages"
+          ]
+        },
+        "changes": [
+          {
+            "at": "2026-11-02T05:50:00-05:00",
+            "by": "Dr. Kivo",
+            "what": "Set the stages. Plan done, Execute started. Added 4 steps. Step done: Start the room map."
+          },
+          {
+            "at": "2026-11-02T06:30:00-05:00",
+            "by": "Dr. Kivo",
+            "what": "Step done: Map the first twenty rooms."
+          }
+        ]
+      },
+      "timeline": [
+        {
+          "at": "2026-11-02T06:30:00-05:00",
+          "quietFor": "0 minutes",
+          "show": null
+        },
+        {
+          "at": "2026-11-02T08:29:00-05:00",
+          "quietFor": "119 minutes",
+          "show": null
+        },
+        {
+          "at": "2026-11-02T08:30:00-05:00",
+          "quietFor": "120 minutes",
+          "show": "No update for 2 hours"
+        },
+        {
+          "at": "2026-11-02T09:29:00-05:00",
+          "quietFor": "179 minutes",
+          "show": "No update for 2 hours"
+        },
+        {
+          "at": "2026-11-02T09:30:00-05:00",
+          "quietFor": "180 minutes",
+          "show": "No update for 3 hours"
+        },
+        {
+          "at": "2026-11-02T10:00:00-05:00",
+          "quietFor": "210 minutes",
+          "show": "No update for 3 hours"
+        }
+      ],
+      "afterBotUpdate": {
+        "at": "2026-11-02T09:45:00-05:00",
+        "by": "Dr. Kivo",
+        "text": "Mapped the rest of the rooms.",
+        "showAt1000": null
+      },
+      "afterBlocker": {
+        "at": "2026-11-02T09:40:00-05:00",
+        "by": "Dr. Kivo",
+        "waitingOn": "Dale",
+        "showAt1000": null,
+        "projectMark": "! Blocked: Dale"
+      }
+    },
+    "LT-8": {
+      "fixture": "A Check done by the bot that did the work: the Lane must not be marked Done",
+      "expect": [
+        "Shelvorn built the room map and also ran the checks: 3 of 3 pass. Only a verdict from a bot that did not do the work counts, so Check stays the current stage and the Lane stays Active.",
+        "No 'Lane done' Activity line and no 'Done' mark appear. The Project view row stays in the Lane groups, not under Done.",
+        "Suggested tracker line: 'Not checked by another bot yet (Shelvorn checked its own work: 3 of 3)'. Wording is the design lead's.",
+        "'afterSecondCheck' is the same Lane after Dr. Kivo runs the check at 9:50 AM: Check is done, the plan has no sign-off, so the Lane goes Done by itself and 'Lane done' lands in Activity at 9:51 AM."
+      ],
+      "lane": {
+        "id": "fx-l-selfcheck",
+        "projectId": "fx-lane-tracker",
+        "name": "Checked by its own bot",
+        "status": "Active",
+        "lead": "Shelvorn",
+        "now": "Shelvorn is waiting for another bot to check the room map.",
+        "activity": [
+          {
+            "at": "2026-11-02T09:30:00-05:00",
+            "bot": "Shelvorn",
+            "text": "Checked the room map: 3 of 3 checks pass.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          },
+          {
+            "at": "2026-11-02T09:00:00-05:00",
+            "bot": "Shelvorn",
+            "text": "Built the room map. Execute done, Check started.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          },
+          {
+            "at": "2026-11-01T10:00:00-05:00",
+            "bot": "Shelvorn",
+            "text": "Set the stages. Plan done, Execute started.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          }
+        ],
+        "waiting": 0
+      },
+      "tracker": {
+        "lane": "Checked by its own bot",
+        "project": "fx-lane-tracker",
+        "status": "Active",
+        "lead": "Shelvorn",
+        "plan": {
+          "endsWithSignOff": false,
+          "doneBy": [
+            "Shelvorn"
+          ],
+          "checkedBy": "Dr. Kivo"
+        },
+        "stages": [
+          {
+            "n": 1,
+            "name": "Plan",
+            "state": "done",
+            "startedAt": "2026-11-01T10:00:00-05:00",
+            "doneAt": "2026-11-01T10:00:00-05:00",
+            "time": "done Sun 10:00 AM",
+            "doneWhen": "The plan is written",
+            "steps": []
+          },
+          {
+            "n": 2,
+            "name": "Execute",
+            "state": "done",
+            "startedAt": "2026-11-01T10:00:00-05:00",
+            "doneAt": "2026-11-02T09:00:00-05:00",
+            "time": "done 9:00 AM",
+            "doneWhen": "The room map is built",
+            "steps": []
+          },
+          {
+            "n": 3,
+            "name": "Check",
+            "state": "current",
+            "startedAt": "2026-11-02T09:00:00-05:00",
+            "doneAt": null,
+            "time": "since 9:00 AM",
+            "doneWhen": "A bot that did not build it checks the room map",
+            "steps": []
+          }
+        ],
+        "stageCount": 3,
+        "currentStage": 3,
+        "currentStep": null,
+        "doneWhen": "A bot that did not build it checks the room map",
+        "now": "Shelvorn is waiting for another bot to check the room map.",
+        "next": "Dr. Kivo checks the room map.",
+        "blockers": [],
+        "updated": {
+          "at": "2026-11-02T09:30:00-05:00",
+          "by": "Shelvorn",
+          "line": "Updated 9:30 AM by Shelvorn"
+        },
+        "stagesChanged": {
+          "at": "2026-11-01T10:00:00-05:00",
+          "by": "Shelvorn",
+          "what": "set the stages, Plan done",
+          "line": "Changed by Shelvorn Sun 10:00 AM: set the stages, Plan done"
+        },
+        "stale": null,
+        "done": null,
+        "display": {
+          "stageRow": "✓ Plan  ✓ Execute  ● Check",
+          "stageRowLength": 26,
+          "stageRowFolded": false,
+          "unfoldedRowLength": 26,
+          "stepLine": null,
+          "countLine": null,
+          "countLineFull": null,
+          "blockersHeading": "No blockers",
+          "projectLine": "Check (3 of 3)",
+          "projectRow": "Check (3 of 3)",
+          "projectMark": null,
+          "trackerLines": [
+            "✓ Plan  ✓ Execute  ● Check",
+            "Done when: A bot that did not build it checks the room map",
+            "Now: Shelvorn is waiting for another bot to check the room map.",
+            "Next: Dr. Kivo checks the room map.",
+            "No blockers",
+            "Updated 9:30 AM by Shelvorn"
+          ],
+          "stagesSheet": [
+            "Stages of Checked by its own bot",
+            "✓ Plan  done Sun 10:00 AM",
+            "✓ Execute  done 9:00 AM",
+            "● Check  since 9:00 AM",
+            "  Done when: A bot that did not build it checks the room map",
+            "Changed by Shelvorn Sun 10:00 AM: set the stages, Plan done"
+          ]
+        },
+        "changes": [
+          {
+            "at": "2026-11-01T10:00:00-05:00",
+            "by": "Shelvorn",
+            "what": "Set the stages. Plan done, Execute started."
+          },
+          {
+            "at": "2026-11-02T09:00:00-05:00",
+            "by": "Shelvorn",
+            "what": "Execute done, Check started."
+          },
+          {
+            "at": "2026-11-02T09:30:00-05:00",
+            "by": "Shelvorn",
+            "what": "Check run by Shelvorn, who did the work. Not counted."
+          }
+        ]
+      },
+      "afterSecondCheck": {
+        "lane": {
+          "id": "fx-l-selfcheck",
+          "projectId": "fx-lane-tracker",
+          "name": "Checked by its own bot",
+          "status": "Done",
+          "lead": "Shelvorn",
+          "now": "Done. Nothing running.",
+          "activity": [
+            {
+              "at": "2026-11-02T09:51:00-05:00",
+              "bot": "Shelvorn",
+              "text": "Lane done.",
+              "mailRef": null,
+              "pageRef": null,
+              "artifactRef": null
+            },
+            {
+              "at": "2026-11-02T09:50:00-05:00",
+              "bot": "Dr. Kivo",
+              "text": "Checked the room map: 3 of 3 checks pass.",
+              "mailRef": null,
+              "pageRef": null,
+              "artifactRef": null
+            },
+            {
+              "at": "2026-11-02T09:30:00-05:00",
+              "bot": "Shelvorn",
+              "text": "Checked the room map: 3 of 3 checks pass.",
+              "mailRef": null,
+              "pageRef": null,
+              "artifactRef": null
+            },
+            {
+              "at": "2026-11-02T09:00:00-05:00",
+              "bot": "Shelvorn",
+              "text": "Built the room map. Execute done, Check started.",
+              "mailRef": null,
+              "pageRef": null,
+              "artifactRef": null
+            },
+            {
+              "at": "2026-11-01T10:00:00-05:00",
+              "bot": "Shelvorn",
+              "text": "Set the stages. Plan done, Execute started.",
+              "mailRef": null,
+              "pageRef": null,
+              "artifactRef": null
+            }
+          ],
+          "waiting": 0
+        },
+        "tracker": {
+          "lane": "Checked by its own bot",
+          "project": "fx-lane-tracker",
+          "status": "Done",
+          "lead": "Shelvorn",
+          "plan": {
+            "endsWithSignOff": false,
+            "doneBy": [
+              "Shelvorn"
+            ],
+            "checkedBy": "Dr. Kivo"
+          },
+          "stages": [
+            {
+              "n": 1,
+              "name": "Plan",
+              "state": "done",
+              "startedAt": "2026-11-01T10:00:00-05:00",
+              "doneAt": "2026-11-01T10:00:00-05:00",
+              "time": "done Sun 10:00 AM",
+              "doneWhen": "The plan is written",
+              "steps": []
+            },
+            {
+              "n": 2,
+              "name": "Execute",
+              "state": "done",
+              "startedAt": "2026-11-01T10:00:00-05:00",
+              "doneAt": "2026-11-02T09:00:00-05:00",
+              "time": "done 9:00 AM",
+              "doneWhen": "The room map is built",
+              "steps": []
+            },
+            {
+              "n": 3,
+              "name": "Check",
+              "state": "done",
+              "startedAt": "2026-11-02T09:00:00-05:00",
+              "doneAt": "2026-11-02T09:50:00-05:00",
+              "time": "done 9:50 AM",
+              "doneWhen": "A bot that did not build it checks the room map",
+              "steps": []
+            }
+          ],
+          "stageCount": 3,
+          "currentStage": null,
+          "currentStep": null,
+          "doneWhen": null,
+          "now": "Done. Nothing running.",
+          "next": null,
+          "blockers": [],
+          "updated": {
+            "at": "2026-11-02T09:51:00-05:00",
+            "by": "Shelvorn",
+            "line": "Updated 9:51 AM by Shelvorn"
+          },
+          "stagesChanged": {
+            "at": "2026-11-01T10:00:00-05:00",
+            "by": "Shelvorn",
+            "what": "set the stages, Plan done",
+            "line": "Changed by Shelvorn Sun 10:00 AM: set the stages, Plan done"
+          },
+          "stale": null,
+          "done": {
+            "at": "2026-11-02T09:51:00-05:00",
+            "by": "Shelvorn",
+            "checkedBy": "Dr. Kivo",
+            "signedOff": false,
+            "activityLine": "Lane done.",
+            "line": "Done 9:51 AM. Checked by Dr. Kivo."
+          },
+          "display": {
+            "stageRow": "✓ Plan  ✓ Execute  ✓ Check",
+            "stageRowLength": 26,
+            "stageRowFolded": false,
+            "unfoldedRowLength": 26,
+            "stepLine": null,
+            "countLine": null,
+            "countLineFull": null,
+            "blockersHeading": "No blockers",
+            "projectLine": "Done 9:51 AM · checked by Dr. Kivo",
+            "projectRow": "Done 9:51 AM · checked by Dr. Kivo",
+            "projectMark": null,
+            "trackerLines": [
+              "✓ Plan  ✓ Execute  ✓ Check",
+              "Done 9:51 AM. Checked by Dr. Kivo.",
+              "Updated 9:51 AM by Shelvorn"
+            ],
+            "stagesSheet": [
+              "Stages of Checked by its own bot",
+              "✓ Plan  done Sun 10:00 AM",
+              "✓ Execute  done 9:00 AM",
+              "✓ Check  done 9:50 AM",
+              "Changed by Shelvorn Sun 10:00 AM: set the stages, Plan done"
+            ]
+          },
+          "changes": [
+            {
+              "at": "2026-11-01T10:00:00-05:00",
+              "by": "Shelvorn",
+              "what": "Set the stages. Plan done, Execute started."
+            },
+            {
+              "at": "2026-11-02T09:00:00-05:00",
+              "by": "Shelvorn",
+              "what": "Execute done, Check started."
+            },
+            {
+              "at": "2026-11-02T09:30:00-05:00",
+              "by": "Shelvorn",
+              "what": "Check run by Shelvorn, who did the work. Not counted."
+            },
+            {
+              "at": "2026-11-02T09:50:00-05:00",
+              "by": "Dr. Kivo",
+              "what": "Check done: 3 of 3 checks pass. Dr. Kivo did not do the work."
+            },
+            {
+              "at": "2026-11-02T09:51:00-05:00",
+              "by": "Shelvorn",
+              "what": "Lane done. The plan has no sign-off, so the Lane went Done by itself."
+            }
+          ]
+        }
+      }
+    },
+    "LT-9": {
+      "fixture": "Check passed and the plan ends with his sign-off: the Lane waits on a sign-off card",
+      "expect": [
+        "All three stages show done, yet the Lane stays Active: the blocker 'Waiting on you: Sign off: Room map is done?' links to the waiting card fx-signoff-1, which is in the Queue while the fixture is loaded.",
+        "The line under the row reads 'Check done by Dr. Kivo: 3 of 3 pass' (the flow's wording).",
+        "No 'No update' line: a blocker is waiting on him.",
+        "'afterApprove' is the same Lane after he approves at 9:30 AM: the blocker clears, 'Lane done' lands in Activity at 9:31 AM, the Lane is Done and is counted under 'Done (N)' in the Project view. The card is answered and leaves the Queue.",
+        "A Reject on the sign-off card is not covered by the ruling; where the Lane goes then is the design lead's call (suggested: back to Execute, with the card's note as the reason)."
+      ],
+      "lane": {
+        "id": "fx-l-signoff",
+        "projectId": "fx-lane-tracker",
+        "name": "Room map",
+        "status": "Active",
+        "lead": "Shelvorn",
+        "now": "Shelvorn is waiting for your sign-off.",
+        "activity": [
+          {
+            "at": "2026-11-02T09:05:00-05:00",
+            "bot": "Shelvorn",
+            "text": "Sent the sign-off Task Card fx-signoff-1 with its evidence.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          },
+          {
+            "at": "2026-11-02T09:00:00-05:00",
+            "bot": "Dr. Kivo",
+            "text": "Checked the room map: 3 of 3 checks pass.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          },
+          {
+            "at": "2026-11-02T08:00:00-05:00",
+            "bot": "Shelvorn",
+            "text": "Built the room map. Execute done, Check started.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          },
+          {
+            "at": "2026-11-01T10:00:00-05:00",
+            "bot": "Shelvorn",
+            "text": "Set the stages. The plan ends with your sign-off. Plan done, Execute started.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          }
+        ],
+        "waiting": 0
+      },
+      "tracker": {
+        "lane": "Room map",
+        "project": "fx-lane-tracker",
+        "status": "Active",
+        "lead": "Shelvorn",
+        "plan": {
+          "endsWithSignOff": true,
+          "doneBy": [
+            "Shelvorn"
+          ],
+          "checkedBy": "Dr. Kivo"
+        },
+        "stages": [
+          {
+            "n": 1,
+            "name": "Plan",
+            "state": "done",
+            "startedAt": "2026-11-01T10:00:00-05:00",
+            "doneAt": "2026-11-01T10:00:00-05:00",
+            "time": "done Sun 10:00 AM",
+            "doneWhen": "The plan is written",
+            "steps": []
+          },
+          {
+            "n": 2,
+            "name": "Execute",
+            "state": "done",
+            "startedAt": "2026-11-01T10:00:00-05:00",
+            "doneAt": "2026-11-02T08:00:00-05:00",
+            "time": "done 8:00 AM",
+            "doneWhen": "The room map is built",
+            "steps": []
+          },
+          {
+            "n": 3,
+            "name": "Check",
+            "state": "done",
+            "startedAt": "2026-11-02T08:00:00-05:00",
+            "doneAt": "2026-11-02T09:00:00-05:00",
+            "time": "done 9:00 AM",
+            "doneWhen": "A bot that did not build it checks the room map",
+            "steps": []
+          }
+        ],
+        "stageCount": 3,
+        "currentStage": null,
+        "currentStep": null,
+        "doneWhen": null,
+        "now": "Shelvorn is waiting for your sign-off.",
+        "next": null,
+        "blockers": [
+          {
+            "id": "fx-l-signoff-b1",
+            "what": "Sign off: Room map is done?",
+            "waitingOn": "Captain",
+            "waitingOnYou": true,
+            "since": "2026-11-02T09:05:00-05:00",
+            "sinceLine": "since 9:05 AM",
+            "recordedBy": "Shelvorn",
+            "taskCard": "fx-signoff-1",
+            "line": "! Waiting on you: Sign off: Room map is done?, since 9:05 AM",
+            "projectMark": null
+          }
+        ],
+        "updated": {
+          "at": "2026-11-02T09:05:00-05:00",
+          "by": "Shelvorn",
+          "line": "Updated 9:05 AM by Shelvorn"
+        },
+        "stagesChanged": {
+          "at": "2026-11-01T10:00:00-05:00",
+          "by": "Shelvorn",
+          "what": "set the stages, Plan done",
+          "line": "Changed by Shelvorn Sun 10:00 AM: set the stages, Plan done"
+        },
+        "stale": null,
+        "done": null,
+        "display": {
+          "stageRow": "✓ Plan  ✓ Execute  ✓ Check",
+          "stageRowLength": 26,
+          "stageRowFolded": false,
+          "unfoldedRowLength": 26,
+          "stepLine": null,
+          "countLine": null,
+          "countLineFull": null,
+          "blockersHeading": "Blockers (1)",
+          "projectLine": "Check (3 of 3)",
+          "projectRow": "Check (3 of 3) · ! Waiting on you",
+          "projectMark": "! Waiting on you",
+          "trackerLines": [
+            "✓ Plan  ✓ Execute  ✓ Check",
+            "Check done by Dr. Kivo: 3 of 3 pass",
+            "Blockers (1)",
+            "! Waiting on you: Sign off: Room map is done?, since 9:05 AM",
+            "Updated 9:05 AM by Shelvorn"
+          ],
+          "stagesSheet": [
+            "Stages of Room map",
+            "✓ Plan  done Sun 10:00 AM",
+            "✓ Execute  done 8:00 AM",
+            "✓ Check  done 9:00 AM",
+            "Changed by Shelvorn Sun 10:00 AM: set the stages, Plan done"
+          ]
+        },
+        "changes": [
+          {
+            "at": "2026-11-01T10:00:00-05:00",
+            "by": "Shelvorn",
+            "what": "Set the stages. The plan ends with your sign-off. Plan done, Execute started."
+          },
+          {
+            "at": "2026-11-02T08:00:00-05:00",
+            "by": "Shelvorn",
+            "what": "Execute done, Check started."
+          },
+          {
+            "at": "2026-11-02T09:00:00-05:00",
+            "by": "Dr. Kivo",
+            "what": "Check done: 3 of 3 checks pass. Dr. Kivo did not do the work."
+          },
+          {
+            "at": "2026-11-02T09:05:00-05:00",
+            "by": "Shelvorn",
+            "what": "Blocker added: Waiting on you: Sign off: Room map is done?"
+          }
+        ]
+      },
+      "signOffCard": {
+        "laneId": "fx-l-signoff",
+        "card": {
+          "qd": "card/1",
+          "card": "fx-signoff-1",
+          "id": "fx-signoff-1",
+          "project": "test-lane-tracker",
+          "lane": "Room map",
+          "title": "Sign off: Room map is done?",
+          "about": "Test fixture: the room map, checked.",
+          "context": "Test fixture for a sign-off Task Card that is still waiting.\nDr. Kivo checked the room map: 3 of 3 checks pass.",
+          "ascii": " dale --help, on a phone\n ------------------------------------------\n export   Write Task Cards to a file\n rooms    Count the rooms a change moves\n notes    Print a Lane's notes\n Run dale <tool> --help for its options.",
+          "options": [
+            {
+              "label": "A. Approve",
+              "pick": true,
+              "does": "Marks the Lane Done. It stays as a read-only record.",
+              "cost": "Nothing more.",
+              "risk": "A wording mistake stays until someone reports it.",
+              "undo": "Ask Dale to reopen the Lane."
+            },
+            {
+              "label": "B. Reject",
+              "does": "Sends the help text back to Dale for another round.",
+              "cost": "About an hour.",
+              "risk": "The Lane stays open longer.",
+              "undo": "Not needed."
+            }
+          ],
+          "pick_why": "Another bot checked all three tools, and the help screen matches the plan.",
+          "you_do": "Look at the evidence, then pick A or B.",
+          "skip": "If no answer by due: the Lane stays open and we ask again tomorrow.",
+          "due": "2026-11-03T17:00:00-05:00",
+          "door": "two-way",
+          "category": [
+            "try-it"
+          ],
+          "kind": "decision"
+        },
+        "rev": 1,
+        "from": "shelvorn",
+        "at": "2026-11-02T09:05:00-05:00",
+        "comments": [],
+        "answers": [],
+        "priority": "P2",
+        "type": "approval",
+        "unblocks": [],
+        "edits": [],
+        "seenAt": null
+      },
+      "evidence": {
+        "doneBy": "Shelvorn",
+        "media": [],
+        "links": [],
+        "check": {
+          "by": "Dr. Kivo",
+          "at": "2026-11-02T09:00:00-05:00",
+          "checks": [
+            {
+              "name": "Every room is on the map",
+              "result": "pass"
+            },
+            {
+              "name": "The map opens on a phone",
+              "result": "pass"
+            },
+            {
+              "name": "No room is listed twice",
+              "result": "pass"
+            }
+          ]
+        }
+      },
+      "afterApprove": {
+        "answer": {
+          "qd": "answer/1",
+          "card": "fx-signoff-1",
+          "rev": 1,
+          "pick": "A",
+          "at": "2026-11-02T09:30:00-05:00"
+        },
+        "lane": {
+          "id": "fx-l-signoff",
+          "projectId": "fx-lane-tracker",
+          "name": "Room map",
+          "status": "Done",
+          "lead": "Shelvorn",
+          "now": "Done. Nothing running.",
+          "activity": [
+            {
+              "at": "2026-11-02T09:31:00-05:00",
+              "bot": "Shelvorn",
+              "text": "Lane done. You signed it off on Task Card fx-signoff-1.",
+              "mailRef": null,
+              "pageRef": null,
+              "artifactRef": null
+            },
+            {
+              "at": "2026-11-02T09:05:00-05:00",
+              "bot": "Shelvorn",
+              "text": "Sent the sign-off Task Card fx-signoff-1 with its evidence.",
+              "mailRef": null,
+              "pageRef": null,
+              "artifactRef": null
+            },
+            {
+              "at": "2026-11-02T09:00:00-05:00",
+              "bot": "Dr. Kivo",
+              "text": "Checked the room map: 3 of 3 checks pass.",
+              "mailRef": null,
+              "pageRef": null,
+              "artifactRef": null
+            },
+            {
+              "at": "2026-11-02T08:00:00-05:00",
+              "bot": "Shelvorn",
+              "text": "Built the room map. Execute done, Check started.",
+              "mailRef": null,
+              "pageRef": null,
+              "artifactRef": null
+            },
+            {
+              "at": "2026-11-01T10:00:00-05:00",
+              "bot": "Shelvorn",
+              "text": "Set the stages. The plan ends with your sign-off. Plan done, Execute started.",
+              "mailRef": null,
+              "pageRef": null,
+              "artifactRef": null
+            }
+          ],
+          "waiting": 0
+        },
+        "tracker": {
+          "lane": "Room map",
+          "project": "fx-lane-tracker",
+          "status": "Done",
+          "lead": "Shelvorn",
+          "plan": {
+            "endsWithSignOff": true,
+            "doneBy": [
+              "Shelvorn"
+            ],
+            "checkedBy": "Dr. Kivo"
+          },
+          "stages": [
+            {
+              "n": 1,
+              "name": "Plan",
+              "state": "done",
+              "startedAt": "2026-11-01T10:00:00-05:00",
+              "doneAt": "2026-11-01T10:00:00-05:00",
+              "time": "done Sun 10:00 AM",
+              "doneWhen": "The plan is written",
+              "steps": []
+            },
+            {
+              "n": 2,
+              "name": "Execute",
+              "state": "done",
+              "startedAt": "2026-11-01T10:00:00-05:00",
+              "doneAt": "2026-11-02T08:00:00-05:00",
+              "time": "done 8:00 AM",
+              "doneWhen": "The room map is built",
+              "steps": []
+            },
+            {
+              "n": 3,
+              "name": "Check",
+              "state": "done",
+              "startedAt": "2026-11-02T08:00:00-05:00",
+              "doneAt": "2026-11-02T09:00:00-05:00",
+              "time": "done 9:00 AM",
+              "doneWhen": "A bot that did not build it checks the room map",
+              "steps": []
+            }
+          ],
+          "stageCount": 3,
+          "currentStage": null,
+          "currentStep": null,
+          "doneWhen": null,
+          "now": "Done. Nothing running.",
+          "next": null,
+          "blockers": [],
+          "updated": {
+            "at": "2026-11-02T09:31:00-05:00",
+            "by": "Shelvorn",
+            "line": "Updated 9:31 AM by Shelvorn"
+          },
+          "stagesChanged": {
+            "at": "2026-11-01T10:00:00-05:00",
+            "by": "Shelvorn",
+            "what": "set the stages, Plan done",
+            "line": "Changed by Shelvorn Sun 10:00 AM: set the stages, Plan done"
+          },
+          "stale": null,
+          "done": {
+            "at": "2026-11-02T09:31:00-05:00",
+            "by": "Shelvorn",
+            "checkedBy": "Dr. Kivo",
+            "signedOff": true,
+            "signOffCard": "fx-signoff-1",
+            "activityLine": "Lane done. You signed it off on Task Card fx-signoff-1.",
+            "line": "Done 9:31 AM. Checked by Dr. Kivo. Signed off by you."
+          },
+          "display": {
+            "stageRow": "✓ Plan  ✓ Execute  ✓ Check",
+            "stageRowLength": 26,
+            "stageRowFolded": false,
+            "unfoldedRowLength": 26,
+            "stepLine": null,
+            "countLine": null,
+            "countLineFull": null,
+            "blockersHeading": "No blockers",
+            "projectLine": "Done 9:31 AM · signed off by you",
+            "projectRow": "Done 9:31 AM · signed off by you",
+            "projectMark": null,
+            "trackerLines": [
+              "✓ Plan  ✓ Execute  ✓ Check",
+              "Done 9:31 AM. Checked by Dr. Kivo. Signed off by you.",
+              "Updated 9:31 AM by Shelvorn"
+            ],
+            "stagesSheet": [
+              "Stages of Room map",
+              "✓ Plan  done Sun 10:00 AM",
+              "✓ Execute  done 8:00 AM",
+              "✓ Check  done 9:00 AM",
+              "Changed by Shelvorn Sun 10:00 AM: set the stages, Plan done"
+            ]
+          },
+          "changes": [
+            {
+              "at": "2026-11-01T10:00:00-05:00",
+              "by": "Shelvorn",
+              "what": "Set the stages. The plan ends with your sign-off. Plan done, Execute started."
+            },
+            {
+              "at": "2026-11-02T08:00:00-05:00",
+              "by": "Shelvorn",
+              "what": "Execute done, Check started."
+            },
+            {
+              "at": "2026-11-02T09:00:00-05:00",
+              "by": "Dr. Kivo",
+              "what": "Check done: 3 of 3 checks pass. Dr. Kivo did not do the work."
+            },
+            {
+              "at": "2026-11-02T09:05:00-05:00",
+              "by": "Shelvorn",
+              "what": "Blocker added: Waiting on you: Sign off: Room map is done?"
+            },
+            {
+              "at": "2026-11-02T09:31:00-05:00",
+              "by": "Shelvorn",
+              "what": "Blocker cleared: you approved the sign-off at 9:30 AM. Lane done."
+            }
+          ]
+        }
+      }
+    },
+    "LT-10": {
+      "fixture": "A Done Lane is a read-only record, reopened through 'Talk to <bot>'",
+      "expect": [
+        "Opening the Lane shows the tracker (all stages done), the Done line 'Done Fri 12:41 PM. Checked by Shelvorn.', all Activity, and its answered Task Cards; no Task Card can be answered and no tracker field can be edited.",
+        "The only action is 'Talk to Alba' (the Lane's bot). Nothing is sent by itself.",
+        "'Done (N)' in the Project view counts this Lane: Done (1) for this fixture project.",
+        "When the bot reopens the Lane on his instruction, the Lane becomes Active, the reopened stage shows as current, 'Lane reopened' lands in Activity, and Done (N) drops by 1. The exact stage it returns to is the design lead's call (suggested: Execute)."
+      ],
+      "lane": {
+        "id": "fx-l-reopen",
+        "projectId": "fx-lane-tracker",
+        "name": "Done Lane to reopen",
+        "status": "Done",
+        "lead": "Alba",
+        "now": "Done. Nothing running.",
+        "activity": [
+          {
+            "at": "2026-10-30T12:41:00-04:00",
+            "bot": "Alba",
+            "text": "Lane done.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          },
+          {
+            "at": "2026-10-30T12:40:00-04:00",
+            "bot": "Shelvorn",
+            "text": "Checked the sidebar and layout: 4 of 4 checks pass.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          },
+          {
+            "at": "2026-10-30T12:00:00-04:00",
+            "bot": "Alba",
+            "text": "Finished the sidebar and layout.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          },
+          {
+            "at": "2026-10-28T15:00:00-04:00",
+            "bot": "Alba",
+            "text": "Plan done: one sidebar and one page layout for every screen.",
+            "mailRef": null,
+            "pageRef": null,
+            "artifactRef": null
+          }
+        ],
+        "waiting": 0
+      },
+      "tracker": {
+        "lane": "Done Lane to reopen",
+        "project": "fx-lane-tracker",
+        "status": "Done",
+        "lead": "Alba",
+        "plan": {
+          "endsWithSignOff": false,
+          "doneBy": [
+            "Alba"
+          ],
+          "checkedBy": "Shelvorn"
+        },
+        "stages": [
+          {
+            "n": 1,
+            "name": "Plan",
+            "state": "done",
+            "startedAt": "2026-10-28T15:00:00-04:00",
+            "doneAt": "2026-10-28T15:00:00-04:00",
+            "time": "done Wed 3:00 PM",
+            "doneWhen": "One sidebar and one page layout agreed",
+            "steps": []
+          },
+          {
+            "n": 2,
+            "name": "Execute",
+            "state": "done",
+            "startedAt": "2026-10-28T15:00:00-04:00",
+            "doneAt": "2026-10-30T12:00:00-04:00",
+            "time": "done Fri 12:00 PM",
+            "doneWhen": "Sidebar and layout built for phone, iPad and Mac",
+            "steps": []
+          },
+          {
+            "n": 3,
+            "name": "Check",
+            "state": "done",
+            "startedAt": "2026-10-30T12:00:00-04:00",
+            "doneAt": "2026-10-30T12:40:00-04:00",
+            "time": "done Fri 12:40 PM",
+            "doneWhen": "Shelvorn checks every size and all checks pass",
+            "steps": []
+          }
+        ],
+        "stageCount": 3,
+        "currentStage": null,
+        "currentStep": null,
+        "doneWhen": null,
+        "now": "Done. Nothing running.",
+        "next": null,
+        "blockers": [],
+        "updated": {
+          "at": "2026-10-30T12:41:00-04:00",
+          "by": "Alba",
+          "line": "Updated Fri 12:41 PM by Alba"
+        },
+        "stagesChanged": {
+          "at": "2026-10-28T15:00:00-04:00",
+          "by": "Alba",
+          "what": "set the stages, Plan done",
+          "line": "Changed by Alba Wed 3:00 PM: set the stages, Plan done"
+        },
+        "stale": null,
+        "done": {
+          "at": "2026-10-30T12:41:00-04:00",
+          "by": "Alba",
+          "checkedBy": "Shelvorn",
+          "signedOff": false,
+          "activityLine": "Lane done.",
+          "line": "Done Fri 12:41 PM. Checked by Shelvorn."
+        },
+        "display": {
+          "stageRow": "✓ Plan  ✓ Execute  ✓ Check",
+          "stageRowLength": 26,
+          "stageRowFolded": false,
+          "unfoldedRowLength": 26,
+          "stepLine": null,
+          "countLine": null,
+          "countLineFull": null,
+          "blockersHeading": "No blockers",
+          "projectLine": "Done Fri 12:41 PM · checked by Shelvorn",
+          "projectRow": "Done Fri 12:41 PM · checked by Shelvorn",
+          "projectMark": null,
+          "trackerLines": [
+            "✓ Plan  ✓ Execute  ✓ Check",
+            "Done Fri 12:41 PM. Checked by Shelvorn.",
+            "Updated Fri 12:41 PM by Alba"
+          ],
+          "stagesSheet": [
+            "Stages of Done Lane to reopen",
+            "✓ Plan  done Wed 3:00 PM",
+            "✓ Execute  done Fri 12:00 PM",
+            "✓ Check  done Fri 12:40 PM",
+            "Changed by Alba Wed 3:00 PM: set the stages, Plan done"
+          ]
+        },
+        "changes": [
+          {
+            "at": "2026-10-28T15:00:00-04:00",
+            "by": "Alba",
+            "what": "Set the stages Plan, Execute, Check. Plan done, Execute started."
+          },
+          {
+            "at": "2026-10-30T12:00:00-04:00",
+            "by": "Alba",
+            "what": "Execute done, Check started."
+          },
+          {
+            "at": "2026-10-30T12:40:00-04:00",
+            "by": "Shelvorn",
+            "what": "Check done: 4 of 4 checks pass. Shelvorn did not do the work."
+          },
+          {
+            "at": "2026-10-30T12:41:00-04:00",
+            "by": "Alba",
+            "what": "Lane done. The plan has no sign-off, so the Lane went Done by itself."
+          }
+        ]
+      },
+      "doneHeading": {
+        "before": "Done (1)",
+        "afterReopen": "hidden (no Done Lanes)"
+      }
+    }
+  }
+}

@@ -1,0 +1,193 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/captain/cards"
+  },
+  "signIn": "real",
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Content-Security-Policy": "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+    "Referrer-Policy": "strict-origin",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "ETag": "\"05a097c18b8f5dd64212dddac6436b86c194edf48f3bb8a7bfa552655037f9b8\"",
+    "Content-Length": "2246"
+  },
+  "body": {
+    "projects": [
+      {
+        "name": "Crew",
+        "lanes": [
+          {
+            "name": "Launch",
+            "cards": [
+              {
+                "id": "bot-a-3",
+                "title": "Rotate the build agents",
+                "project": "Crew",
+                "lane": "Launch",
+                "due": null,
+                "state": "open",
+                "changed-at": "2026-11-05T08:06:00-05:00",
+                "from": "bot-a",
+                "rev": 1,
+                "answer": null,
+                "waitsOn": null
+              }
+            ]
+          },
+          {
+            "name": "Ops",
+            "cards": [
+              {
+                "id": "bot-a-1",
+                "title": "Pick the backup window",
+                "project": "Crew",
+                "lane": "Ops",
+                "due": null,
+                "state": "done",
+                "changed-at": "2026-11-05T10:01:20-05:00",
+                "from": "bot-a",
+                "rev": 1,
+                "answer": {
+                  "pick": "cant-decide",
+                  "at": "2026-11-05T10:01:20-05:00"
+                },
+                "waitsOn": "bot-a"
+              },
+              {
+                "id": "bot-a-2",
+                "title": "Choose the alert channel",
+                "project": "Crew",
+                "lane": "Ops",
+                "due": null,
+                "state": "done",
+                "changed-at": "2026-11-05T10:02:20-05:00",
+                "from": "bot-a",
+                "rev": 1,
+                "answer": {
+                  "pick": "B",
+                  "at": "2026-11-05T10:02:20-05:00"
+                },
+                "waitsOn": "bot-a"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Repo",
+        "lanes": [
+          {
+            "name": "Launch",
+            "cards": [
+              {
+                "id": "repo-lead-3",
+                "title": "Run the data migration",
+                "project": "Repo",
+                "lane": "Launch",
+                "due": null,
+                "state": "open",
+                "changed-at": "2026-11-05T10:05:20-05:00",
+                "from": "repo-lead",
+                "rev": 1,
+                "answer": null,
+                "waitsOn": null
+              }
+            ]
+          },
+          {
+            "name": "Review",
+            "cards": [
+              {
+                "id": "repo-lead-1",
+                "title": "Choose the release cut",
+                "project": "Repo",
+                "lane": "Review",
+                "due": null,
+                "state": "done",
+                "changed-at": "2026-11-05T10:01:00-05:00",
+                "from": "repo-lead",
+                "rev": 2,
+                "answer": {
+                  "pick": "A",
+                  "at": "2026-11-05T10:01:00-05:00"
+                },
+                "waitsOn": "repo-lead"
+              }
+            ]
+          },
+          {
+            "name": "Ship",
+            "cards": [
+              {
+                "id": "repo-lead-2",
+                "title": "Pick the review depth",
+                "project": "Repo",
+                "lane": "Ship",
+                "due": null,
+                "state": "done",
+                "changed-at": "2026-11-05T10:00:20-05:00",
+                "from": "repo-lead",
+                "rev": 1,
+                "answer": {
+                  "pick": "B",
+                  "at": "2026-11-05T10:00:20-05:00"
+                },
+                "waitsOn": "repo-lead"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Web",
+        "lanes": [
+          {
+            "name": "Docs",
+            "cards": [
+              {
+                "id": "bot-b-1",
+                "title": "Pick the docs theme",
+                "project": "Web",
+                "lane": "Docs",
+                "due": null,
+                "state": "done",
+                "changed-at": "2026-11-05T10:01:40-05:00",
+                "from": "bot-b",
+                "rev": 1,
+                "answer": {
+                  "pick": "none",
+                  "at": "2026-11-05T10:01:40-05:00"
+                },
+                "waitsOn": "bot-b"
+              },
+              {
+                "id": "bot-b-2",
+                "title": "Choose the search provider",
+                "project": "Web",
+                "lane": "Docs",
+                "due": null,
+                "state": "withdrawn",
+                "changed-at": "2026-11-05T10:03:20-05:00",
+                "from": "bot-b",
+                "rev": 1,
+                "answer": {
+                  "pick": "A",
+                  "at": "2026-11-05T10:03:20-05:00"
+                },
+                "waitsOn": null
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "plainMail": [],
+    "truncated": false,
+    "csrf": "csrf-placeholder",
+    "freshUntil": 0
+  }
+}

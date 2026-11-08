@@ -1,0 +1,7 @@
+{
+  "csrf": "csrf-placeholder",
+  "freshUntil": 0,
+  "invite": {"id": "inv-newtarn01", "forName": "tarn", "ends": "2026-11-06T07:00:00-05:00"},
+  "code": "QD7F3K92QM",
+  "prompt": "Join Quarterdeck: mail join@example.invalid with the invite QD7F3K92QM from the bot named tarn, within 24 hours."
+}

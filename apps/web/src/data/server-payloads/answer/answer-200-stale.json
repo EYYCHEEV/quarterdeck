@@ -1,0 +1,7 @@
+{
+  "message": "Got it: alba-1 B at 9:07 AM ET",
+  "stale": true,
+  "rev": 2,
+  "csrf": "sample-csrf-after-stale-answer",
+  "freshUntil": 1793836800.6
+}

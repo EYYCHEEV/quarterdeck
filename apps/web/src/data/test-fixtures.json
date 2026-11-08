@@ -1,0 +1,481 @@
+{
+  "qd": "fixtures/1",
+  "testOnly": true,
+  "for": "Quarterdeck merge build tests, design-spec.md sections 4.3, 4.4, 4.5, 4.7, 12",
+  "author": "the content lead",
+  "written": "Tue Nov 3, 2026 (ET)",
+  "rules": [
+    "Test-only: loaded only by the build's test mode, never in the example data, never in anything shown to the Captain as example content.",
+    "Each fixture is one taskCards entry in the example data's shape, on an existing Lane; Page, Artifact and Mail refs point at existing example records.",
+    "In test mode the Queue and Lane counts include the loaded fixtures."
+  ],
+  "fixtures": [
+    {
+      "fixture": "F-1 one-way pick with real risk",
+      "expect": [
+        "Above the pick, a red-edged block: '! One-way change: cannot be undone', then 'Risk: ' and option A's risk text (spec 4.4).",
+        "The pick's own lines skip Risk and the undo line.",
+        "Send A asks once: 'Send A? This cannot be undone.' with [ Confirm: send A ] and [ Back ]; a double tap sends once (4.5).",
+        "Choosing B (two-way) sends in one tap."
+      ],
+      "taskCard": {
+        "laneId": "l-sw2",
+        "card": {
+          "qd": "card/1",
+          "card": "fx-oneway-pick",
+          "id": "fx-oneway-pick",
+          "project": "heron-forge",
+          "lane": "Bridge",
+          "title": "Delete the three old bridge rooms now?",
+          "about": "After the move the three old bridge rooms sit empty. Deleting them removes their message history for good.",
+          "context": "Every message was copied to the new rooms on Nov 2.\nThe old rooms still show in the room list and confuse people.",
+          "ascii": " Old bridge rooms after the move\n ------------------------------------------\n old-room-1   empty   history 1,204 msgs\n old-room-2   empty   history   311 msgs\n old-room-3   empty   history    87 msgs\n A deletes all three and their history.\n The copies stay in the new rooms.",
+          "options": [
+            {
+              "label": "A. Delete all three now",
+              "pick": true,
+              "door": "one-way",
+              "does": "Deletes the three old rooms and their history.",
+              "cost": "Five minutes.",
+              "risk": "Their message history is gone for good. If the copy missed a message, nobody can read it again.",
+              "undo": "Cannot be undone.",
+              "pros": [
+                "The room list shows only live rooms."
+              ],
+              "cons": [
+                "No way back."
+              ]
+            },
+            {
+              "label": "B. Keep them read-only for 30 days",
+              "door": "two-way",
+              "does": "Locks the rooms and hides them from the room list.",
+              "cost": "Nothing now.",
+              "risk": "They take a little space for a month.",
+              "undo": "Unlock them.",
+              "pros": [
+                "Nothing is lost."
+              ],
+              "cons": [
+                "One more card in 30 days."
+              ]
+            }
+          ],
+          "pick_why": "The copies were checked on Nov 2, and the empty rooms keep confusing people.",
+          "you_do": "Pick A or B.",
+          "skip": "If no answer by due: we keep them read-only and ask again Friday.",
+          "due": "2026-11-03T17:00:00-05:00",
+          "door": "one-way",
+          "category": [
+            "your-hands"
+          ],
+          "kind": "action"
+        },
+        "rev": 1,
+        "from": "shelvorn",
+        "at": "2026-11-02T08:20:00-05:00",
+        "comments": [],
+        "answers": [],
+        "priority": "P1",
+        "type": "high-risk approval",
+        "unblocks": [],
+        "edits": [],
+        "seenAt": null
+      }
+    },
+    {
+      "fixture": "F-2 two-way pick, one-way other option",
+      "expect": [
+        "No block above the pick (4.4).",
+        "Option B's details (opened with its arrow) show its undo line 'Cannot be undone.' in red.",
+        "Send A sends in one tap; choosing B makes Send ask the confirm (4.5)."
+      ],
+      "taskCard": {
+        "laneId": "l-da1",
+        "card": {
+          "qd": "card/1",
+          "card": "fx-twoway-oneway-other",
+          "id": "fx-twoway-oneway-other",
+          "project": "dale-tools",
+          "lane": "Task export",
+          "title": "How should we clear space on the export disk?",
+          "about": "The export disk is 92 percent full. Old export files can move to the archive disk or be deleted.",
+          "context": "Each export writes one file.\nFiles older than 90 days are almost never opened.",
+          "ascii": " Export disk\n ------------------------------------------\n [################################----] 92%\n Exports older than 90 days: 41 GB\n A. move them to the archive disk\n B. delete them",
+          "options": [
+            {
+              "label": "A. Move old exports to the archive disk",
+              "pick": true,
+              "does": "Moves files older than 90 days to the archive disk.",
+              "cost": "About an hour of copying.",
+              "risk": "The archive disk fills a little faster.",
+              "undo": "Move them back.",
+              "pros": [
+                "Every file is kept."
+              ],
+              "cons": [
+                "An hour of copying."
+              ]
+            },
+            {
+              "label": "B. Delete exports older than 90 days",
+              "door": "one-way",
+              "does": "Deletes the old files.",
+              "cost": "A few minutes.",
+              "risk": "An old export is gone for good; a past report can no longer be checked.",
+              "undo": "Cannot be undone.",
+              "pros": [
+                "Fastest."
+              ],
+              "cons": [
+                "No way back."
+              ]
+            }
+          ],
+          "pick_why": "Moving frees the same space and keeps every file.",
+          "you_do": "Pick A or B.",
+          "skip": "If no answer by due: we move them, as in A.",
+          "due": "2026-11-04T12:00:00-05:00",
+          "door": "two-way",
+          "category": [
+            "strategy"
+          ],
+          "kind": "decision"
+        },
+        "rev": 1,
+        "from": "dale",
+        "at": "2026-11-02T08:40:00-05:00",
+        "comments": [],
+        "answers": [],
+        "priority": "P2",
+        "type": "decision",
+        "unblocks": [],
+        "edits": [],
+        "seenAt": null
+      }
+    },
+    {
+      "fixture": "F-3 undoable card labelled high-risk",
+      "expect": [
+        "type is 'high-risk approval', yet no block and no confirm: the label alone changes nothing.",
+        "Send A sends in one tap."
+      ],
+      "taskCard": {
+        "laneId": "l-mai",
+        "card": {
+          "qd": "card/1",
+          "card": "fx-highrisk-undoable",
+          "id": "fx-highrisk-undoable",
+          "project": "quarterdeck",
+          "lane": "Mail client",
+          "title": "Turn on the new mail sync for every bot?",
+          "about": "The new mail sync replaces the old one for all five bots at once.",
+          "context": "It ran for a day on Dale's mailbox with no errors.\nIf it fails, bots get no mail until it is turned off.",
+          "ascii": " Mail sync, all five bots\n ------------------------------------------\n Iris       old sync  ->  new sync\n Alba    old sync  ->  new sync\n Dr. Kivo   old sync  ->  new sync\n Shelvorn   old sync  ->  new sync\n Dale       new sync since Nov 1",
+          "options": [
+            {
+              "label": "A. Turn it on for every bot",
+              "pick": true,
+              "does": "Switches the four other bots to the new sync.",
+              "cost": "Ten minutes.",
+              "risk": "If it fails, bots get no mail until it is turned off.",
+              "undo": "Turn it off; the old sync takes over within a minute.",
+              "pros": [
+                "One sync to look after."
+              ],
+              "cons": [
+                "All bots at once."
+              ]
+            },
+            {
+              "label": "B. One more day on Dale only",
+              "does": "Keeps the test on Dale's mailbox.",
+              "cost": "Nothing now.",
+              "risk": "Another day on two syncs.",
+              "undo": "Not needed.",
+              "pros": [
+                "More proof first."
+              ],
+              "cons": [
+                "Another card tomorrow."
+              ]
+            }
+          ],
+          "pick_why": "A full day on Dale showed no errors, and turning it off is quick.",
+          "you_do": "Pick A or B.",
+          "skip": "If no answer by due: we keep the test on Dale only.",
+          "due": "2026-11-03T12:00:00-05:00",
+          "door": "two-way",
+          "category": [
+            "your-hands"
+          ],
+          "kind": "action"
+        },
+        "rev": 1,
+        "from": "shelvorn",
+        "at": "2026-11-02T09:10:00-05:00",
+        "comments": [],
+        "answers": [],
+        "priority": "P1",
+        "type": "high-risk approval",
+        "unblocks": [],
+        "edits": [],
+        "seenAt": null
+      }
+    },
+    {
+      "fixture": "F-4 card whose Page has a file",
+      "expect": [
+        "Evidence heading with 'See all on Page' at its right; it opens PG-1 Mission control in the Page viewer (4.3, 9).",
+        "Three tiles in order Page PG-1 (a link), Artifact AR-1, Mail MT-101."
+      ],
+      "taskCard": {
+        "laneId": "l-sea",
+        "card": {
+          "qd": "card/1",
+          "card": "fx-page-file",
+          "id": "fx-page-file",
+          "project": "quarterdeck",
+          "lane": "Search",
+          "title": "Add the Search test results to Mission control?",
+          "about": "Mission control is the quarterdeck Page the bots keep live. This adds a panel with the latest Search test run.",
+          "context": "Dr. Kivo's test log has the numbers.\nThe panel would sit beside the Queue panel.",
+          "ascii": " Mission control (PG-1)\n ------------------------------------------\n +------------------+ +------------------+\n | Queue            | | Search tests     |\n | 9 waiting        | | 5 per group: ok  |\n +------------------+ | keyboard up: ok  |\n                      +------------------+",
+          "options": [
+            {
+              "label": "A. Add the panel",
+              "pick": true,
+              "does": "Adds a Search tests panel to Mission control.",
+              "cost": "About an hour.",
+              "risk": "One more panel on the Page.",
+              "undo": "Remove the panel."
+            },
+            {
+              "label": "B. Keep the Page as it is",
+              "does": "No change.",
+              "cost": "Nothing.",
+              "risk": "The numbers stay in the log only.",
+              "undo": "Not needed."
+            }
+          ],
+          "pick_why": "The bots already open Mission control first; the numbers belong there.",
+          "you_do": "Pick A or B.",
+          "skip": "If no answer by due: we keep the Page as it is.",
+          "due": "2026-11-06T17:00:00-05:00",
+          "door": "two-way",
+          "category": [
+            "design"
+          ],
+          "kind": "decision",
+          "mailRef": "MT-101",
+          "pageRefs": [
+            "PG-1"
+          ],
+          "artifactRefs": [
+            "AR-1"
+          ]
+        },
+        "rev": 1,
+        "from": "dr-kivo",
+        "at": "2026-11-02T09:30:00-05:00",
+        "comments": [],
+        "answers": [],
+        "priority": "P3",
+        "type": "design",
+        "unblocks": [],
+        "edits": [],
+        "seenAt": null
+      }
+    },
+    {
+      "fixture": "F-5 card with saved version records",
+      "expect": [
+        "The fold reads Earlier versions with 2 earlier versions and a change trail of 2 changes (4.7).",
+        "Version 1 shows its own options, pick A, and his answer to it: 'You answered: B. Friday 5 PM' with his note, as history only.",
+        "The waiting card (version 3) shows no answer; Send C is selected."
+      ],
+      "taskCard": {
+        "laneId": "l-da1",
+        "card": {
+          "qd": "card/1",
+          "card": "fx-history",
+          "id": "fx-history",
+          "project": "dale-tools",
+          "lane": "Task export",
+          "title": "When should the weekly export go out?",
+          "about": "The export sheet goes to the team once a week. This sets the day and time.",
+          "context": "You asked for Tuesday, so C is new and is the pick.\nMonday mornings are already busy.",
+          "ascii": " Weekly export, when it goes out\n ------------------------------------------\n Mon   Tue   Wed   Thu   Fri\n  A     C                 B\n 8 AM  8 AM             5 PM",
+          "options": [
+            {
+              "label": "A. Monday 8 AM",
+              "does": "The export goes out every Monday at 8 AM.",
+              "cost": "A small change.",
+              "risk": "It lands with the Monday mail.",
+              "undo": "Change the day."
+            },
+            {
+              "label": "B. Friday 5 PM",
+              "does": "The export goes out every Friday at 5 PM.",
+              "cost": "A small change.",
+              "risk": "Nobody reads it until Monday.",
+              "undo": "Change the day."
+            },
+            {
+              "label": "C. Tuesday 8 AM",
+              "pick": true,
+              "does": "The export goes out every Tuesday at 8 AM.",
+              "cost": "A small change.",
+              "risk": "One day later than Monday.",
+              "undo": "Change the day."
+            }
+          ],
+          "pick_why": "Tuesday morning misses the Monday rush and is still early in the week.",
+          "you_do": "Pick A, B or C.",
+          "skip": "If no answer by due: the first export goes out Tuesday at 8 AM.",
+          "due": "2026-11-05T12:00:00-05:00",
+          "door": "two-way",
+          "category": [
+            "strategy"
+          ],
+          "kind": "decision"
+        },
+        "rev": 3,
+        "from": "dale",
+        "at": "2026-11-02T07:00:00-05:00",
+        "comments": [],
+        "answers": [
+          {
+            "qd": "answer/1",
+            "card": "fx-history",
+            "rev": 1,
+            "pick": "B",
+            "note": "Friday works, but check Tuesday.",
+            "at": "2026-11-02T07:40:00-05:00"
+          }
+        ],
+        "priority": "P2",
+        "type": "strategy",
+        "unblocks": [],
+        "edits": [
+          {
+            "by": "Dale",
+            "at": "2026-11-02T08:10:00-05:00",
+            "instruction": {
+              "from": "Captain",
+              "at": "2026-11-02T08:05:00-05:00",
+              "text": "Can it be Tuesday instead?"
+            },
+            "change": "Added Tuesday 8 AM as C and made it the pick."
+          },
+          {
+            "by": "Iris",
+            "at": "2026-11-02T09:00:00-05:00",
+            "instruction": {
+              "from": "Captain",
+              "at": "2026-11-02T08:55:00-05:00",
+              "text": "Say what happens if I don't answer."
+            },
+            "change": "Added the no-answer line."
+          }
+        ],
+        "seenAt": null
+      },
+      "versions": [
+        {
+          "version": 1,
+          "madeBy": "Dale",
+          "madeAt": "2026-11-02T07:00:00-05:00",
+          "following": null,
+          "change": null,
+          "answer": {
+            "pick": "B",
+            "note": "Friday works, but check Tuesday.",
+            "at": "2026-11-02T07:40:00-05:00"
+          },
+          "card": {
+            "title": "When should the weekly export go out?",
+            "about": "The export sheet goes to the team once a week. This sets the day and time.",
+            "context": "The first sheet goes out once a week.\nPick the day and time.",
+            "ascii": " Weekly export, when it goes out\n ------------------------------------------\n Mon   Tue   Wed   Thu   Fri\n  A                       B\n 8 AM                   5 PM",
+            "options": [
+              {
+                "label": "A. Monday 8 AM",
+                "pick": true,
+                "does": "The export goes out every Monday at 8 AM.",
+                "cost": "A small change.",
+                "risk": "It lands with the Monday mail.",
+                "undo": "Change the day."
+              },
+              {
+                "label": "B. Friday 5 PM",
+                "does": "The export goes out every Friday at 5 PM.",
+                "cost": "A small change.",
+                "risk": "Nobody reads it until Monday.",
+                "undo": "Change the day."
+              }
+            ],
+            "pick_why": "Monday morning starts the week with the numbers.",
+            "you_do": "Pick A or B.",
+            "due": "2026-11-05T12:00:00-05:00",
+            "door": "two-way",
+            "category": [
+              "strategy"
+            ],
+            "kind": "decision"
+          }
+        },
+        {
+          "version": 2,
+          "madeBy": "Dale",
+          "madeAt": "2026-11-02T08:10:00-05:00",
+          "following": {
+            "from": "Captain",
+            "at": "2026-11-02T08:05:00-05:00",
+            "text": "Can it be Tuesday instead?"
+          },
+          "change": "Added Tuesday 8 AM as C and made it the pick.",
+          "answer": null,
+          "card": {
+            "title": "When should the weekly export go out?",
+            "about": "The export sheet goes to the team once a week. This sets the day and time.",
+            "context": "You asked for Tuesday, so C is new and is the pick.\nMonday mornings are already busy.",
+            "ascii": " Weekly export, when it goes out\n ------------------------------------------\n Mon   Tue   Wed   Thu   Fri\n  A     C                 B\n 8 AM  8 AM             5 PM",
+            "options": [
+              {
+                "label": "A. Monday 8 AM",
+                "does": "The export goes out every Monday at 8 AM.",
+                "cost": "A small change.",
+                "risk": "It lands with the Monday mail.",
+                "undo": "Change the day."
+              },
+              {
+                "label": "B. Friday 5 PM",
+                "does": "The export goes out every Friday at 5 PM.",
+                "cost": "A small change.",
+                "risk": "Nobody reads it until Monday.",
+                "undo": "Change the day."
+              },
+              {
+                "label": "C. Tuesday 8 AM",
+                "pick": true,
+                "does": "The export goes out every Tuesday at 8 AM.",
+                "cost": "A small change.",
+                "risk": "One day later than Monday.",
+                "undo": "Change the day."
+              }
+            ],
+            "pick_why": "Tuesday morning misses the Monday rush and is still early in the week.",
+            "you_do": "Pick A, B or C.",
+            "due": "2026-11-05T12:00:00-05:00",
+            "door": "two-way",
+            "category": [
+              "strategy"
+            ],
+            "kind": "decision"
+          }
+        }
+      ]
+    }
+  ]
+}

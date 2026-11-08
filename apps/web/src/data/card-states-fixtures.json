@@ -1,0 +1,133 @@
+{
+  "qd": "fixtures/1",
+  "testOnly": true,
+  "for": "Task Card states that the example data does not reach: a single-action card with its ask and why, and a card whose due time has passed",
+  "rules": [
+    "Test-only: loaded only by the build's test mode with fixtures=card-states.",
+    "Each fixture is one taskCards entry in the example data's shape, on an existing Lane."
+  ],
+  "fixtures": [
+    {
+      "fixture": "S-1 single-action card with its ask, why, undo and no-answer line",
+      "expect": [
+        "Approve and Reject answer it, with an optional note.",
+        "The no-answer line reads 'If no answer by Wed 5 PM: nothing changes.'",
+        "The ask names what to approve and says how to undo it."
+      ],
+      "taskCard": {
+        "laneId": "l-set",
+        "card": {
+          "qd": "card/1",
+          "card": "fx-approve",
+          "id": "fx-approve",
+          "project": "quarterdeck",
+          "lane": "Settings",
+          "title": "Approve the Appearance wording",
+          "about": "The words for the three Appearance choices in Settings.",
+          "context": "Settings now has Appearance.\nThe three choices are System, Light and Dark.\nOnly the words are still open.",
+          "ascii": " Settings > Appearance\n ------------------------------------------\n System   follows the device\n Light    always light\n Dark     always dark",
+          "options": [],
+          "pick_why": "The words match your notes from Monday.",
+          "you_do": "Approve or reject.",
+          "skip": "If no answer by due: nothing changes.",
+          "due": "2026-11-04T17:00:00-05:00",
+          "door": "two-way",
+          "undo": "Ask Alba to put the old words back; nothing else changes.",
+          "category": [
+            "design"
+          ],
+          "kind": "action"
+        },
+        "rev": 1,
+        "from": "alba",
+        "at": "2026-11-02T08:20:00-05:00",
+        "comments": [],
+        "answers": [],
+        "priority": "P2",
+        "type": "approval",
+        "unblocks": [
+          "t1",
+          "t2"
+        ],
+        "edits": [],
+        "seenAt": null
+      }
+    },
+    {
+      "fixture": "S-2 two-way card past its due time",
+      "expect": [
+        "The no-answer line says what happened and that he can still answer.",
+        "Send still works."
+      ],
+      "taskCard": {
+        "laneId": "l-sea",
+        "card": {
+          "qd": "card/1",
+          "card": "fx-past-due",
+          "id": "fx-past-due",
+          "project": "quarterdeck",
+          "lane": "Search",
+          "title": "Ship the Search sheet today?",
+          "about": "The new Search sheet, built and checked.",
+          "context": "The sheet shows five rows per group.\nIt passed all three checks.\nThree tasks wait on it.",
+          "ascii": " Search sheet, phone\n ------------------------------------------\n Chats        5 rows    See all\n Task Cards   5 rows    See all\n Projects     2 rows\n Lanes        1 row",
+          "options": [
+            {
+              "label": "A. Ship it today",
+              "pick": true,
+              "door": "two-way",
+              "does": "Turns the new sheet on for everyone.",
+              "cost": "Nothing to build.",
+              "risk": "Low.",
+              "undo": "Turn the sheet off in Settings.",
+              "pros": [
+                "Three waiting tasks can start."
+              ],
+              "cons": [
+                "Nobody has used it for a day."
+              ],
+              "why": "All checks pass and three tasks wait on it."
+            },
+            {
+              "label": "B. Hold a day",
+              "door": "two-way",
+              "does": "Keeps the old sheet one more day.",
+              "cost": "One day of waiting.",
+              "risk": "Three tasks stay blocked.",
+              "undo": "Not needed.",
+              "pros": [
+                "One more day of testing."
+              ],
+              "cons": [
+                "The waiting tasks lose a day."
+              ]
+            }
+          ],
+          "pick_why": "All checks pass, and three tasks wait on it.",
+          "you_do": "Pick A or B.",
+          "skip": "If no answer by due: Alba holds it and asks again Wednesday.",
+          "due": "2026-11-02T08:00:00-05:00",
+          "door": "two-way",
+          "category": [
+            "strategy"
+          ],
+          "kind": "decision"
+        },
+        "rev": 1,
+        "from": "alba",
+        "at": "2026-11-01T17:00:00-05:00",
+        "comments": [],
+        "answers": [],
+        "priority": "P1",
+        "type": "strategy",
+        "unblocks": [
+          "t1",
+          "t2",
+          "t3"
+        ],
+        "edits": [],
+        "seenAt": null
+      }
+    }
+  ]
+}

@@ -1,0 +1,488 @@
+{
+  "qd": "chat-fixtures/1",
+  "testOnly": true,
+  "for": "Quarterdeck build PR 6 tests: chat",
+  "author": "Quarterdeck contributors",
+  "written": "Tue Nov 3, 2026 (ET)",
+  "rules": [
+    "Test-only: loaded only by the build's test mode, never in the example data, never shown to the Captain as example content.",
+    "Paths are relative to this file's folder. Messages use the shapes of chat.json. Sizes and wording marked 'suggestion' are for the design lead to confirm; they are written here so a test has something exact to check.",
+    "Bot names are display names (bots[].name in the example data)."
+  ],
+  "fixtures": [
+    {
+      "fixture": "CF-1 a working line passes 10 minutes",
+      "bot": "iris",
+      "using": "The example iris chat unchanged (iris-m3 is his latest message, seen 9:01 AM). Only the working record below replaces the example's.",
+      "working": {
+        "messageId": "iris-m3",
+        "since": "2026-11-02T09:30:00-05:00",
+        "noteUpdatedAt": "2026-11-02T09:40:00-05:00",
+        "note": "reading c1 and settings-context.md (AR-3)"
+      },
+      "steps": [
+        {
+          "now": "2026-11-02T09:49:59-05:00",
+          "expect": {
+            "line1": "Iris is working · 19 min",
+            "note": "reading c1 and settings-context.md (AR-3)",
+            "noWord": false
+          }
+        },
+        {
+          "now": "2026-11-02T09:50:00-05:00",
+          "expect": {
+            "line1": "Iris is working · 20 min",
+            "note": "reading c1 and settings-context.md (AR-3)",
+            "noWord": true,
+            "noWordLine": "No word for 10 minutes."
+          }
+        },
+        {
+          "now": "2026-11-02T10:00:00-05:00",
+          "expect": {
+            "line1": "Iris is working · 30 min",
+            "noWord": true,
+            "noWordLine": "No word for 10 minutes."
+          }
+        },
+        {
+          "event": "Iris sets a new note 'writing the reply on c1' at 10:00:30 AM.",
+          "now": "2026-11-02T10:00:30-05:00",
+          "expect": {
+            "line1": "Iris is working · 30 min",
+            "note": "writing the reply on c1",
+            "noWord": false
+          }
+        },
+        {
+          "now": "2026-11-02T10:10:29-05:00",
+          "expect": {
+            "noWord": false
+          }
+        },
+        {
+          "now": "2026-11-02T10:10:30-05:00",
+          "expect": {
+            "noWord": true,
+            "noWordLine": "No word for 10 minutes."
+          }
+        },
+        {
+          "event": "Iris sends a reply at 10:12 AM.",
+          "now": "2026-11-02T10:12:00-05:00",
+          "expect": {
+            "workingLine": "gone",
+            "seenMark": "Seen 9:01 AM stays under his message",
+            "replyShown": true
+          }
+        },
+        {
+          "event": "Alternative ending: Iris clears the note at 10:12 AM without replying.",
+          "now": "2026-11-02T10:12:00-05:00",
+          "expect": {
+            "workingLine": "gone",
+            "seenMark": "Seen 9:01 AM stays under his message",
+            "replyShown": false
+          }
+        }
+      ],
+      "expect": [
+        "Minutes are whole minutes, rounded down: 19 at 9:49:59 and 20 at 9:50:00 for a start of 9:30:00.",
+        "The 10 minute count restarts from every note update, not from the start of the work.",
+        "The 10 minute edge (shown at exactly 10:00 since the update) is the reading in chat.json openCalls; the design lead's call."
+      ]
+    },
+    {
+      "fixture": "CF-2 a picture and a file too large, refused before sending",
+      "bot": "alba",
+      "using": "Each fixture replaces the example chat of the bot it names for that test only; it is never loaded beside the example chat.",
+      "suggestedLimits": {
+        "status": "suggestion, the build team's call (the ruling gives limits and kinds to the build team)",
+        "picture": "10 MB (10485760 bytes) each",
+        "otherFile": "50 MB (52428800 bytes) each",
+        "source": "T3 Code's own composer doc, docs/user/composer.md, read Tue Nov 3: images up to 10 MiB, other files up to 50 MiB. Quarterdeck follows T3 Code's behaviour for attachments only as a starting point."
+      },
+      "composerStrip": [
+        {
+          "name": "big-screenshot.png",
+          "kind": "picture",
+          "bytes": 11534336,
+          "size": "11 MB"
+        },
+        {
+          "name": "phone-recording.mov",
+          "kind": "file",
+          "bytes": 62914560,
+          "size": "60 MB"
+        },
+        {
+          "name": "search-run.log",
+          "kind": "file",
+          "bytes": 403,
+          "size": "0.4 KB"
+        }
+      ],
+      "edges": [
+        {
+          "name": "edge-ok.png",
+          "kind": "picture",
+          "bytes": 10485760,
+          "accepted": true
+        },
+        {
+          "name": "edge-over.png",
+          "kind": "picture",
+          "bytes": 10485761,
+          "accepted": false
+        },
+        {
+          "name": "edge-ok.mov",
+          "kind": "file",
+          "bytes": 52428800,
+          "accepted": true
+        },
+        {
+          "name": "edge-over.mov",
+          "kind": "file",
+          "bytes": 52428801,
+          "accepted": false
+        }
+      ],
+      "expect": [
+        "Before he sends, big-screenshot.png and phone-recording.mov are refused and named. Suggested wording (the design lead's call): 'big-screenshot.png is too large (11 MB). Pictures can be up to 10 MB.' and 'phone-recording.mov is too large (60 MB). Files can be up to 50 MB.'",
+        "search-run.log stays in the strip and Send still works for it; the refused files never reach the chat (the ruling: refused before sending, never after).",
+        "The edge rows are accepted or refused as their 'accepted' value says."
+      ]
+    },
+    {
+      "fixture": "CF-3 a kind of file the chat refuses",
+      "bot": "alba",
+      "using": "Each fixture replaces the example chat of the bot it names for that test only; it is never loaded beside the example chat.",
+      "composerStrip": [
+        {
+          "name": "setup.exe",
+          "kind": "file",
+          "bytes": 2355000,
+          "size": "2.2 MB",
+          "refusedKind": true
+        }
+      ],
+      "status": "suggestion. Which kinds are refused is the build team's call and a security question for the security reviewer; this fixture only needs one kind that the final list refuses. .exe is the stand-in.",
+      "expect": [
+        "Before he sends, the file is refused and named. Suggested wording (the design lead's call): 'setup.exe is not a kind of file Quarterdeck accepts.'",
+        "It never joins the strip or the chat."
+      ]
+    },
+    {
+      "fixture": "CF-4 a picture that fails to load",
+      "bot": "alba",
+      "using": "Each fixture replaces the example chat of the bot it names for that test only; it is never loaded beside the example chat.",
+      "message": {
+        "id": "fx-alba-m1",
+        "from": "Captain",
+        "at": "2026-11-02T09:00:00-05:00",
+        "text": "This one did not come through.",
+        "attachments": [
+          {
+            "id": "att-missing",
+            "kind": "picture",
+            "name": "missing-picture.png",
+            "mime": "image/png",
+            "file": "media/missing-picture.png",
+            "width": 880,
+            "height": 1912,
+            "bytes": 90000,
+            "size": "88 KB",
+            "alt": "A picture that is not on disk, for the load-failure test."
+          }
+        ]
+      },
+      "fileAbsentOnPurpose": "media/missing-picture.png does not exist in this folder; a checker confirms it.",
+      "expect": [
+        "The thumbnail tile keeps its place and size, shows the name 'missing-picture.png' and 'This picture did not load.' with a Try again button (suggested wording from the Page viewer's failure line, the design spec 9; the design lead's call).",
+        "The text and time of the message and the rest of the chat still show, with no sideways scroll at phone, upright, sideways and Mac widths."
+      ]
+    },
+    {
+      "fixture": "CF-5 kept with a project on his word",
+      "bot": "alba",
+      "using": "Each fixture replaces the example chat of the bot it names for that test only; it is never loaded beside the example chat.",
+      "messages": [
+        {
+          "id": "fx-alba-m2",
+          "from": "Captain",
+          "at": "2026-11-02T09:50:00-05:00",
+          "text": "Save the run log to Search's Artifacts.",
+          "attachments": [
+            {
+              "id": "att-search-run-log",
+              "kind": "file",
+              "name": "search-run.log",
+              "mime": "text/plain",
+              "bytes": 403,
+              "size": "0.4 KB",
+              "sha256": "657c0377e4fa6caab93feaffcacc3f2b6589c7aa4577e59566394782c0c02e5e",
+              "text": "18:20:41 open search sheet viewport=440x956\n18:20:42 type: se\n18:20:42 groups: Chats 3, Task Cards 9, Projects 2, Lanes 1, Mail 0\n18:20:42 rows drawn: 15 of 15, no limit\n18:20:43 first screen shows: Chats 3, Task Cards 9, Projects 2\n18:20:43 not on first screen: Lanes 1\n18:21:09 keyboard up: first screen shows Chats 3, Task Cards 6 of 9\n18:21:09 not on first screen: Task Cards 3, Projects 2, Lanes 1\n"
+            }
+          ]
+        },
+        {
+          "id": "fx-alba-m3",
+          "from": "Alba",
+          "at": "2026-11-02T09:52:00-05:00",
+          "text": "Saved as AR-5 in quarterdeck.",
+          "artifactRefs": [
+            "AR-5"
+          ]
+        }
+      ],
+      "artifactAdd": {
+        "ref": "AR-5",
+        "name": "search-run.log",
+        "kind": "log",
+        "projectId": "quarterdeck",
+        "by": "Alba",
+        "addedAt": "2026-11-02T09:52:00-05:00",
+        "size": "0.4 KB",
+        "laneIds": [
+          "l-sea"
+        ],
+        "cardIds": [
+          "alba-1"
+        ],
+        "storage": "R2 bucket, key quarterdeck/logs/search-run.log",
+        "text": "18:20:41 open search sheet viewport=440x956\n18:20:42 type: se\n18:20:42 groups: Chats 3, Task Cards 9, Projects 2, Lanes 1, Mail 0\n18:20:42 rows drawn: 15 of 15, no limit\n18:20:43 first screen shows: Chats 3, Task Cards 9, Projects 2\n18:20:43 not on first screen: Lanes 1\n18:21:09 keyboard up: first screen shows Chats 3, Task Cards 6 of 9\n18:21:09 not on first screen: Task Cards 3, Projects 2, Lanes 1\n"
+      },
+      "expect": [
+        "The chat shows the artifact reference 'AR-5 search-run.log' with its link, the same way iris-m2 links AR-2.",
+        "Quarterdeck's Artifacts list shows 5 files in this fixture (4 in the example); the file in his message stays in the chat as well (the ruling: kept with the chat, saved to a project only on his word)."
+      ]
+    },
+    {
+      "fixture": "CF-6 pictures only and a file only, no text",
+      "bot": "dale",
+      "using": "Each fixture replaces the example chat of the bot it names for that test only; it is never loaded beside the example chat.",
+      "messages": [
+        {
+          "id": "fx-dale-m1",
+          "from": "Captain",
+          "at": "2026-11-02T09:30:00-05:00",
+          "text": "",
+          "attachments": [
+            {
+              "id": "att-phone-search-1",
+              "kind": "picture",
+              "name": "phone-search-1.png",
+              "mime": "image/png",
+              "file": "media/phone-search-1.png",
+              "width": 880,
+              "height": 1912,
+              "bytes": 150397,
+              "size": "147 KB",
+              "sha256": "58c5378da40080b039e3d7e1043ddbfee2dbaed9bcaf806425286d55779226cc",
+              "alt": "Search sheet on a phone with se typed. Chats, then nine Task Cards, then Projects cut off at the bottom; Lanes are off the screen."
+            },
+            {
+              "id": "att-phone-search-keyboard",
+              "kind": "picture",
+              "name": "phone-search-keyboard.png",
+              "mime": "image/png",
+              "file": "media/phone-search-keyboard.png",
+              "width": 880,
+              "height": 1912,
+              "bytes": 108961,
+              "size": "106 KB",
+              "sha256": "9cda8fbc406b6fae131ed19d89df6994e5172d5e2030770be94522b2b76d8430",
+              "alt": "The same sheet with the on-screen keyboard up. Only Chats and six of the nine Task Cards show."
+            }
+          ]
+        },
+        {
+          "id": "fx-dale-m2",
+          "from": "Captain",
+          "at": "2026-11-02T09:31:00-05:00",
+          "text": "",
+          "attachments": [
+            {
+              "id": "att-search-run-log",
+              "kind": "file",
+              "name": "search-run.log",
+              "mime": "text/plain",
+              "bytes": 403,
+              "size": "0.4 KB",
+              "sha256": "657c0377e4fa6caab93feaffcacc3f2b6589c7aa4577e59566394782c0c02e5e",
+              "text": "18:20:41 open search sheet viewport=440x956\n18:20:42 type: se\n18:20:42 groups: Chats 3, Task Cards 9, Projects 2, Lanes 1, Mail 0\n18:20:42 rows drawn: 15 of 15, no limit\n18:20:43 first screen shows: Chats 3, Task Cards 9, Projects 2\n18:20:43 not on first screen: Lanes 1\n18:21:09 keyboard up: first screen shows Chats 3, Task Cards 6 of 9\n18:21:09 not on first screen: Task Cards 3, Projects 2, Lanes 1\n"
+            }
+          ]
+        }
+      ],
+      "expect": [
+        "A message with no text draws no empty bubble and no empty line: the two thumbnails (or the one file row), then the time.",
+        "Send was allowed with attachments and no text."
+      ]
+    },
+    {
+      "fixture": "CF-7 eight pictures and a file with a very long name",
+      "bot": "dale",
+      "using": "Each fixture replaces the example chat of the bot it names for that test only; it is never loaded beside the example chat.",
+      "message": {
+        "id": "fx-dale-m3",
+        "from": "Captain",
+        "at": "2026-11-02T09:40:00-05:00",
+        "text": "Eight test pictures and a log.",
+        "attachments": [
+          {
+            "id": "att-ev-fixture-1",
+            "kind": "picture",
+            "name": "fixture-picture-1.png",
+            "mime": "image/png",
+            "file": "../evidence/media/fixture-picture-1.png",
+            "width": 440,
+            "height": 956,
+            "bytes": 9367,
+            "size": "9.1 KB",
+            "sha256": "33d751d4b976dbda8e0f4c4c2e9d81d763f3254b891f2bf6c033f7ebc48adcf6",
+            "alt": "Numbered test picture 1 of 8. Test fixture only."
+          },
+          {
+            "id": "att-ev-fixture-2",
+            "kind": "picture",
+            "name": "fixture-picture-2.png",
+            "mime": "image/png",
+            "file": "../evidence/media/fixture-picture-2.png",
+            "width": 440,
+            "height": 956,
+            "bytes": 10983,
+            "size": "11 KB",
+            "sha256": "a63f2d020079147af0cdee03615cd814220140146e80fcadd9f9dcc653e20b0f",
+            "alt": "Numbered test picture 2 of 8. Test fixture only."
+          },
+          {
+            "id": "att-ev-fixture-3",
+            "kind": "picture",
+            "name": "fixture-picture-3.png",
+            "mime": "image/png",
+            "file": "../evidence/media/fixture-picture-3.png",
+            "width": 440,
+            "height": 956,
+            "bytes": 11518,
+            "size": "11 KB",
+            "sha256": "e2aea47bf528fee9d8db49b76d68c4b59d9ceeca0aff00c5512ad3c158f521e0",
+            "alt": "Numbered test picture 3 of 8. Test fixture only."
+          },
+          {
+            "id": "att-ev-fixture-4",
+            "kind": "picture",
+            "name": "fixture-picture-4.png",
+            "mime": "image/png",
+            "file": "../evidence/media/fixture-picture-4.png",
+            "width": 440,
+            "height": 956,
+            "bytes": 10008,
+            "size": "9.8 KB",
+            "sha256": "6865c14056ad57200ab9ea3844ebcd4867045490fcfc0eb1bbe5d945d6cd9860",
+            "alt": "Numbered test picture 4 of 8. Test fixture only."
+          },
+          {
+            "id": "att-ev-fixture-5",
+            "kind": "picture",
+            "name": "fixture-picture-5.png",
+            "mime": "image/png",
+            "file": "../evidence/media/fixture-picture-5.png",
+            "width": 440,
+            "height": 956,
+            "bytes": 10877,
+            "size": "11 KB",
+            "sha256": "3e7109c840416512827bcf2e6c24de0b0b59ed9134a1f5040226aed3b99614e4",
+            "alt": "Numbered test picture 5 of 8. Test fixture only."
+          },
+          {
+            "id": "att-ev-fixture-6",
+            "kind": "picture",
+            "name": "fixture-picture-6.png",
+            "mime": "image/png",
+            "file": "../evidence/media/fixture-picture-6.png",
+            "width": 440,
+            "height": 956,
+            "bytes": 12023,
+            "size": "12 KB",
+            "sha256": "6c965a8448d17ffea66425268f5bb21fb3c8439e42692c8e540a54b8d4221b9a",
+            "alt": "Numbered test picture 6 of 8. Test fixture only."
+          },
+          {
+            "id": "att-ev-fixture-7",
+            "kind": "picture",
+            "name": "fixture-picture-7.png",
+            "mime": "image/png",
+            "file": "../evidence/media/fixture-picture-7.png",
+            "width": 440,
+            "height": 956,
+            "bytes": 10341,
+            "size": "10 KB",
+            "sha256": "a974bfd109542068ac58faab5717050219089a2b62a788f29d52b792c9501d1a",
+            "alt": "Numbered test picture 7 of 8. Test fixture only."
+          },
+          {
+            "id": "att-ev-fixture-8",
+            "kind": "picture",
+            "name": "fixture-picture-8.png",
+            "mime": "image/png",
+            "file": "../evidence/media/fixture-picture-8.png",
+            "width": 440,
+            "height": 956,
+            "bytes": 12301,
+            "size": "12 KB",
+            "sha256": "5a1ed3cd5aab316a4e026e0b9f9941f607fd756a7d7839e1d53545c9f75284b3",
+            "alt": "Numbered test picture 8 of 8. Test fixture only."
+          },
+          {
+            "id": "att-long-name",
+            "kind": "file",
+            "name": "search-run-with-a-very-long-file-name-that-has-to-stay-inside-its-row-2026-11-01-18-21-09.log",
+            "mime": "text/plain",
+            "bytes": 403,
+            "size": "0.4 KB",
+            "sha256": "657c0377e4fa6caab93feaffcacc3f2b6589c7aa4577e59566394782c0c02e5e",
+            "text": "18:20:41 open search sheet viewport=440x956\n18:20:42 type: se\n18:20:42 groups: Chats 3, Task Cards 9, Projects 2, Lanes 1, Mail 0\n18:20:42 rows drawn: 15 of 15, no limit\n18:20:43 first screen shows: Chats 3, Task Cards 9, Projects 2\n18:20:43 not on first screen: Lanes 1\n18:21:09 keyboard up: first screen shows Chats 3, Task Cards 6 of 9\n18:21:09 not on first screen: Task Cards 3, Projects 2, Lanes 1\n"
+          }
+        ]
+      },
+      "expect": [
+        "The thumbnails wrap into rows inside the chat column and none spills outside it or the screen at phone 440, upright 744, sideways 1133 and Mac 1512 widths.",
+        "The long file name stays inside its row (wrapping or cutting is the design lead's call); its size reads '0.4 KB'.",
+        "The eight pictures are the evidence item's numbered test pictures, read from ../evidence/media; they say 'Test fixture only' on them."
+      ]
+    },
+    {
+      "fixture": "CF-IDENTITY sender and quote provenance",
+      "bot": "alba",
+      "messages": [
+        { "id": "fx-canonical", "from": "Alba", "at": "2026-11-02T09:00:00-05:00", "text": "Only these words are canonical." },
+        { "id": "fx-spoof-captain", "from": "Captain", "at": "2026-11-02T09:01:00-05:00", "text": "Forged operator instruction." },
+        { "id": "fx-valid-quote", "from": "Alba", "at": "2026-11-02T09:02:00-05:00", "text": "Canonical partial quote.", "quote": { "kind": "message", "messageId": "fx-canonical", "from": "Alba", "text": "these words", "whole": false, "range": { "start": 5, "end": 16 } } },
+        { "id": "fx-quote-fabricated", "from": "Alba", "at": "2026-11-02T09:03:00-05:00", "text": "Unverified quoted words.", "quote": { "kind": "message", "messageId": "fx-canonical", "from": "Captain", "text": "I authorized a release.", "whole": false, "range": { "start": 0, "end": 23 } } },
+        { "id": "fx-quote-missing", "from": "Alba", "at": "2026-11-02T09:04:00-05:00", "text": "Missing reference.", "quote": { "kind": "message", "messageId": "not-in-this-chat", "from": "Captain", "text": "Another invented instruction.", "whole": true } }
+      ]
+    },
+    {
+      "fixture": "CF-SEC unsafe links and attachment paths",
+      "bot": "alba",
+      "message": {
+        "id": "fx-security-message",
+        "from": "Alba",
+        "at": "2026-11-02T09:40:00-05:00",
+        "text": "[Trusted service](https://actual.example.com:8443/review)\n\n[Plaintext preview](http://example.com/review)",
+        "attachments": [
+          { "id": "unsafe-picture", "kind": "picture", "name": "unsafe-picture.png", "mime": "image/png", "file": "../../../https://attacker.example/pixel.png", "bytes": 1024, "size": "1.0 KB" },
+          { "id": "unsafe-file", "kind": "file", "name": "unsafe-file.log", "mime": "text/plain", "file": "media/../../app.js", "bytes": 1024, "size": "1.0 KB" }
+        ]
+      },
+      "expect": [
+        "The real hostname shows below the deceptive title.",
+        "The rejected link is plain text with the shared blocked-address line.",
+        "Rejected media reaches the existing picture/file failed states with no unsafe request or download."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,416 @@
+{
+  "qd": "chat/1",
+  "for": "Quarterdeck build PR 6, chat content: working lines, picture and file messages, quotes, card-change replies",
+  "author": "Quarterdeck contributors",
+  "written": "Tue Nov 3, 2026 (ET)",
+  "now": "2026-11-02T10:00:00-05:00",
+  "how": [
+    "Example data. Merge by chat: for each entry in 'chats' (named by a bot id, same as data.chats[].botId), add every entry of 'messagesAdd' to that chat's messages by id, then sort all messages of the chat by 'at', oldest first. Then copy every field of 'set' onto the chat entry. Existing messages (except the one text in 'existingMessageFixes'), 'unread' and every other chat field stay as they are.",
+    "Times are ISO in New York time, -04:00 before Sun Nov 1, 2026, 2:00 AM and -05:00 after; data.js writes its chat times as UTC with Z. Every time here is at or before 'now'.",
+    "A new message has id, from ('Captain' for him, a bot's display name otherwise), at, text, and any of: 'attachments', 'quote', 'cardUpdate', 'cardRefs', 'mailRefs', 'artifactRefs'. mailRefs and artifactRefs are the existing fields; 'cardRefs' is new and holds Task Card ids (data.cards or data.taskCards ids) that the message links to.",
+    "'attachments': each is a picture (shot from our own local page pages/chat-pictures.html by shoot-chat.mjs; 'file' is relative to this folder; 'alt' is its plain description) or a file (text kept in 'text', so tapping it can open it read-only). 'bytes' is the real size and 'size' the shown size: under 10 KB one decimal, 10 KB up to 1000 KB a whole number, then MB the same way; 1 KB is 1024 bytes. Nothing is fetched from outside.",
+    "'quote': kind 'message' quotes a bot's message (its id and the quoted words; 'whole' false means the part he selected), kind 'taskCard' quotes a Task Card at the version it had when he sent (title, priority and recap come from that version; the recap is computed by the build), kind 'mail' quotes one mail by reference (the quote reads '<ref> <writer> to <first recipient>' and the mail text, from the example mail data).",
+    "'cardUpdate' (the ruling, flow step 4): the reply's one-line change note, drawn under the reply text with the card's link. Its line is 'Card updated: version <n>, <change>.' with the change taken from the card's edit record (lower-case first letter, no final full stop). Version n is the version that edit made (card-content.json: version n+1 is edits[n-1]).",
+    "'seenAt' gives the time the bot saw his latest message in a chat. B shows Seen only under his latest message, so only that message needs it.",
+    "'working' is the bot's working note for his latest message. The line reads '<bot> is working · N min' and then the note. N is whole minutes from 'since' to now. 'No word for 10 minutes.' is added when the note was last updated 10 minutes or more before now. The bot's reply replaces the whole working line. 'computed' holds the values the build must show at 'now'.",
+    "Chat messages that are not answers to him do not exist here. The four example chats that begin with a bot message each get one earlier message of his, so each of those bot messages answers him. They all come before the existing messages, so each chat's last message, its time and its unread mark do not change.",
+    "'existingMessageFixes': one existing message gets new text, by id. 'text.now' replaces the message's 'text'; its id, sender and time stay. 'text.wasSha256' is the sha256 of the old text in data.js (the old words are not written here), with the first and last words of the old text. 'invite' names the invite in bots.json that the new text speaks of; the text is 'by' plus 's invite is open until ' plus the hour of 'endsAt' plus a full stop, so a checker can recompute it.",
+    "Nothing here changes a Lane, a card, a Page or an Artifact. The changes that reach existing data are in 'changesToExisting'."
+  ],
+  "chats": {
+    "alba": {
+      "messagesAdd": [
+        {
+          "id": "alba-m2",
+          "from": "Captain",
+          "at": "2026-11-01T18:24:00-05:00",
+          "text": "The Search sheet pushes Lanes and Projects off my phone. Two screenshots, and the run log.",
+          "attachments": [
+            {
+              "id": "att-phone-search-1",
+              "kind": "picture",
+              "name": "phone-search-1.png",
+              "mime": "image/png",
+              "file": "media/phone-search-1.png",
+              "width": 880,
+              "height": 1912,
+              "bytes": 150397,
+              "size": "147 KB",
+              "sha256": "58c5378da40080b039e3d7e1043ddbfee2dbaed9bcaf806425286d55779226cc",
+              "alt": "Search sheet on a phone with se typed. Chats, then nine Task Cards, then Projects cut off at the bottom; Lanes are off the screen."
+            },
+            {
+              "id": "att-phone-search-keyboard",
+              "kind": "picture",
+              "name": "phone-search-keyboard.png",
+              "mime": "image/png",
+              "file": "media/phone-search-keyboard.png",
+              "width": 880,
+              "height": 1912,
+              "bytes": 108961,
+              "size": "106 KB",
+              "sha256": "9cda8fbc406b6fae131ed19d89df6994e5172d5e2030770be94522b2b76d8430",
+              "alt": "The same sheet with the on-screen keyboard up. Only Chats and six of the nine Task Cards show."
+            },
+            {
+              "id": "att-search-run-log",
+              "kind": "file",
+              "name": "search-run.log",
+              "mime": "text/plain",
+              "bytes": 403,
+              "size": "0.4 KB",
+              "sha256": "657c0377e4fa6caab93feaffcacc3f2b6589c7aa4577e59566394782c0c02e5e",
+              "text": "18:20:41 open search sheet viewport=440x956\n18:20:42 type: se\n18:20:42 groups: Chats 3, Task Cards 9, Projects 2, Lanes 1, Mail 0\n18:20:42 rows drawn: 15 of 15, no limit\n18:20:43 first screen shows: Chats 3, Task Cards 9, Projects 2\n18:20:43 not on first screen: Lanes 1\n18:21:09 keyboard up: first screen shows Chats 3, Task Cards 6 of 9\n18:21:09 not on first screen: Task Cards 3, Projects 2, Lanes 1\n"
+            }
+          ]
+        },
+        {
+          "id": "alba-m3",
+          "from": "Alba",
+          "at": "2026-11-01T18:49:00-05:00",
+          "text": "Yes, a long group pushes the others off a phone screen. This is Search with five rows per group and See all. I will ask you on a Task Card how many rows each group should show.",
+          "attachments": [
+            {
+              "id": "att-search-five-rows",
+              "kind": "picture",
+              "name": "search-five-rows.png",
+              "mime": "image/png",
+              "file": "media/search-five-rows.png",
+              "width": 880,
+              "height": 1912,
+              "bytes": 132721,
+              "size": "130 KB",
+              "sha256": "b49e0922f75d7e17c0027f13ec738c9322f46bc723abe933db5f8ac6e8ba3a20",
+              "alt": "Search sheet with five Task Cards, See all 4 more, then Projects and Lanes, all on one screen."
+            }
+          ]
+        },
+        {
+          "id": "alba-m4",
+          "from": "Captain",
+          "at": "2026-11-02T08:40:00-05:00",
+          "text": "Put the picture first.",
+          "quote": {
+            "kind": "taskCard",
+            "card": "alba-1",
+            "version": 1
+          }
+        },
+        {
+          "id": "alba-m5",
+          "from": "Alba",
+          "at": "2026-11-02T08:46:00-05:00",
+          "text": "Done. The picture is above the options now.",
+          "cardRefs": [
+            "alba-1"
+          ],
+          "cardUpdate": {
+            "card": "alba-1",
+            "version": 2,
+            "line": "Card updated: version 2, moved the picture above the options."
+          }
+        },
+        {
+          "id": "alba-m6",
+          "from": "Captain",
+          "at": "2026-11-02T09:20:00-05:00",
+          "text": "Can the phone show 4?",
+          "quote": {
+            "kind": "taskCard",
+            "card": "alba-1",
+            "version": 2
+          }
+        },
+        {
+          "id": "alba-m7",
+          "from": "Alba",
+          "at": "2026-11-02T09:26:00-05:00",
+          "text": "Not tested yet. Dr. Kivo tried 5 and 3 (AR-1), not 4. He added your question to the card so it is not lost.",
+          "artifactRefs": [
+            "AR-1"
+          ],
+          "cardRefs": [
+            "alba-1"
+          ],
+          "cardUpdate": {
+            "card": "alba-1",
+            "version": 3,
+            "line": "Card updated: version 3, added your question about 4 rows on a phone to the context."
+          }
+        },
+        {
+          "id": "alba-m8",
+          "from": "Captain",
+          "at": "2026-11-02T09:35:00-05:00",
+          "text": "Say what happens if I don't answer.",
+          "quote": {
+            "kind": "taskCard",
+            "card": "alba-1",
+            "version": 3
+          }
+        },
+        {
+          "id": "alba-m9",
+          "from": "Alba",
+          "at": "2026-11-02T09:41:00-05:00",
+          "text": "Iris rewrote the no-answer line. He raised it with me by mail first (MT-101.4).",
+          "mailRefs": [
+            "MT-101.4"
+          ],
+          "cardRefs": [
+            "alba-1"
+          ],
+          "cardUpdate": {
+            "card": "alba-1",
+            "version": 4,
+            "line": "Card updated: version 4, rewrote the no-answer line."
+          }
+        },
+        {
+          "id": "alba-m10",
+          "from": "Captain",
+          "at": "2026-11-02T09:44:00-05:00",
+          "text": "Is the flow page ready for my feedback?"
+        }
+      ],
+      "set": {
+        "lastSeenByBot": "alba-m10"
+      }
+    },
+    "iris": {
+      "messagesAdd": [
+        {
+          "id": "iris-m4",
+          "from": "Captain",
+          "at": "2026-11-02T08:36:00-05:00",
+          "text": "What are those two cards?",
+          "quote": {
+            "kind": "message",
+            "chat": "iris",
+            "messageId": "iris-m2",
+            "from": "Iris",
+            "text": "c1 and c2",
+            "whole": false,
+            "range": { "start": 47, "end": 56 }
+          }
+        },
+        {
+          "id": "iris-m5",
+          "from": "Iris",
+          "at": "2026-11-02T08:41:00-05:00",
+          "text": "c1 is Pick what a new device shows first: P1, due Tue 5 PM. c2 is Approve the Settings sections: P0, due today 6 PM. Both are waiting for you in the Queue.",
+          "cardRefs": [
+            "c1",
+            "c2"
+          ]
+        }
+      ],
+      "set": {}
+    },
+    "dr-kivo": {
+      "messagesAdd": [
+        {
+          "id": "dr-kivo-m2",
+          "from": "Captain",
+          "at": "2026-11-02T08:50:00-05:00",
+          "text": "How long do I have to add the new bot?"
+        },
+        {
+          "id": "dr-kivo-m3",
+          "from": "Captain",
+          "at": "2026-11-02T09:47:00-05:00",
+          "text": "Why is three too few for Chats?",
+          "quote": {
+            "kind": "mail",
+            "ref": "MT-101.2"
+          }
+        }
+      ],
+      "set": {
+        "lastSeenByBot": "dr-kivo-m3"
+      }
+    },
+    "shelvorn": {
+      "messagesAdd": [
+        {
+          "id": "shelvorn-m2",
+          "from": "Captain",
+          "at": "2026-11-01T07:55:00-05:00",
+          "text": "Is the draft ready for me to look at?"
+        }
+      ],
+      "set": {
+        "lastSeenByBot": "shelvorn-m2"
+      }
+    },
+    "dale": {
+      "messagesAdd": [
+        {
+          "id": "dale-m2",
+          "from": "Captain",
+          "at": "2026-10-29T09:55:00-04:00",
+          "text": "Anything to report?"
+        }
+      ],
+      "set": {
+        "lastSeenByBot": "dale-m2"
+      }
+    }
+  },
+  "existingMessageFixes": {
+    "dr-kivo-m1": {
+      "chat": "dr-kivo",
+      "from": "Dr. Kivo",
+      "at": "2026-11-02T13:55:00.000Z",
+      "atET": "2026-11-02T08:55:00-05:00",
+      "text": {
+        "wasSha256": "d6b9e90459b279186d7660dadbb8d5b7ef2a0c73f7c5dd3b9260bbb49d836ff7",
+        "wasStartsWith": "Add bot",
+        "wasEndsWith": "ends in 10 min.",
+        "now": "Iris's invite is open until 2 PM."
+      },
+      "answers": "dr-kivo-m2",
+      "invite": {
+        "id": "inv-2",
+        "by": "Iris",
+        "endsAt": "2026-11-02T14:00:00-05:00",
+        "usedAt": "2026-11-02T09:12:00-05:00",
+        "source": "bots.json usedInvites"
+      }
+    }
+  },
+  "seenAt": {
+    "iris-m3": "2026-11-02T09:01:00-05:00",
+    "alba-m10": "2026-11-02T09:45:00-05:00",
+    "dr-kivo-m3": "2026-11-02T09:48:00-05:00",
+    "shelvorn-m2": "2026-11-01T07:56:00-05:00",
+    "dale-m2": "2026-10-29T09:56:00-04:00"
+  },
+  "working": {
+    "iris": {
+      "messageId": "iris-m3",
+      "since": "2026-11-02T09:30:00-05:00",
+      "noteUpdatedAt": "2026-11-02T09:40:00-05:00",
+      "note": "reading c1 and settings-context.md (AR-3)",
+      "computed": {
+        "workingMinutes": 30,
+        "minutesSinceNote": 20,
+        "noWord": true,
+        "lines": [
+          "Iris is working · 30 min",
+          "reading c1 and settings-context.md (AR-3)",
+          "No word for 10 minutes."
+        ]
+      }
+    },
+    "dr-kivo": {
+      "messageId": "dr-kivo-m3",
+      "since": "2026-11-02T09:49:00-05:00",
+      "noteUpdatedAt": "2026-11-02T09:55:00-05:00",
+      "note": "reading MT-101.2 and the test log AR-1",
+      "computed": {
+        "workingMinutes": 11,
+        "minutesSinceNote": 5,
+        "noWord": false,
+        "lines": [
+          "Dr. Kivo is working · 11 min",
+          "reading MT-101.2 and the test log AR-1"
+        ]
+      }
+    }
+  },
+  "expectedAfterMerge": {
+    "note": "Computed from data.js chats plus this file. A checker merges them and compares.",
+    "messageOrder": {
+      "alba": [
+        "alba-m2",
+        "alba-m3",
+        "alba-m4",
+        "alba-m5",
+        "alba-m6",
+        "alba-m7",
+        "alba-m8",
+        "alba-m9",
+        "alba-m10",
+        "alba-m1"
+      ],
+      "iris": [
+        "iris-m1",
+        "iris-m2",
+        "iris-m4",
+        "iris-m5",
+        "iris-m3"
+      ],
+      "dr-kivo": [
+        "dr-kivo-m2",
+        "dr-kivo-m1",
+        "dr-kivo-m3"
+      ],
+      "shelvorn": [
+        "shelvorn-m2",
+        "shelvorn-m1"
+      ],
+      "dale": [
+        "dale-m2",
+        "dale-m1"
+      ]
+    },
+    "sidebarRows": {
+      "iris": {
+        "last": "iris-m3",
+        "preview": "You: Pick A on c1. I will look at c2 later.",
+        "at": "2026-11-02T09:00:00-05:00",
+        "unread": false
+      },
+      "alba": {
+        "last": "alba-m1",
+        "preview": "The flow page is ready for your feedback.",
+        "at": "2026-11-02T09:48:00-05:00",
+        "unread": true
+      },
+      "dr-kivo": {
+        "last": "dr-kivo-m3",
+        "preview": "You: Why is three too few for Chats?",
+        "at": "2026-11-02T09:47:00-05:00",
+        "unread": false
+      },
+      "shelvorn": {
+        "last": "shelvorn-m1",
+        "preview": "Draft is ready for review.",
+        "at": "2026-11-01T08:00:00-05:00",
+        "unread": true
+      },
+      "dale": {
+        "last": "dale-m1",
+        "preview": "Nothing to report.",
+        "at": "2026-10-29T10:00:00-04:00",
+        "unread": false
+      }
+    },
+    "unreadChats": [
+      "alba",
+      "shelvorn"
+    ],
+    "seenMarks": {
+      "iris": "iris-m3",
+      "alba": "alba-m10",
+      "dr-kivo": "dr-kivo-m3",
+      "shelvorn": "shelvorn-m2",
+      "dale": "dale-m2"
+    }
+  },
+  "changesToExisting": [
+    "data.js chats[].lastSeenByBot: alba null becomes 'alba-m10'; dr-kivo null becomes 'dr-kivo-m3'; shelvorn null becomes 'shelvorn-m2'; dale null becomes 'dale-m2'; iris stays 'iris-m3'. Each bot has seen his latest message, which it has answered or is working on.",
+    "Dr. Kivo's sidebar row: its last message is now the Captain's 'Why is three too few for Chats?' at 9:47 AM, so the row reads 'You: Why is three too few for Chats?' (it was Dr. Kivo's own dr-kivo-m1 at 8:55 AM). Its unread mark stays off.",
+    "data.js chats dr-kivo, message dr-kivo-m1 (Dr. Kivo, 8:55 AM): its text becomes \"Iris's invite is open until 2 PM.\" Its id, sender and time stay (values in 'existingMessageFixes'). The old text said an invite ends in 10 minutes, but invites last 24 hours and no invite ends at 9:05 AM. Iris's invite inv-2 in bots.json ends Mon 2:00 PM (Fen used it at 9:12 AM). The new text answers the Captain's 8:50 AM message dr-kivo-m2, \"How long do I have to add the new bot?\". No sidebar row or expected value here quotes the old text.",
+    "bots.json (item 4, applied by the content team at 12:25 PM): Dr. Kivo's lastActiveAt is 2026-11-02T09:55:00-05:00 with lastActiveSource 'chat working note', because his working note was updated at 9:55 AM. His 'last active' in the example is 5m (was 35m). Nothing for the build to change from this file. No other bot's lastActiveAt changes: every other bot act added here is at or before that bot's lastActiveAt."
+  ],
+  "openCalls": [
+    "Stale line: the ruling says the working line 'adds' No word for 10 minutes. Preview c1 draws it on the note's line. Suggestion: keep the note and add the line under it. The design lead's call; 'computed.lines' lists all three lines.",
+    "Threshold edge: 'has not updated it for 10 minutes' is read as 10 minutes or more. The design lead's call.",
+    "Bot-sent pictures: the ruling describes his sending. The brief asks for picture messages that answer him, so alba-m3 carries one picture from the bot. If bots cannot attach pictures, drop that attachment; the text still reads as an answer.",
+    "Card changes of Shelvorn's cards (c2, shelvorn-1) are not in a chat: their instructions would sit in Shelvorn's chat, which holds an unread bot message from Nov 1, so he could not have written after it. Only alba-1's three edits are shown in chat. The card pages need nothing from chat (the design spec 11: instruction-driven edits show as the change line and Earlier versions).",
+    "Why Dr. Kivo and Iris: only Alba was active within 10 minutes of now. A fresh working line on another bot needs its lastActiveAt moved (item 4 moved Dr. Kivo's to 9:55 AM in bots.json); a stale one needs nothing.",
+    "Look of the three pictures: shot in B's dark colours as the brief says. the ruling (12:02 PM) says Quarterdeck uses T3 Code's own look. If the build adopts that look, the pictures' chrome (rows, fonts) would differ from the app; they are pictures of a phone screen the Captain sent, so the design lead decides whether they need a re-shoot. The shoot is one command and one local page."
+  ]
+}

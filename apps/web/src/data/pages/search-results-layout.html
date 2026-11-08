@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Search results layout</title>
+<style>
+:root{--bg:#0a0a0b;--bg-1:#131315;--bg-2:#1a1a1d;--line:rgba(255,255,255,.11);--text:#ececef;--text-2:#a9a9b2;--text-3:#8a8a93;--green:#5fd08a;--brass:#d4a64a}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100%}
+body{background:var(--bg);color:var(--text);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;overflow-wrap:anywhere}
+.page{padding:20px 16px 28px;display:flex;flex-direction:column;gap:16px;max-width:760px;margin:0 auto}
+.meta{font-size:13px;color:var(--text-3)}
+h1{font-size:23px;font-weight:700;line-height:1.25}
+h2{font-size:16px;font-weight:650}
+.lead{color:var(--text-2)}
+.sheet{background:var(--bg-1);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+.grp{padding:12px 16px;border-top:1px solid var(--line)}
+.grp:first-child{border-top:0}
+.head{display:flex;justify-content:space-between;gap:12px;font-weight:600}
+.count{color:var(--text-3);font-weight:400;font-size:13px}
+.rows{margin-top:6px;color:var(--text-2);font-size:14px}
+.rows li{list-style:none;padding:2px 0}
+.more{margin-top:6px;font-size:13px;color:var(--brass)}
+.note{font-size:13px;color:var(--text-3)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:8px 10px;border-top:1px solid var(--line);vertical-align:top}
+th{color:var(--text-3);font-weight:500;font-size:13px}
+.ok{color:var(--green)}
+</style>
+</head>
+<body>
+<main class="page">
+<div>
+<p class="meta">Version 2 · Dr. Kivo · Mon Nov 2, 7:00 AM ET · example data</p>
+<h1>Search results layout</h1>
+</div>
+<p class="lead">How the Search sheet groups its results on a phone. Seven groups in a fixed order. Each group shows at most five rows, then one See all row. The counts are samples.</p>
+<section class="sheet">
+<div class="grp"><div class="head"><span>Chats</span><span class="count">3 results</span></div><ul class="rows"><li>Alba</li><li>Dr. Kivo</li><li>Iris</li></ul></div>
+<div class="grp"><div class="head"><span>Task Cards</span><span class="count">12 results</span></div><ul class="rows"><li>How many results should each Search group show?</li><li>Search result grouping</li><li>Approve the Settings sections</li><li>Room list placeholder</li><li>CSV export columns</li></ul><p class="more">See all 7 more</p></div>
+<div class="grp"><div class="head"><span>Projects</span><span class="count">2 results</span></div><ul class="rows"><li>quarterdeck</li><li>heron-forge</li></ul></div>
+<div class="grp"><div class="head"><span>Lanes</span><span class="count">1 result</span></div><ul class="rows"><li>Search · quarterdeck</li></ul></div>
+<div class="grp"><div class="head"><span>Pages</span><span class="count">1 result</span></div><ul class="rows"><li>Search results layout</li></ul></div>
+<div class="grp"><div class="head"><span>Artifacts</span><span class="count">1 result</span></div><ul class="rows"><li>AR-1 search-groups-test.log</li></ul></div>
+<div class="grp"><div class="head"><span>Mail</span><span class="count">1 result</span></div><ul class="rows"><li>MT-101 Search group limit: how many rows per group?</li></ul></div>
+</section>
+<h2>What the phone shows first</h2>
+<table>
+<tr><th>Phone</th><th>First screen</th></tr>
+<tr><td>Typing pad down</td><td>Chats, Task Cards and the start of Projects</td></tr>
+<tr><td>Typing pad up</td><td>Chats and the first Task Cards; the rest scroll</td></tr>
+</table>
+<p class="note">Example data and sample counts. This Page holds no private data.</p>
+</main>
+</body>
+</html>

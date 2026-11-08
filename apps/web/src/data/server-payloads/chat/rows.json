@@ -1,0 +1,32 @@
+[
+  {
+    "bot": {
+      "id": "iris",
+      "note": "Export lead"
+    },
+    "preview": "Answer 30: the export sheet is on its way.",
+    "at": "2026-11-06T00:30:00-05:00",
+    "last": "iris-m30",
+    "unread": false
+  },
+  {
+    "bot": {
+      "id": "alba",
+      "note": "Project lead"
+    },
+    "preview": "The flow page is ready for your feedback.",
+    "at": "2026-11-05T22:00:00-05:00",
+    "last": "alba-m1",
+    "unread": false
+  },
+  {
+    "bot": {
+      "id": "dale",
+      "note": "Builder"
+    },
+    "preview": "",
+    "at": "",
+    "last": "",
+    "unread": false
+  }
+]

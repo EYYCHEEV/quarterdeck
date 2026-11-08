@@ -1,0 +1,11 @@
+{
+  "id": "iris-m31",
+  "from": "captain",
+  "text": "text-placeholder",
+  "at": "2026-11-06T00:40:00-05:00",
+  "refs": [],
+  "clientId": "client-placeholder",
+  "uploadVerdicts": [],
+  "csrf": "csrf-placeholder",
+  "freshUntil": 0
+}

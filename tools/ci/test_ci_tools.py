@@ -462,6 +462,22 @@ class WorkflowRefusalTest(unittest.TestCase):
         self.assertEqual(self.run_refusal(), 0)
 
 
+class WorkflowMainFetchTest(unittest.TestCase):
+    def test_main_fetch_is_shallow_tagless_and_only_after_web_design_checkout(self):
+        steps = workflow_steps(WORKFLOW.read_text(encoding="utf-8"))
+        fetches = [step for step in steps if re.search(r"\bgit\b.*\bfetch\b", step_value(step, "run") or "")]
+        self.assertEqual(len(fetches), 1)
+        fetch = fetches[0]
+        self.assertEqual(fetch["job"], "web-design")
+        command = step_value(fetch, "run").split()
+        self.assertEqual(command[:3], ["git", "-c", "credential.helper="])
+        self.assertCountEqual(command[3:], ["fetch", "--no-tags", "--depth=1", "origin", "main:refs/remotes/origin/main"])
+        checkout = steps[steps.index(fetch) - 1]
+        self.assertEqual(checkout["job"], "web-design")
+        self.assertTrue((step_value(checkout, "uses") or "").startswith("actions/checkout@"))
+        self.assertEqual(step_value(checkout, "persist-credentials"), "false")
+
+
 class WorkflowContextsTest(unittest.TestCase):
     def check(self, text):
         with TempRepo() as repo:
@@ -614,6 +630,11 @@ class WorkflowContextsTest(unittest.TestCase):
 
     def test_the_original_ci_has_exactly_the_three_reported_findings(self):
         original = WORKFLOW.read_text(encoding="utf-8")
+        original = original.replace(
+            "      - name: Fetch main for the design comparison\n"
+            "        run: git -c credential.helper= fetch --no-tags --depth=1 origin main:refs/remotes/origin/main\n\n",
+            "",
+        )
         original = ci_with_selftest_env(original)
         point = (
             '      - name: Point QD_CHROME at the pinned browser\n'
@@ -674,6 +695,11 @@ class WorkflowNullValuesTest(unittest.TestCase):
 
     def test_the_r1_workflow_has_exactly_one_null_finding(self):
         original = ci_with_selftest_env(WORKFLOW.read_text(encoding="utf-8"))
+        original = original.replace(
+            "      - name: Fetch main for the design comparison\n"
+            "        run: git -c credential.helper= fetch --no-tags --depth=1 origin main:refs/remotes/origin/main\n\n",
+            "",
+        )
         point = (
             '      - name: Point QD_CHROME at the pinned browser\n'
             '        run: echo "QD_CHROME=$RUNNER_TEMP/pinned/chrome-headless-shell-linux64/chrome-headless-shell" >> "$GITHUB_ENV"\n\n'

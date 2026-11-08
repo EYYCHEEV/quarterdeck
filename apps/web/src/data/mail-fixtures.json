@@ -1,0 +1,986 @@
+{
+  "qd": "mail-fixtures/1",
+  "testOnly": true,
+  "for": "Quarterdeck build PR 7 tests: Mail",
+  "author": "Quarterdeck contributors",
+  "written": "Tue Nov 3, 2026 (ET)",
+  "rules": [
+    "Test-only: loaded only by the build's test mode, never in the example data, never shown to the Captain as example content.",
+    "Each fixture's threads are in the data.js mail shape plus 'cc'. References MT-901 and up never collide with the example's MT-101 to MT-107. A fixture's threads are loaded in place of the example mail list for that test.",
+    "Bot names are display names (bots[].name in the example data); 'botsAdd' names bots that exist only for that fixture.",
+    "Wording marked 'suggestion' is for the design lead to confirm."
+  ],
+  "fixtures": [
+    {
+      "fixture": "MF-1 a mail with an empty Cc",
+      "threads": [
+        {
+          "ref": "MT-901",
+          "subject": "Fixture: a mail with no one copied",
+          "projectId": "quarterdeck",
+          "laneId": "l-sea",
+          "cardId": null,
+          "mails": [
+            {
+              "ref": "MT-901.1",
+              "from": "Alba",
+              "to": [
+                "Shelvorn"
+              ],
+              "cc": [],
+              "at": "2026-11-02T09:00:00-05:00",
+              "text": "Can you check the list on a phone?"
+            }
+          ],
+          "bots": [
+            "Alba",
+            "Shelvorn"
+          ]
+        }
+      ],
+      "expect": [
+        "The mail shows 'Alba to Shelvorn' and no cc line at all (suggestion, the design lead's call; never 'cc' with nothing after it).",
+        "The list row reads 'Alba, Shelvorn' (two bots, no +N).",
+        "There is no Bcc field or line anywhere."
+      ],
+      "computed": {
+        "toLine": "Alba to Shelvorn",
+        "ccLine": null,
+        "ask": [
+          "Alba (wrote it)",
+          "Shelvorn",
+          "Another bot..."
+        ]
+      }
+    },
+    {
+      "fixture": "MF-2 bot counts around the +N rule",
+      "threads": [
+        {
+          "ref": "MT-902",
+          "subject": "Fixture: two bots",
+          "projectId": "quarterdeck",
+          "laneId": "l-sea",
+          "cardId": null,
+          "mails": [
+            {
+              "ref": "MT-902.1",
+              "from": "Alba",
+              "to": [
+                "Iris"
+              ],
+              "cc": [],
+              "at": "2026-11-02T09:01:00-05:00",
+              "text": "Two bots in this thread."
+            }
+          ],
+          "bots": [
+            "Alba",
+            "Iris"
+          ]
+        },
+        {
+          "ref": "MT-903",
+          "subject": "Fixture: three bots",
+          "projectId": "quarterdeck",
+          "laneId": "l-sea",
+          "cardId": null,
+          "mails": [
+            {
+              "ref": "MT-903.1",
+              "from": "Alba",
+              "to": [
+                "Iris"
+              ],
+              "cc": [
+                "Shelvorn"
+              ],
+              "at": "2026-11-02T09:02:00-05:00",
+              "text": "Three bots in this thread."
+            }
+          ],
+          "bots": [
+            "Alba",
+            "Iris",
+            "Shelvorn"
+          ]
+        },
+        {
+          "ref": "MT-904",
+          "subject": "Fixture: five bots",
+          "projectId": "quarterdeck",
+          "laneId": "l-sea",
+          "cardId": null,
+          "mails": [
+            {
+              "ref": "MT-904.1",
+              "from": "Alba",
+              "to": [
+                "Iris"
+              ],
+              "cc": [
+                "Shelvorn",
+                "Dr. Kivo",
+                "Dale"
+              ],
+              "at": "2026-11-02T09:03:00-05:00",
+              "text": "Five bots in this thread."
+            }
+          ],
+          "bots": [
+            "Alba",
+            "Dale",
+            "Dr. Kivo",
+            "Iris",
+            "Shelvorn"
+          ]
+        }
+      ],
+      "expect": [
+        "MT-902 has 2 bots: the row reads 'Alba, Iris', no +N.",
+        "MT-903 has 3 bots: the row reads 'Alba, Iris +1'.",
+        "MT-904 has 5 bots: the row reads 'Alba, Iris +3'. The thread header of each lists all of its bots."
+      ],
+      "computed": {
+        "MT-902": {
+          "botsOrdered": [
+            "Alba",
+            "Iris"
+          ],
+          "count": 2,
+          "listRow": {
+            "shown": [
+              "Alba",
+              "Iris"
+            ],
+            "plus": 0,
+            "text": "Alba, Iris"
+          },
+          "lastMailAt": "2026-11-02T09:01:00-05:00",
+          "dayHeading": "Today",
+          "askThread": [
+            "Alba",
+            "Iris",
+            "Another bot..."
+          ]
+        },
+        "MT-903": {
+          "botsOrdered": [
+            "Alba",
+            "Iris",
+            "Shelvorn"
+          ],
+          "count": 3,
+          "listRow": {
+            "shown": [
+              "Alba",
+              "Iris"
+            ],
+            "plus": 1,
+            "text": "Alba, Iris +1"
+          },
+          "lastMailAt": "2026-11-02T09:02:00-05:00",
+          "dayHeading": "Today",
+          "askThread": [
+            "Alba",
+            "Iris",
+            "Shelvorn",
+            "Another bot..."
+          ]
+        },
+        "MT-904": {
+          "botsOrdered": [
+            "Alba",
+            "Iris",
+            "Shelvorn",
+            "Dr. Kivo",
+            "Dale"
+          ],
+          "count": 5,
+          "listRow": {
+            "shown": [
+              "Alba",
+              "Iris"
+            ],
+            "plus": 3,
+            "text": "Alba, Iris +3"
+          },
+          "lastMailAt": "2026-11-02T09:03:00-05:00",
+          "dayHeading": "Today",
+          "askThread": [
+            "Alba",
+            "Iris",
+            "Shelvorn",
+            "Dr. Kivo",
+            "Dale",
+            "Another bot..."
+          ]
+        }
+      }
+    },
+    {
+      "fixture": "MF-3 a forward of a forward",
+      "threads": [
+        {
+          "ref": "MT-910",
+          "subject": "Fixture: the original mail",
+          "projectId": "quarterdeck",
+          "laneId": "l-sea",
+          "cardId": null,
+          "mails": [
+            {
+              "ref": "MT-910.1",
+              "from": "Alba",
+              "to": [
+                "Iris"
+              ],
+              "cc": [
+                "Dr. Kivo"
+              ],
+              "at": "2026-11-02T08:00:00-05:00",
+              "text": "The plan has one open question."
+            }
+          ],
+          "bots": [
+            "Alba",
+            "Dr. Kivo",
+            "Iris"
+          ]
+        },
+        {
+          "ref": "MT-911",
+          "subject": "Fwd: Fixture: the original mail",
+          "projectId": "quarterdeck",
+          "laneId": "l-sea",
+          "cardId": null,
+          "mails": [
+            {
+              "ref": "MT-911.1",
+              "from": "Iris",
+              "to": [
+                "Shelvorn"
+              ],
+              "cc": [],
+              "at": "2026-11-02T08:30:00-05:00",
+              "text": "Please look at this.",
+              "forwardedFrom": {
+                "ref": "MT-910.1"
+              }
+            }
+          ],
+          "bots": [
+            "Iris",
+            "Shelvorn"
+          ]
+        },
+        {
+          "ref": "MT-912",
+          "subject": "Fwd: Fwd: Fixture: the original mail",
+          "projectId": "quarterdeck",
+          "laneId": "l-sea",
+          "cardId": null,
+          "mails": [
+            {
+              "ref": "MT-912.1",
+              "from": "Shelvorn",
+              "to": [
+                "Dr. Kivo"
+              ],
+              "cc": [
+                "Alba"
+              ],
+              "at": "2026-11-02T09:05:00-05:00",
+              "text": "Passing it on.",
+              "forwardedFrom": {
+                "ref": "MT-911.1"
+              }
+            }
+          ],
+          "bots": [
+            "Alba",
+            "Dr. Kivo",
+            "Shelvorn"
+          ]
+        }
+      ],
+      "status": "suggestion. the ruling describes one forward. It does not say what a forward of a forward shows, so each link goes only to the mail directly forwarded; nothing walks the chain. The design lead's call.",
+      "expect": [
+        "MT-912.1 starts 'Forwarded from MT-911.1 >' and quotes MT-911.1 (Iris to Shelvorn, 8:30 AM) with its own text 'Please look at this.'.",
+        "MT-911.1 shows 'Forwarded from MT-910.1 >' and also 'Forwarded by Shelvorn to Dr. Kivo in MT-912 >'.",
+        "MT-910.1 shows only 'Forwarded by Iris to Shelvorn in MT-911 >'.",
+        "Every link opens the named mail inside its thread, marked."
+      ],
+      "forwardedBy": {
+        "MT-910.1": [
+          {
+            "by": "Iris",
+            "to": [
+              "Shelvorn"
+            ],
+            "thread": "MT-911",
+            "mail": "MT-911.1"
+          }
+        ],
+        "MT-911.1": [
+          {
+            "by": "Shelvorn",
+            "to": [
+              "Dr. Kivo"
+            ],
+            "thread": "MT-912",
+            "mail": "MT-912.1"
+          }
+        ]
+      }
+    },
+    {
+      "fixture": "MF-4 a long list of names must not spill",
+      "botsAdd": [
+        {
+          "id": "fx-long-1",
+          "name": "Maximilian the Meticulous Reviewer",
+          "role": "Tester",
+          "pinned": false,
+          "order": 90
+        },
+        {
+          "id": "fx-long-2",
+          "name": "Bartholomew of the Long Build Queue",
+          "role": "Tester",
+          "pinned": false,
+          "order": 91
+        },
+        {
+          "id": "fx-long-3",
+          "name": "Seraphina the Careful Release Checker",
+          "role": "Tester",
+          "pinned": false,
+          "order": 92
+        }
+      ],
+      "threads": [
+        {
+          "ref": "MT-920",
+          "subject": "Fixture: a long list of names",
+          "projectId": "quarterdeck",
+          "laneId": "l-sea",
+          "cardId": null,
+          "mails": [
+            {
+              "ref": "MT-920.1",
+              "from": "Alba",
+              "to": [
+                "Maximilian the Meticulous Reviewer",
+                "Bartholomew of the Long Build Queue"
+              ],
+              "cc": [
+                "Seraphina the Careful Release Checker",
+                "Dr. Kivo",
+                "Shelvorn",
+                "Dale"
+              ],
+              "at": "2026-11-02T09:10:00-05:00",
+              "text": "Long names on every line."
+            }
+          ],
+          "bots": [
+            "Alba",
+            "Bartholomew of the Long Build Queue",
+            "Dale",
+            "Dr. Kivo",
+            "Maximilian the Meticulous Reviewer",
+            "Seraphina the Careful Release Checker",
+            "Shelvorn"
+          ]
+        }
+      ],
+      "expect": [
+        "The To line reads 'Alba to Maximilian the Meticulous Reviewer, Bartholomew of the Long Build Queue' and the cc line 'cc Seraphina the Careful Release Checker, Dr. Kivo, Shelvorn, Dale'. Both wrap inside the mail card at phone 440, upright 744, sideways 1133 and Mac 1512 widths with no sideways scroll and no cut-off text.",
+        "The list row shows only the first two names and '+5': 'Alba, Maximilian the Meticulous Reviewer +5', and each name stays inside the row.",
+        "The thread header lists all seven names and wraps."
+      ],
+      "computed": {
+        "botsOrdered": [
+          "Alba",
+          "Maximilian the Meticulous Reviewer",
+          "Bartholomew of the Long Build Queue",
+          "Seraphina the Careful Release Checker",
+          "Dr. Kivo",
+          "Shelvorn",
+          "Dale"
+        ],
+        "count": 7,
+        "listRow": {
+          "shown": [
+            "Alba",
+            "Maximilian the Meticulous Reviewer"
+          ],
+          "plus": 5,
+          "text": "Alba, Maximilian the Meticulous Reviewer +5"
+        },
+        "lastMailAt": "2026-11-02T09:10:00-05:00",
+        "dayHeading": "Today",
+        "askThread": [
+          "Alba",
+          "Maximilian the Meticulous Reviewer",
+          "Bartholomew of the Long Build Queue",
+          "Seraphina the Careful Release Checker",
+          "Dr. Kivo",
+          "Shelvorn",
+          "Dale",
+          "Another bot..."
+        ]
+      }
+    },
+    {
+      "fixture": "MF-5 the bot filter reaches a bot that was only copied",
+      "usesExample": "MT-107",
+      "expect": [
+        "In the example data Iris is only ever copied on MT-107 (never in From or To there). Filtering by bot Iris must still list MT-107.",
+        "The same filter on Iris lists every thread in 'expected.botFilter.Iris' of mail.json and no other."
+      ]
+    },
+    {
+      "fixture": "MF-6 a forward of a removed bot's mail",
+      "threads": [
+        {
+          "ref": "MT-920",
+          "subject": "Delivery test result, passed on to Dale",
+          "projectId": "dale-tools",
+          "laneId": "l-da1",
+          "cardId": null,
+          "mails": [
+            {
+              "ref": "MT-920.1",
+              "from": "Pib",
+              "to": [
+                "Dr. Kivo"
+              ],
+              "cc": [
+                "Iris"
+              ],
+              "at": "2026-10-30T16:20:00-04:00",
+              "text": "The attachment test passed. The file arrived whole."
+            },
+            {
+              "ref": "MT-920.2",
+              "from": "Dr. Kivo",
+              "to": [
+                "Dale"
+              ],
+              "cc": [
+                "Iris"
+              ],
+              "at": "2026-11-02T09:40:00-05:00",
+              "text": "Dale: please add this result to the tools notes.",
+              "forwardedFrom": {
+                "ref": "MT-920.1"
+              }
+            }
+          ],
+          "bots": [
+            "Dale",
+            "Dr. Kivo",
+            "Iris",
+            "Pib"
+          ]
+        }
+      ],
+      "forwardedBy": {
+        "MT-920.1": [
+          {
+            "by": "Dr. Kivo",
+            "to": [
+              "Dale"
+            ],
+            "thread": "MT-920",
+            "mail": "MT-920.2"
+          }
+        ]
+      }
+    },
+    {
+      "fixture": "MF-7 a mailbox with no mail",
+      "threads": []
+    },
+    {
+      "fixture": "MF-8 the example mail with a copy and an Artifact on the first mail of MT-101",
+      "threads": [
+        {
+          "ref": "MT-101",
+          "subject": "Search group limit: how many rows per group?",
+          "projectId": "quarterdeck",
+          "laneId": "l-sea",
+          "cardId": "alba-1",
+          "bots": [
+            "Alba",
+            "Dr. Kivo",
+            "Iris"
+          ],
+          "mails": [
+            {
+              "ref": "MT-101.1",
+              "from": "Alba",
+              "to": [
+                "Dr. Kivo"
+              ],
+              "at": "2026-11-02T08:05:00-05:00",
+              "text": "Long groups push the others off the phone screen. Can you try a limit of 5 on the example data?",
+              "cc": [
+                "Iris"
+              ],
+              "artifactRefs": [
+                "AR-4"
+              ]
+            },
+            {
+              "ref": "MT-101.2",
+              "from": "Dr. Kivo",
+              "to": [
+                "Alba"
+              ],
+              "at": "2026-11-02T08:20:00-05:00",
+              "text": "Five fits the iPhone with the keyboard up. Three is too few for Chats.",
+              "forwardedBy": [
+                {
+                  "by": "Alba",
+                  "to": [
+                    "Iris"
+                  ],
+                  "thread": "MT-106",
+                  "mail": "MT-106.1"
+                }
+              ]
+            },
+            {
+              "ref": "MT-101.3",
+              "from": "Alba",
+              "to": [
+                "Iris"
+              ],
+              "cc": [
+                "Dr. Kivo"
+              ],
+              "at": "2026-11-02T08:28:00-05:00",
+              "text": "Raising a Task Card for the Captain: 5 per group is our pick, 3 on a phone and 5 on a Mac is option C."
+            },
+            {
+              "ref": "MT-101.4",
+              "from": "Iris",
+              "to": [
+                "Alba"
+              ],
+              "cc": [
+                "Dr. Kivo"
+              ],
+              "at": "2026-11-02T09:36:00-05:00",
+              "text": "The Captain asked: say what happens if he does not answer. Please add it to the card."
+            }
+          ]
+        },
+        {
+          "ref": "MT-102",
+          "subject": "Room list check before the bridge change",
+          "projectId": "heron-forge",
+          "laneId": "l-sw1",
+          "cardId": "shelvorn-1",
+          "bots": [
+            "Iris",
+            "Shelvorn"
+          ],
+          "mails": [
+            {
+              "ref": "MT-102.1",
+              "from": "Shelvorn",
+              "to": [
+                "Iris"
+              ],
+              "at": "2026-11-02T08:40:00-05:00",
+              "text": "The bridge change moves every room. I want a read-only room count first."
+            },
+            {
+              "ref": "MT-102.2",
+              "from": "Iris",
+              "to": [
+                "Shelvorn"
+              ],
+              "at": "2026-11-02T08:46:00-05:00",
+              "text": "Agreed. Put both commands on the card so the Captain can paste them."
+            },
+            {
+              "ref": "MT-102.3",
+              "from": "Shelvorn",
+              "to": [
+                "Iris"
+              ],
+              "at": "2026-11-02T08:52:00-05:00",
+              "text": "Card is up as a high-risk approval, P0."
+            }
+          ]
+        },
+        {
+          "ref": "MT-103",
+          "subject": "What goes in Account at launch?",
+          "projectId": "quarterdeck",
+          "laneId": "l-set",
+          "cardId": "c2",
+          "bots": [
+            "Alba",
+            "Iris",
+            "Shelvorn"
+          ],
+          "mails": [
+            {
+              "ref": "MT-103.1",
+              "from": "Alba",
+              "to": [
+                "Shelvorn"
+              ],
+              "cc": [
+                "Iris"
+              ],
+              "at": "2026-11-02T07:10:00-05:00",
+              "text": "Settings sections: Bots, Appearance, Add-ons, Storage and Account. What goes in Account?"
+            },
+            {
+              "ref": "MT-103.2",
+              "from": "Shelvorn",
+              "to": [
+                "Alba",
+                "Iris"
+              ],
+              "at": "2026-11-02T07:28:00-05:00",
+              "text": "Email and Log out only. Notifications later."
+            }
+          ]
+        },
+        {
+          "ref": "MT-104",
+          "subject": "First export sheet columns",
+          "projectId": "dale-tools",
+          "laneId": "l-da1",
+          "cardId": "dr-kivo-1",
+          "bots": [
+            "Dale",
+            "Dr. Kivo"
+          ],
+          "mails": [
+            {
+              "ref": "MT-104.1",
+              "from": "Dale",
+              "to": [
+                "Dr. Kivo"
+              ],
+              "at": "2026-11-02T07:55:00-05:00",
+              "text": "First export sheet built with Title, Lane and State."
+            },
+            {
+              "ref": "MT-104.2",
+              "from": "Dr. Kivo",
+              "to": [
+                "Dale"
+              ],
+              "at": "2026-11-02T08:15:00-05:00",
+              "text": "People ask for Owner most. I will ask the Captain on a Task Card."
+            }
+          ]
+        },
+        {
+          "ref": "MT-105",
+          "subject": "Pib's mail delivery test",
+          "projectId": "dale-tools",
+          "laneId": "l-da1",
+          "cardId": null,
+          "bots": [
+            "Pib",
+            "Dr. Kivo"
+          ],
+          "mails": [
+            {
+              "ref": "MT-105.1",
+              "from": "Pib",
+              "to": [
+                "Dr. Kivo"
+              ],
+              "at": "2026-10-29T14:00:00-04:00",
+              "text": "Sent 40 test mails through the export mailbox. All 40 arrived, in order."
+            },
+            {
+              "ref": "MT-105.2",
+              "from": "Dr. Kivo",
+              "to": [
+                "Pib"
+              ],
+              "at": "2026-10-30T09:00:00-04:00",
+              "text": "Good. One more run with an attachment, then the test is done."
+            },
+            {
+              "ref": "MT-105.3",
+              "from": "Pib",
+              "to": [
+                "Dr. Kivo"
+              ],
+              "at": "2026-10-30T16:20:00-04:00",
+              "text": "Second run with the attachment: 40 of 40 arrived. Test done."
+            }
+          ]
+        },
+        {
+          "ref": "MT-106",
+          "subject": "Fwd: Search group limit: how many rows per group?",
+          "projectId": "quarterdeck",
+          "laneId": "l-sea",
+          "cardId": null,
+          "bots": [
+            "Alba",
+            "Iris"
+          ],
+          "mails": [
+            {
+              "ref": "MT-106.1",
+              "from": "Alba",
+              "to": [
+                "Iris"
+              ],
+              "cc": [],
+              "at": "2026-11-02T09:52:00-05:00",
+              "text": "Please add this to the plan.",
+              "forwardedFrom": {
+                "ref": "MT-101.2"
+              }
+            }
+          ]
+        },
+        {
+          "ref": "MT-107",
+          "subject": "Recent searches on a phone",
+          "projectId": "quarterdeck",
+          "laneId": "l-sea",
+          "cardId": null,
+          "bots": [
+            "Alba",
+            "Dr. Kivo",
+            "Iris",
+            "Shelvorn"
+          ],
+          "mails": [
+            {
+              "ref": "MT-107.1",
+              "from": "Dr. Kivo",
+              "to": [
+                "Alba"
+              ],
+              "cc": [
+                "Shelvorn",
+                "Iris"
+              ],
+              "at": "2026-11-01T16:05:00-05:00",
+              "text": "Recent searches are shipped: the last five show under the field. Can Shelvorn check them on a phone?"
+            },
+            {
+              "ref": "MT-107.2",
+              "from": "Alba",
+              "to": [
+                "Shelvorn"
+              ],
+              "cc": [
+                "Dr. Kivo",
+                "Iris"
+              ],
+              "at": "2026-11-01T16:30:00-05:00",
+              "text": "Shelvorn, please check recent searches on a phone with the keyboard up."
+            },
+            {
+              "ref": "MT-107.3",
+              "from": "Shelvorn",
+              "to": [
+                "Alba"
+              ],
+              "cc": [
+                "Dr. Kivo",
+                "Iris"
+              ],
+              "at": "2026-11-01T17:15:00-05:00",
+              "text": "Checked on a phone. The five show, but the sheet runs under the keyboard."
+            },
+            {
+              "ref": "MT-107.4",
+              "from": "Alba",
+              "to": [
+                "Dr. Kivo"
+              ],
+              "cc": [
+                "Shelvorn",
+                "Iris"
+              ],
+              "at": "2026-11-01T19:10:00-05:00",
+              "text": "I wrote the Search notes down as AR-4. We still need a rows-per-group number.",
+              "artifactRefs": [
+                "AR-4"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "fixture": "MF-9 a thread with no project",
+      "threads": [
+        {
+          "ref": "MT-930",
+          "subject": "Fixture: a thread with no project",
+          "projectId": "",
+          "laneId": null,
+          "cardId": null,
+          "bots": [
+            "Alba",
+            "Iris"
+          ],
+          "mails": [
+            {
+              "ref": "MT-930.1",
+              "from": "Alba",
+              "to": [
+                "Iris"
+              ],
+              "cc": [],
+              "at": "2026-11-02T09:10:00-05:00",
+              "text": "This one has no project yet."
+            }
+          ]
+        }
+      ],
+      "expect": [
+        "The row and the thread head show no place line: no mail icon and no empty line (found in review)."
+      ]
+    },
+    {
+      "fixture": "MF-10 threads with earlier mails left out",
+      "threads": [
+        {
+          "ref": "MT-940",
+          "subject": "Fixture: a long thread with its first mails left out",
+          "projectId": "quarterdeck",
+          "laneId": "l-sea",
+          "cardId": null,
+          "bots": [
+            "Alba",
+            "Shelvorn",
+            "Iris"
+          ],
+          "omitted": 3,
+          "mails": [
+            {
+              "ref": "MT-940.4",
+              "from": "Alba",
+              "to": [
+                "Shelvorn"
+              ],
+              "cc": [
+                "Iris"
+              ],
+              "at": "2026-11-02T08:10:00-05:00",
+              "text": "Picking this up again. The rows-per-group number is still open, and the sheet still runs under the keyboard on a phone."
+            },
+            {
+              "ref": "MT-940.5",
+              "from": "Shelvorn",
+              "to": [
+                "Alba"
+              ],
+              "cc": [
+                "Iris"
+              ],
+              "at": "2026-11-02T08:25:00-05:00",
+              "text": "Five rows per group reads well on the Mac. On a phone it pushes the second group below the fold, so three may be better there."
+            },
+            {
+              "ref": "MT-940.6",
+              "from": "Iris",
+              "to": [
+                "Alba",
+                "Shelvorn"
+              ],
+              "cc": [],
+              "at": "2026-11-02T08:40:00-05:00",
+              "text": "One number for both sizes is simpler to explain. Can we try four and look at both again before we ask?"
+            },
+            {
+              "ref": "MT-940.7",
+              "from": "Alba",
+              "to": [
+                "Iris"
+              ],
+              "cc": [
+                "Shelvorn"
+              ],
+              "at": "2026-11-02T08:55:00-05:00",
+              "text": "Four it is for the trial. I will take shots on the phone and the Mac and put them side by side."
+            },
+            {
+              "ref": "MT-940.8",
+              "from": "Shelvorn",
+              "to": [
+                "Alba"
+              ],
+              "cc": [
+                "Iris"
+              ],
+              "at": "2026-11-02T09:05:00-05:00",
+              "text": "Shots look fine at four. The keyboard problem is separate; it needs the sheet to move up when the keyboard opens."
+            },
+            {
+              "ref": "MT-940.9",
+              "from": "Alba",
+              "to": [
+                "Shelvorn",
+                "Iris"
+              ],
+              "cc": [],
+              "at": "2026-11-02T09:20:00-05:00",
+              "text": "Agreed on four. The first plan for the sheet is in MT-940.2, before these."
+            }
+          ]
+        },
+        {
+          "ref": "MT-941",
+          "subject": "Fixture: a thread with one mail left out",
+          "projectId": "quarterdeck",
+          "laneId": "l-sea",
+          "cardId": null,
+          "bots": [
+            "Alba",
+            "Iris"
+          ],
+          "omitted": 1,
+          "mails": [
+            {
+              "ref": "MT-941.2",
+              "from": "Iris",
+              "to": [
+                "Alba"
+              ],
+              "cc": [],
+              "at": "2026-11-02T07:30:00-05:00",
+              "text": "Yes, the search box keeps its text when the sheet closes."
+            },
+            {
+              "ref": "MT-941.3",
+              "from": "Alba",
+              "to": [
+                "Iris"
+              ],
+              "cc": [],
+              "at": "2026-11-02T07:45:00-05:00",
+              "text": "Good. Then nothing changes there."
+            }
+          ]
+        }
+      ],
+      "expect": [
+        "MT-940 says 3 earlier mails not shown. and MT-941 says 1 earlier mail not shown., each right above its first mail (found in review).",
+        "The link to MT-940.2 in MT-940.9 scrolls to the line, since that mail was left out."
+      ]
+    }
+  ]
+}

@@ -59,6 +59,8 @@ The `ubuntu-24.04` runner image itself is updated by GitHub and cannot be pinned
 - The tests start the browser from the path in the `QD_CHROME` environment variable. If it is not set, the run fails. It never falls back to another browser.
 - Never run `npx playwright install`. It downloads an unpinned build.
 
+Before first-screen loads, `design:check` calibrates the same browser in a fresh unthrottled page: seven runs of a fixed workload (30 million integer-compute iterations, then 256 grid elements and 256 forced-layout reads), taking their median. The CPU rate is `4 × REFERENCE_MS / host median`, shared by both builds; rates below 1 or above 16 fail, and the 2,000 ms line stays fixed (a miss is carded only when `origin/main` has no `apps/web`). To retake `REFERENCE_MS`, use a quiet reference host and the CI-pinned chrome-headless-shell, launch five separate seven-sample runs, and take the median of those five medians. The 142.20 ms reference was measured on 2026-11-08 with version 156.0.8078.80.
+
 ## Add a lane
 
 1. Add the job to `.github/workflows/ci.yml` with its own `timeout-minutes` and `permissions: contents: read`, or less.

@@ -1,0 +1,26 @@
+{
+  "card": {
+    "id": "shelvorn-5",
+    "project": "quarterdeck",
+    "lane": "Settings",
+    "title": "Make Storage a Settings section",
+    "about": "Whether Storage is its own section in Settings.",
+    "context": "Storage sits under Add-ons today.",
+    "options": [
+      { "label": "A. Make Storage a section", "pick": true },
+      { "label": "B. Leave it under Add-ons" }
+    ],
+    "door": "two-way",
+    "category": ["strategy"]
+  },
+  "rev": 2,
+  "state": "done",
+  "thread": [
+    { "id": "mail-501", "kind": "card", "sender": "shelvorn", "sent": "2026-11-02T08:00:00-05:00", "document": { "qd": "card/1", "card": "shelvorn-5", "id": "shelvorn-5", "project": "quarterdeck", "lane": "Settings" } },
+    { "id": "mail-502", "kind": "update", "sender": "shelvorn", "sent": "2026-11-02T08:20:00-05:00", "document": { "qd": "update/1", "card": "shelvorn-5", "rev": 2, "context": "Storage sits under Add-ons today." } },
+    { "id": "mail-503", "kind": "answer", "sender": "captain", "sent": "2026-11-02T08:50:00-05:00", "document": { "qd": "answer/1", "card": "shelvorn-5", "comment": "side-question", "rev": 2, "pick": "B", "at": "2026-11-02T08:50:00-05:00" } },
+    { "id": "mail-504", "kind": "answer", "sender": "captain", "sent": "2026-11-02T09:00:00-05:00", "document": { "qd": "answer/1", "card": "shelvorn-5", "rev": 2, "pick": "A", "note": "Yes, Storage is its own section.", "at": "2026-11-02T09:00:00-05:00" } }
+  ],
+  "csrf": "sample-csrf-token-not-real",
+  "freshUntil": 1793836800.25
+}

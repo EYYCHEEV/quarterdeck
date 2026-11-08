@@ -23,6 +23,12 @@ The notices for the packages that ship in the web app are generated from `apps/w
 - License: MIT, Copyright (c) Tailwind Labs, Inc. Full text: [licenses/TAILWIND-CSS-MIT.txt](licenses/TAILWIND-CSS-MIT.txt).
 - Credit: the 4 px spacing grid and the utility classes come from Tailwind CSS. The colours, type sizes and radii in `apps/web/src/ui/theme.css` are Quarterdeck's own.
 
+## React
+
+- Project: React, https://github.com/facebook/react. Three packages are bundled into the built web app: `react` 19.3.1, `react-dom` 19.3.1 and `scheduler` 0.28.0, at the exact versions in `apps/web/package-lock.json`.
+- License: MIT, Copyright (c) Meta Platforms, Inc. and affiliates. Full text: [licenses/REACT-MIT.txt](licenses/REACT-MIT.txt). The three packages carry the same text.
+- Use: bundled as published, not modified.
+
 ## taste-skill
 
 - Project: taste-skill (design-taste-frontend) 2.1.5, https://github.com/Leonxlnx/taste-skill, commit `12af471f627f866411b4bd785b19646d3672784c`.

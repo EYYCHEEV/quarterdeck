@@ -1,0 +1,102 @@
+{
+  "qd": "evidence/2",
+  "for": "Quarterdeck merge build C-6, the ruling evidence on a Task Card",
+  "author": "Quarterdeck contributors",
+  "written": "Tue Nov 3, 2026 (ET)",
+  "how": [
+    "Version 2 of evidence.json, written for the the ruling sweep: the same content with new pictures and a new video that show Search results with c1's new title ('Pick what a new device shows first'). The old file stays as it was.",
+    "Paths are relative to this file's folder: the media are in evidence/media, shot from our own local page evidence/pages/search.html with Playwright 1.64.1 (evidence/shoot-evidence.mjs, B's dark colours as the first version); nothing was fetched from outside. Only the page's c1 title changed, so the target picture and the eight fixture pictures are byte-identical to the first shoot.",
+    "media: pictures and videos, in the order the card shows them. A 'build' picture names its 'target'; they show side by side, and the viewer's 'Show target' switches to it.",
+    "links: preview links and delivered live services, each with a small screenshot ('shot'), its time ('updatedAt' for a preview, 'deliveredAt' for a live service) and, for a live service, 'status' (up or down) as of 'statusAt'.",
+    "check: the bot that checked the work and each check's result. The line reads 'Checked by Shelvorn: 3 of 3 checks pass'. A check counts only when 'by' is not 'doneBy' (the bot that did the work); see evidence-fixtures.json EV-6.",
+    "The Page link ('See all N on Page') follows the card's pageRefs[0] and shows only when that Page has a file (spec 4.3). alba-1's Page PG-2 has no file in the example data, so the card shows its 5 items and no 'See all'; EV-1 in the fixtures tests 'See all'.",
+    "URLs are example.com addresses: shown, never opened by the build's tests. Preview links are 'gated': until the gated Pages host exists they open in the browser (the ruling consequences).",
+    "The video is VP9 WebM (Playwright's own recorder; no other encoder on this machine). Safari plays WebM only on recent iOS and macOS; if the builder needs MP4, that is a new file from the content owner, never made by the builder.",
+    "Bot names in 'by', 'doneBy' and check 'by' are display names (bots[].name in the example data)."
+  ],
+  "cards": {
+    "alba-1": {
+      "doneBy": "Alba",
+      "media": [
+        {
+          "id": "ev-a1-build",
+          "kind": "image",
+          "role": "build",
+          "file": "media/alba-1-build-phone.png",
+          "width": 880,
+          "height": 1912,
+          "caption": "Search sheet on the phone: 5 per group, keyboard up",
+          "by": "Alba",
+          "at": "2026-11-02T09:12:00-05:00",
+          "target": "ev-a1-target"
+        },
+        {
+          "id": "ev-a1-target",
+          "kind": "image",
+          "role": "target",
+          "file": "media/alba-1-target-phone.png",
+          "width": 880,
+          "height": 1912,
+          "caption": "Target: Search sheet, phone, 5 per group",
+          "by": "Alba",
+          "at": "2026-11-01T19:10:00-05:00"
+        },
+        {
+          "id": "ev-a1-video",
+          "kind": "video",
+          "caption": "Tap-through: type, see 5 per group, open See all",
+          "by": "Alba",
+          "at": "2026-11-02T09:14:00-05:00",
+          "file": "media/alba-1-tap-through.webm",
+          "type": "video/webm; codecs=vp9",
+          "width": 440,
+          "height": 956,
+          "poster": "media/alba-1-video-poster.png",
+          "length": "0:10",
+          "seconds": 10
+        }
+      ],
+      "links": [
+        {
+          "id": "ev-a1-preview",
+          "kind": "preview",
+          "title": "Preview: Search v3",
+          "url": "https://preview.quarterdeck.example.com/search-v3",
+          "shot": "media/alba-1-preview-mac.png",
+          "updatedAt": "2026-11-02T09:10:00-05:00",
+          "gated": true,
+          "caption": "Option A, 5 per group, for you to try"
+        },
+        {
+          "id": "ev-a1-live",
+          "kind": "live",
+          "title": "Live service: Search",
+          "url": "https://quarterdeck.example.com/search",
+          "shot": "media/alba-1-live-mac.png",
+          "deliveredAt": "2026-10-30T16:00:00-04:00",
+          "status": "up",
+          "statusAt": "2026-11-02T09:55:00-05:00",
+          "caption": "Live today: every group shows all of its results (option B)"
+        }
+      ],
+      "check": {
+        "by": "Shelvorn",
+        "at": "2026-11-02T09:40:00-05:00",
+        "checks": [
+          {
+            "name": "5 rows per group on the phone with the keyboard up",
+            "result": "pass"
+          },
+          {
+            "name": "See all opens the rest of the group",
+            "result": "pass"
+          },
+          {
+            "name": "The Mac shows the same 5 rows",
+            "result": "pass"
+          }
+        ]
+      }
+    }
+  }
+}
