@@ -393,7 +393,7 @@ export function createServerChat(host: ChatHost): ChatPart {
   function event(): void {
     if (onScreen()) {
       wanted = true;
-      if (host.live()) for (const [bot, set] of threadWatchers) if (set.size > 0 && threads.get(bot)?.features.includes("cursor")) poked.add(bot);
+      for (const [bot, set] of threadWatchers) if (set.size > 0 && threads.get(bot)?.features.includes("cursor")) poked.add(bot);
     } else staleAt = host.clock();
     host.arm();
   }
