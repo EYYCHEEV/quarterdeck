@@ -1,0 +1,15 @@
+{
+  "format": 1,
+  "bind": {"address": "0.0.0.0", "port": 19091},
+  "paths": {
+    "oidc": "/var/lib/quarterdeck-approval-qd/oidc.json",
+    "state": "/var/lib/quarterdeck-approval-qd/state.sqlite",
+    "socket": "/run/quarterdeck-no-join/approve.sock",
+    "captainAuthSocket": "/run/quarterdeck-qd-auth/auth.sock"
+  },
+  "captainAuth": {"peerUid": 2700, "socketMode": "0660", "socketGid": 2711},
+  "trustedProxy": "${QD_CADDY_ADDRESS}",
+  "publicOrigin": "https://qd.example.invalid",
+  "oidcRedirectUri": "https://qd.example.invalid/captain/oidc/callback",
+  "release": {"artifactUrl": null, "version": null, "sha256": null}
+}

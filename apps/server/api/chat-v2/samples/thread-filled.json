@@ -1,0 +1,88 @@
+{
+  "bot": {
+    "id": "bot-a"
+  },
+  "rev": 42,
+  "features": [
+    "quote",
+    "read",
+    "seen",
+    "working",
+    "files"
+  ],
+  "messages": [
+    {
+      "id": "Mc0a1",
+      "from": "captain",
+      "text": "Can you check the **door** file?",
+      "at": "2026-11-06T15:40:00-05:00",
+      "refs": [],
+      "clientId": "k1",
+      "quote": null,
+      "files": []
+    },
+    {
+      "id": "Mb0a2",
+      "from": "bot",
+      "text": "Done. It matches.\n\n| file | hash |\n|---|---|\n| door | 9a5c9762 |",
+      "at": "2026-11-06T15:42:00-05:00",
+      "refs": [],
+      "quote": {
+        "id": "Mc0a1",
+        "from": "captain",
+        "at": "2026-11-06T15:40:00-05:00",
+        "text": "Can you check the **door** file?"
+      },
+      "files": [
+        {
+          "id": "f-7Qk2Lm9Xz",
+          "name": "screenshot.png",
+          "type": "image/png",
+          "size": 482113,
+          "kind": "photo",
+          "url": "/captain/api/files/f-7Qk2Lm9Xz"
+        }
+      ]
+    },
+    {
+      "id": "Mc0a3",
+      "from": "captain",
+      "text": "Thanks. About this card:",
+      "at": "2026-11-06T15:44:00-05:00",
+      "refs": [],
+      "clientId": "k2",
+      "quote": {
+        "cardId": "Q176",
+        "version": 3
+      },
+      "files": [
+        {
+          "id": "f-3Hs8Pa1Wq",
+          "name": "notes.pdf",
+          "type": "application/pdf",
+          "size": 2093120,
+          "kind": "file",
+          "url": "/captain/api/files/f-3Hs8Pa1Wq"
+        }
+      ]
+    },
+    {
+      "id": "Mb0a4",
+      "from": "bot",
+      "text": "Looking at it now.",
+      "at": "2026-11-06T15:45:00-05:00",
+      "refs": [],
+      "quote": null,
+      "files": []
+    }
+  ],
+  "seenUpTo": "Mc0a3",
+  "seenAt": "2026-11-06T15:45:00-05:00",
+  "working": {
+    "note": "reading the card",
+    "since": "2026-11-06T15:45:00-05:00",
+    "updatedAt": "2026-11-06T15:46:00-05:00"
+  },
+  "firstUnread": "Mb0a4",
+  "older": false
+}

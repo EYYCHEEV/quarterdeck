@@ -1,0 +1,10 @@
+{
+  "bot": "bot-a",
+  "text": "Talk to me about this.",
+  "clientId": "k4",
+  "csrf": "CSRF",
+  "quote": {
+    "cardId": "Q176",
+    "version": 3
+  }
+}

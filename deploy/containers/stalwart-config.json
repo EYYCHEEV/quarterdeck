@@ -1,0 +1,9 @@
+{
+  "@type": "RocksDb",
+  "path": "/var/lib/stalwart/data",
+  "blobSize": 4096,
+  "bufferSize": 134217728,
+  "poolWorkers": null,
+  "poolMaxConnections": null,
+  "cacheSize": null
+}

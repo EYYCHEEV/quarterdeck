@@ -1,0 +1,19 @@
+{
+  "bot": {
+    "id": "bot-a"
+  },
+  "messages": [
+    {
+      "id": "Mc0a1",
+      "from": "captain",
+      "text": "hi",
+      "at": "2026-11-06T15:40:00-05:00",
+      "refs": [],
+      "clientId": "k1"
+    }
+  ],
+  "seenUpTo": null,
+  "seenAt": null,
+  "working": null,
+  "older": false
+}

@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import tomllib
 import unittest
 import zipfile
 from unittest import mock
@@ -294,6 +295,295 @@ def step_value(step, key):
             block.append(follow.strip())
         return "\n".join(part for part in block if part)
     return None
+
+
+class MoveB2Test(unittest.TestCase):
+    def test_server_uses_the_same_pinned_node_steps_before_the_lane(self):
+        steps = workflow_steps(WORKFLOW.read_text(encoding="utf-8"))
+        server = [step for step in steps if step["job"] == "server"]
+        self.assertEqual([step_value(step, "name") for step in server], [
+            "Checkout",
+            "Fetch the pinned Node",
+            "Put the pinned Node first on the path",
+            "Server suites, one process each",
+        ])
+        web = [step for step in steps if step["job"] == "web-static"]
+        for index in (1, 2):
+            self.assertEqual(server[index]["lines"], web[index]["lines"])
+        self.assertEqual(step_value(server[1], "run"), "python3 tools/ci/fetch-pinned node")
+        self.assertEqual(step_value(server[2], "run"), 'echo "$RUNNER_TEMP/pinned/node-v22.21.0-linux-x64/bin" >> "$GITHUB_PATH"')
+        self.assertEqual(step_value(server[3], "run"), "python3 deploy/server_lane.py")
+
+    def test_missing_node_exits_with_one_line_before_running_any_suite(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            suite = root / "app" / "captain-app"
+            suite.mkdir(parents=True)
+            marker = root / "suite-ran"
+            (suite / "test_probe.py").write_text(
+                "from pathlib import Path\n"
+                + "Path(" + repr(str(marker)) + ").write_text('ran')\n",
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [sys.executable, "-B", str(HERE.parent.parent / "deploy" / "server_lane.py"), "--tree", str(root), "captain-app"],
+                env={"PATH": str(root / "no-programs"), "HOME": str(root), "PYTHONDONTWRITEBYTECODE": "1"},
+                capture_output=True, text=True, timeout=10,
+            )
+            self.assertFalse(marker.exists(), "a suite ran without node")
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stderr, "")
+            self.assertEqual(result.stdout, "missing node: captain-app test_chat_bubbles, test_chat_chime, test_chat_page, test_chat_windowing require it\n")
+
+    def test_scan_exceptions_cover_only_the_six_exact_digest_fields(self):
+        path = HERE / "gitleaks.toml"
+        self.assertTrue(path.is_file())
+        config = tomllib.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(set(config), {"extend", "allowlists"})
+        self.assertEqual(config["extend"], {"useDefault": True})
+        expected = {
+            r"^deploy/captain-app/package-manifest\.json$": ("auth_bridge.py", "captain_auth.py"),
+            r"^deploy/qd-web/package-manifest\.json$": ("auth_bridge.py", "chat_api.py", "mail_api.py"),
+            r"^deploy/containers/test_layout\.py$": ("first_start/password_file.py",),
+        }
+        self.assertEqual(len(config["allowlists"]), 3)
+        seen = set()
+        for block in config["allowlists"]:
+            self.assertEqual(set(block), {"description", "targetRules", "condition", "paths", "regexTarget", "regexes"})
+            self.assertIsInstance(block["description"], str)
+            self.assertTrue(block["description"].strip())
+            self.assertEqual(block["targetRules"], ["generic-api-key"])
+            self.assertEqual(block["condition"], "AND")
+            self.assertEqual(block["regexTarget"], "line")
+            self.assertEqual(len(block["paths"]), 1)
+            path_pattern = block["paths"][0]
+            self.assertIn(path_pattern, expected)
+            self.assertNotIn(path_pattern, seen)
+            seen.add(path_pattern)
+            fields = expected[path_pattern]
+            self.assertEqual(block["regexes"], [
+                r'^\n?    "' + re.escape(field) + '": "[0-9a-f]{64}",?$'
+                for field in fields
+            ])
+            for field, pattern in zip(fields, block["regexes"]):
+                line = '    "' + field + '": "' + "a" * 64 + '"'
+                for ending in ("", ","):
+                    self.assertIsNotNone(re.fullmatch(pattern, line + ending))
+                for value in ("a" * 63, "a" * 65, "A" * 64, "g" * 64):
+                    self.assertIsNone(re.fullmatch(pattern, '    "' + field + '": "' + value + '",'))
+                for changed in (" " + line, line + " ", line.replace(field, "other_password.py")):
+                    self.assertIsNone(re.fullmatch(pattern, changed))
+        self.assertEqual(seen, set(expected))
+
+    def test_six_real_fields_match_gitleaks_line_shapes_and_fail_closed(self):
+        config = tomllib.loads((HERE / "gitleaks.toml").read_text(encoding="utf-8"))
+        fields = {
+            "deploy/captain-app/package-manifest.json": ("auth_bridge.py", "captain_auth.py"),
+            "deploy/qd-web/package-manifest.json": ("auth_bridge.py", "chat_api.py", "mail_api.py"),
+            "deploy/containers/test_layout.py": ("first_start/password_file.py",),
+        }
+        for filename, names in fields.items():
+            block = next(block for block in config["allowlists"] if re.fullmatch(block["paths"][0], filename))
+            lines = (HERE.parent.parent / filename).read_bytes().decode("utf-8").split("\n")
+            self.assertEqual(len(block["regexes"]), len(names))
+            for name, pattern in zip(names, block["regexes"]):
+                line = next(line for line in lines if line.startswith('    "' + name + '": "'))
+                value = line.split('"')[3]
+                for shape, target in (("bare", line), ("mid-fragment", "\n" + line)):
+                    with self.subTest(file=filename, field=name, shape=shape):
+                        self.assertTrue(re.fullmatch(pattern, target) is not None)
+                invalid = {
+                    "two leading newlines": "\n\n" + line,
+                    "space before newline": " \n" + line,
+                    "tab before newline": "\t\n" + line,
+                    "trailing newline": line + "\n",
+                    "trailing carriage return": line + "\r",
+                    "63-character value": line.replace(value, value[:-1], 1),
+                    "65-character value": line.replace(value, value + "0", 1),
+                    "uppercase hex value": line.replace(value, value.upper(), 1),
+                    "five spaces without newline": " " + line,
+                }
+                for shape, target in invalid.items():
+                    with self.subTest(file=filename, field=name, shape=shape):
+                        self.assertTrue(re.fullmatch(pattern, target) is None)
+
+    def test_both_public_scan_commands_load_the_explicit_configuration(self):
+        steps = workflow_steps(WORKFLOW.read_text(encoding="utf-8"))
+        commands = [
+            line.strip()
+            for step in steps if step["job"] == "leaks"
+            for line in step["lines"] if line.strip().startswith('"$gitleaks" ')
+        ]
+        self.assertEqual(len(commands), 2)
+        self.assertTrue(commands[0].startswith('"$gitleaks" dir '))
+        self.assertTrue(commands[1].startswith('"$gitleaks" git '))
+        for command in commands:
+            self.assertEqual(command.count("--config tools/ci/gitleaks.toml"), 1)
+
+    def test_both_public_scan_commands_reject_inline_markers_and_pass_a_missing_ignore_path(self):
+        steps = workflow_steps(WORKFLOW.read_text(encoding="utf-8"))
+        commands = [
+            line.strip()
+            for step in steps if step["job"] == "leaks"
+            for line in step["lines"] if line.strip().startswith('"$gitleaks" ')
+        ]
+        self.assertEqual(len(commands), 2)
+        for command in commands:
+            self.assertEqual(command.split().count("--ignore-gitleaks-allow"), 1)
+            self.assertEqual(command.count('--gitleaks-ignore-path "$RUNNER_TEMP/no-gitleaksignore"'), 1)
+
+    def test_root_ignore_refusal_is_exact_and_precedes_scanning(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        steps = [step for step in workflow_steps(text) if step["job"] == "leaks"]
+        self.assertFalse(any(step_value(step, "name") == "Refuse a gitleaks ignore file" for step in steps))
+        scans = [step for step in steps if step_value(step, "name") == "Scan the checkout and the new commits"]
+        self.assertEqual(len(scans), 1)
+        scan = scans[0]
+        self.assertEqual(scan["lines"][2:6], [
+            "          if [ -e .gitleaksignore ] || [ -L .gitleaksignore ]; then",
+            '            echo "::error file=.gitleaksignore::gitleaks always reads this file, so this repository keeps none. Remove it."',
+            "            exit 1",
+            "          fi",
+        ])
+        self.assertEqual(
+            [step for step in steps if any(line.strip().startswith('"$gitleaks" ') for line in step["lines"])],
+            [scan],
+        )
+        restored = without_ignore_refusal(text)
+        with self.assertRaisesRegex(ValueError, "exactly one"):
+            without_ignore_refusal(restored)
+        with self.assertRaisesRegex(ValueError, "exactly one"):
+            without_ignore_refusal(text + "\n".join(scan["lines"][:6]) + "\n")
+
+    def test_root_ignore_refusal_handles_files_links_and_directories(self):
+        scans = [
+            step for step in workflow_steps(WORKFLOW.read_text(encoding="utf-8"))
+            if step["job"] == "leaks" and step_value(step, "name") == "Scan the checkout and the new commits"
+        ]
+        self.assertEqual(len(scans), 1)
+        run_text = "\n".join(line[10:] for line in scans[0]["lines"][2:6])
+        self.assertTrue(run_text.startswith("if [ -e .gitleaksignore ]"))
+        for kind, expected in (("absent", 0), ("file", 1), ("symlink", 1), ("dangling", 1), ("directory", 1)):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as directory:
+                root = pathlib.Path(directory)
+                ignore = root / ".gitleaksignore"
+                if kind == "file":
+                    ignore.touch()
+                elif kind == "symlink":
+                    target = root / "target"
+                    target.touch()
+                    ignore.symlink_to(target)
+                elif kind == "dangling":
+                    ignore.symlink_to(root / "missing")
+                elif kind == "directory":
+                    ignore.mkdir()
+                result = subprocess.run(["bash", "-c", run_text], cwd=root, capture_output=True, text=True, timeout=10)
+                self.assertEqual(result.returncode, expected)
+                self.assertEqual(result.stderr, "")
+
+    def test_scan_refuses_an_ignore_file_created_after_an_earlier_guard(self):
+        scans = [
+            step for step in workflow_steps(WORKFLOW.read_text(encoding="utf-8"))
+            if step["job"] == "leaks" and step_value(step, "name") == "Scan the checkout and the new commits"
+        ]
+        self.assertEqual(len(scans), 1)
+        run_text = "\n".join(line[10:] for line in scans[0]["lines"][2:]) + "\n"
+        for present in (True, False):
+            with self.subTest(ignore_present=present), tempfile.TemporaryDirectory() as directory:
+                root = pathlib.Path(directory)
+                checkout = root / "checkout"
+                checkout.mkdir()
+                runner_temp = root / "runner"
+                scanner = runner_temp / "pinned" / "gitleaks" / "gitleaks"
+                scanner.parent.mkdir(parents=True)
+                scanner.write_text(HASH + '!/bin/bash\n: > "$SCAN_MARKER"\n', encoding="utf-8")
+                scanner.chmod(0o755)
+                marker = root / "scanner-ran"
+                if present:
+                    (checkout / ".gitleaksignore").touch()
+                environment = dict(os.environ, RUNNER_TEMP=str(runner_temp), EVENT="pull_request", BASE="base", HEAD="head", SCAN_MARKER=str(marker))
+                result = subprocess.run(["bash", "-c", run_text], cwd=checkout, env=environment, capture_output=True, text=True, timeout=10)
+                if present:
+                    self.assertFalse(marker.exists())
+                    self.assertEqual(result.returncode, 1)
+                else:
+                    self.assertTrue(marker.exists())
+
+
+class HistoricalScanReconstructionTest(unittest.TestCase):
+    OPTIONS = (
+        "--config tools/ci/gitleaks.toml",
+        "--ignore-gitleaks-allow",
+        "--gitleaks-ignore-path",
+    )
+
+    def setUp(self):
+        self.text = WORKFLOW.read_text(encoding="utf-8")
+        self.digest = hashlib.sha256(without_scan_config(self.text).encode()).digest()
+        self.commands = [
+            line for line in self.text.splitlines(keepends=True)
+            if line.startswith('          "$gitleaks" ')
+        ]
+        self.assertEqual(len(self.commands), 2)
+
+    def assert_not_erased(self, changed):
+        try:
+            result = without_scan_config(changed)
+        except ValueError:
+            return
+        self.assertTrue(
+            hashlib.sha256(result.encode()).digest() != self.digest,
+            "historical reconstruction erased a guarded workflow mutation",
+        )
+
+    def test_fetch_main_option_injection_is_not_erased(self):
+        line = "      - name: Fetch main for the design comparison"
+        self.assertEqual(self.text.count(line), 1)
+        self.assert_not_erased(self.text.replace(line, line + " " + self.OPTIONS[0], 1))
+
+    def test_refusal_step_option_injection_is_not_erased(self):
+        line = "        id: refuse"
+        self.assertEqual(self.text.count(line), 1)
+        self.assert_not_erased(self.text.replace(line, line + " " + self.OPTIONS[0], 1))
+
+    def test_png_upload_condition_option_injection_is_not_erased(self):
+        line = "        if: failure() && steps.refuse.outcome == 'success'"
+        self.assertEqual(self.text.count(line), 1)
+        self.assert_not_erased(self.text.replace(line, line + " " + self.OPTIONS[0], 1))
+
+    def test_moved_config_in_each_scan_command_is_not_erased(self):
+        for command in self.commands:
+            with self.subTest(mode=command.split()[1]):
+                moved = command.replace(" " + self.OPTIONS[0], "", 1).replace(
+                    '"$gitleaks" ', '"$gitleaks" ' + self.OPTIONS[0] + " ", 1,
+                )
+                self.assert_not_erased(self.text.replace(command, moved, 1))
+
+    def test_each_non_option_byte_in_both_commands_stays_guarded(self):
+        for command in self.commands:
+            masked = command
+            for option in self.OPTIONS:
+                masked = masked.replace(option, "\0" * len(option), 1)
+            for index, character in enumerate(masked):
+                if character == "\0":
+                    continue
+                with self.subTest(mode=command.split()[1], byte=index):
+                    changed = command[:index] + ("Y" if character == "X" else "X") + command[index + 1:]
+                    self.assert_not_erased(self.text.replace(command, changed, 1))
+
+    def test_each_scan_command_requires_exactly_one_full_line(self):
+        for command in self.commands:
+            for count in (0, 2):
+                with self.subTest(mode=command.split()[1], count=count):
+                    changed = self.text.replace(command, command * count, 1)
+                    with self.assertRaisesRegex(ValueError, "exactly one"):
+                        without_scan_config(changed)
+
+    def test_leftover_option_text_is_rejected_anywhere(self):
+        for option in self.OPTIONS:
+            with self.subTest(option=option):
+                with self.assertRaisesRegex(ValueError, "unexpected scan option"):
+                    without_scan_config(self.text + option + "\n")
 
 
 def upload_problems(text):
@@ -629,7 +919,7 @@ class WorkflowContextsTest(unittest.TestCase):
                 self.assertEqual((result.returncode, result.stdout), (0, ""))
 
     def test_the_original_ci_has_exactly_the_three_reported_findings(self):
-        original = WORKFLOW.read_text(encoding="utf-8")
+        original = without_ignore_refusal(without_scan_config(without_server_lane(WORKFLOW.read_text(encoding="utf-8"))))
         original = original.replace(
             "      - name: Fetch main for the design comparison\n"
             "        run: git -c credential.helper= fetch --no-tags --depth=1 origin main:refs/remotes/origin/main\n\n",
@@ -675,6 +965,60 @@ def ci_with_selftest_env(source):
     return source
 
 
+def without_ignore_refusal(text):
+    header = "      - name: Scan the checkout and the new commits\n        run: |\n"
+    guarded = (
+        header
+        + "          if [ -e .gitleaksignore ] || [ -L .gitleaksignore ]; then\n"
+        '            echo "::error file=.gitleaksignore::gitleaks always reads this file, so this repository keeps none. Remove it."\n'
+        "            exit 1\n"
+        "          fi\n"
+    )
+    count = text.count(guarded)
+    if count != 1:
+        raise ValueError(f"expected exactly one root ignore refusal step; found {count}")
+    return text.replace(guarded, header, 1)
+
+
+def without_scan_config(text):
+    lines = text.splitlines(keepends=True)
+    for mode, current, prior in (
+        (
+            "dir",
+            '          "$gitleaks" dir --redact --no-banner --config tools/ci/gitleaks.toml --ignore-gitleaks-allow --gitleaks-ignore-path "$RUNNER_TEMP/no-gitleaksignore" --report-format json --report-path "$RUNNER_TEMP/leaks-dir.json" --exit-code 0 .\n',
+            '          "$gitleaks" dir --redact --no-banner --report-format json --report-path "$RUNNER_TEMP/leaks-dir.json" --exit-code 0 .\n',
+        ),
+        (
+            "git",
+            '          "$gitleaks" git --redact --no-banner --config tools/ci/gitleaks.toml --ignore-gitleaks-allow --gitleaks-ignore-path "$RUNNER_TEMP/no-gitleaksignore" --report-format json --report-path "$RUNNER_TEMP/leaks-git.json" --exit-code 0 --log-opts="$range" .\n',
+            '          "$gitleaks" git --redact --no-banner --report-format json --report-path "$RUNNER_TEMP/leaks-git.json" --exit-code 0 --log-opts="$range" .\n',
+        ),
+    ):
+        count = lines.count(current)
+        if count != 1:
+            raise ValueError(f"expected exactly one {mode} scan command line; found {count}")
+        lines[lines.index(current)] = prior
+    result = "".join(lines)
+    for option in ("--config tools/ci/gitleaks.toml", "--ignore-gitleaks-allow", "--gitleaks-ignore-path"):
+        if option in result:
+            raise ValueError("unexpected scan option outside the two scan commands: " + option)
+    return result
+
+
+def without_server_lane(text):
+    start = text.find("  server:\n")
+    if start < 0:
+        return text
+    text = text[:start] + text[text.index("  extension:\n", start):]
+    for old, new in (
+        ("      - python\n      - server\n      - extension\n", "      - python\n      - extension\n"),
+        ("      SERVER_RESULT: ${{ needs.server.result }}\n", ""),
+        ('"$PYTHON_RESULT" "$SERVER_RESULT" "$EXTENSION_RESULT"', '"$PYTHON_RESULT" "$EXTENSION_RESULT"'),
+    ):
+        text = text.replace(old, new)
+    return text
+
+
 class WorkflowNullValuesTest(unittest.TestCase):
     check = WorkflowContextsTest.check
     workflow = WorkflowContextsTest.workflow
@@ -694,7 +1038,7 @@ class WorkflowNullValuesTest(unittest.TestCase):
         self.assertEqual((result.returncode, result.stdout, result.stderr), (0, "", ""))
 
     def test_the_r1_workflow_has_exactly_one_null_finding(self):
-        original = ci_with_selftest_env(WORKFLOW.read_text(encoding="utf-8"))
+        original = ci_with_selftest_env(without_ignore_refusal(without_scan_config(without_server_lane(WORKFLOW.read_text(encoding="utf-8")))))
         original = original.replace(
             "      - name: Fetch main for the design comparison\n"
             "        run: git -c credential.helper= fetch --no-tags --depth=1 origin main:refs/remotes/origin/main\n\n",

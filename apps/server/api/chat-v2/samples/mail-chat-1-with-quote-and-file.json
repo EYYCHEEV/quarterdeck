@@ -1,0 +1,18 @@
+{
+  "qd": "chat/1",
+  "bot": "bot-a",
+  "text": "Done. It matches.",
+  "quote": {
+    "id": "Mc0a1",
+    "text": "Can you check the **door** file?"
+  },
+  "files": [
+    {
+      "id": "f-7Qk2Lm9Xz",
+      "name": "screenshot.png",
+      "type": "image/png",
+      "size": 482113,
+      "kind": "photo"
+    }
+  ]
+}
