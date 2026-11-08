@@ -180,7 +180,7 @@ function AddBot({ api, admin, onClose }: { api: BotsApi; admin: BotsAdmin; onClo
   const heading: Record<typeof phase, [string, string | null]> = {
     name: ["Add bot", null],
     invite: ["Copy this invite now", "Works once, for 24 hours. Shown only now."],
-    waiting: admin.approveHere ? ["Waiting for " + bot + " to ask to join...", "Invite copied. It works once, for 24 hours."] : ["Waiting for " + bot + " to ask to join.", BOTS_WORDS.waiting],
+    waiting: admin.approveHere ? ["Waiting for " + bot + " to ask to join...", __QD_SOURCE__ === "server" ? BOTS_WORDS.waitingHere : "Invite copied. It works once, for 24 hours."] : ["Waiting for " + bot + " to ask to join.", BOTS_WORDS.waiting],
     request: [(request?.name ?? bot) + " wants to join", "Invited by " + (request?.invitedBy ?? "you") + ", " + (request?.at ?? "")],
     joined: [(joinedBot?.name ?? bot) + " joined.", null],
     refused: ["Refused. " + (refused ?? bot) + " was not added.", null],
