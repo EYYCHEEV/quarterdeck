@@ -1123,6 +1123,27 @@ test("with cursor listed and the chat open, a read after the newest held message
   assert.deepEqual([row.preview, row.at], ["newer", newer.at]);
 });
 
+test("with cursor listed and the chat open, a bot reply of files and no words leaves the open chat's row as it was until the list read lands and gives it", async () => {
+  const { h } = await cursorThread();
+  await h.source.chat.listChats();
+  const rows = await h.watchRows();
+  const before = (await h.source.chat.listChats()).find((one) => one.bot.id === "steward");
+  const from = h.calls.length;
+  const heard = rows.heard.length;
+  const reply = h.add("steward", "bot", "", { files: [{ id: "f1", name: "shot.png", type: "image/png", size: 10, kind: "photo", url: "/captain/api/files/f1" }] });
+  await h.refresh();
+  await pass(h, 100);
+  assert.deepEqual(h.chatRequests(from), [AFTER("steward", "m3")]);
+  assert.equal(rows.heard.length, heard);
+  const held = (await h.source.chat.listChats()).find((one) => one.bot.id === "steward");
+  assert.deepEqual([held.preview, held.at], [before.preview, before.at]);
+  await pass(h, 5_000);
+  assert.deepEqual(h.chatRequests(from), [AFTER("steward", "m3"), LIST]);
+  assert.equal(rows.heard.length, heard + 1);
+  const listed = (await h.source.chat.listChats()).find((one) => one.bot.id === "steward");
+  assert.deepEqual([listed.preview, listed.at], ["", reply.at]);
+});
+
 test("twenty refreshes while a read after the newest held message is in flight make exactly one more read after it, no list read inside the spacing, and credits inside the automatic budget of twenty-one", async () => {
   const { s, h, watcher } = await cursorThread();
   const from = h.calls.length;
