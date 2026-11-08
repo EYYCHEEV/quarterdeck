@@ -4489,10 +4489,10 @@ it("Server Task Card: a 403 on the card's read signs out", PHONE, async (p) => {
   equal(reads, [403], "card reads");
 }, /403 \(Forbidden\)/);
 
-it("Server Settings: the Bots page says Approve new bots in the approval app for now. as a plain line, with no alert, no button and no link, until the server has a bots API", PHONE, async (p) => {
+it("Server Settings: the Bots page says Approve new bots in Backchannel for now. as a plain line, with no alert, no button and no link, until the server has a bots API", PHONE, async (p) => {
   await serverBuild(p, "list-fixed-only.json");
   await open(p, "/settings/bots");
-  const line = p.getByText("Approve new bots in the approval app for now.", { exact: true });
+  const line = p.getByText("Approve new bots in Backchannel for now.", { exact: true });
   await line.waitFor();
   equal([await p.getByRole("alert").count(), await line.locator("xpath=..").getByRole("button").count(), await line.locator("xpath=..").getByRole("link").count(), await p.getByText("Could not load the bots.").count()], [0, 0, 0, 0], "alerts, buttons and links around the line, and the old words");
 });
@@ -4519,20 +4519,20 @@ const serverBots = async (p, { lists = [botsList()], posts = {} } = {}) => {
 const stepUpPage = (p) => p.route((url) => url.pathname === "/captain/step-up", (route) => route.fulfill({ status: 200, contentType: "text/html", body: "<p>Fresh sign-in</p>" }));
 
 for (const [where, size] of [["a phone", PHONE], ["the Mac", MAC]])
-  it("Server Bots on " + where + ": a join request shows who invited it, when it asked, its code in two parts and its time left, with Refuse and the words Approve in the approval app for now. and no Approve, password field or link; the history and the password row stay in the approval app", size, async (p) => {
+  it("Server Bots on " + where + ": a join request shows who invited it, when it asked, its code in two parts and its time left, with Refuse and the words Approve in Backchannel for now. and no Approve, password field or link; the history and the password row stay in Backchannel", size, async (p) => {
     await serverBuild(p, "list-fixed-only.json");
     await serverBots(p);
     await installSessionClock(p);
     await open(p, "/settings/bots");
     const join = T(p, "pending-join").filter({ hasText: "tarn wants to join" });
     await join.waitFor();
-    equal([await join.getByRole("button", { name: "Refuse", exact: true }).count(), await join.getByRole("button", { name: "Approve", exact: true }).count(), await join.locator("input").count(), await join.getByText("Approve in the approval app for now.", { exact: true }).count(), await join.getByRole("link").count()], [1, 0, 0, 1, 0], "Refuse, Approve, a password field, the words and a link in the request");
+    equal([await join.getByRole("button", { name: "Refuse", exact: true }).count(), await join.getByRole("button", { name: "Approve", exact: true }).count(), await join.locator("input").count(), await join.getByText("Approve in Backchannel for now.", { exact: true }).count(), await join.getByRole("link").count()], [1, 0, 0, 1, 0], "Refuse, Approve, a password field, the words and a link in the request");
     const said = await join.innerText();
     equal(["invited by you", "6:58 AM", "K7P4 2Q9M", "ends in 8 min"].filter((part) => !said.includes(part)), [], "parts missing from the request");
     equal(await T(p, "pending-join").count(), 2, "requests");
     const invite = await T(p, "open-invite").first().innerText();
     equal(["for tarn", "by you", "ends in 23 h"].filter((part) => !invite.includes(part)), [], "parts missing from the first invite");
-    equal([await p.getByText("Password to approve a bot").count(), await p.getByText("Joins history is in the approval app for now.", { exact: true }).count(), await T(p, "bots-add").count()], [0, 1, 1], "the password row, the history line and Add bot");
+    equal([await p.getByText("Password to approve a bot").count(), await p.getByText("Joins history is in Backchannel for now.", { exact: true }).count(), await T(p, "bots-add").count()], [0, 1, 1], "the password row, the history line and Add bot");
     equal(await T(p, "bot-row").evaluateAll((rows) => rows.map((row) => row.dataset.id)), ["iris", "alba", "dale"], "bots");
   });
 
@@ -4546,11 +4546,11 @@ it("Server Bots with chat on: All bots lists each bot once, by the chat list's n
   equal([...rows].sort(), [["alba", "alba"], ["dale", "dale"], ["iris", "Iris"], ["nova", "Nova"]], "bots and their names");
 });
 
-it("Server Bots: a bots list that answers 404 shows only Approve new bots in the approval app for now.", PHONE, async (p) => {
+it("Server Bots: a bots list that answers 404 shows only Approve new bots in Backchannel for now.", PHONE, async (p) => {
   await serverBuild(p, "list-fixed-only.json");
   await serverBots(p, { lists: [(route) => chatReply(route, 404, { error: "not found" })] });
   await open(p, "/settings/bots");
-  await shown(p, "Approve new bots in the approval app for now.");
+  await shown(p, "Approve new bots in Backchannel for now.");
   equal([await p.getByRole("alert").count(), await T(p, "pending-join").count(), await T(p, "bots-add").count()], [0, 0, 0], "alerts, requests and Add bot");
 }, /404 \(Not Found\)/);
 
@@ -4561,7 +4561,7 @@ it("Server Bots: a bots list that fails says Could not load the bots. with Try a
   await open(p, "/settings/bots");
   const line = p.getByRole("alert").filter({ hasText: "Could not load the bots." });
   await line.waitFor();
-  equal(await p.getByText("Approve new bots in the approval app for now.").count(), 0, "the the approval app line");
+  equal(await p.getByText("Approve new bots in Backchannel for now.").count(), 0, "the Backchannel line");
   await line.getByRole("button", { name: "Try again" }).click();
   await T(p, "pending-join").first().waitFor();
   equal([asked.reads, await p.getByRole("alert").count()], [2, 0], "reads and alerts");
