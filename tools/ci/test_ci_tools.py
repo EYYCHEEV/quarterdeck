@@ -629,7 +629,7 @@ class WorkflowContextsTest(unittest.TestCase):
                 self.assertEqual((result.returncode, result.stdout), (0, ""))
 
     def test_the_original_ci_has_exactly_the_three_reported_findings(self):
-        original = WORKFLOW.read_text(encoding="utf-8")
+        original = without_server_lane(WORKFLOW.read_text(encoding="utf-8"))
         original = original.replace(
             "      - name: Fetch main for the design comparison\n"
             "        run: git -c credential.helper= fetch --no-tags --depth=1 origin main:refs/remotes/origin/main\n\n",
@@ -675,6 +675,20 @@ def ci_with_selftest_env(source):
     return source
 
 
+def without_server_lane(text):
+    start = text.find("  server:\n")
+    if start < 0:
+        return text
+    text = text[:start] + text[text.index("  extension:\n", start):]
+    for old, new in (
+        ("      - python\n      - server\n      - extension\n", "      - python\n      - extension\n"),
+        ("      SERVER_RESULT: ${{ needs.server.result }}\n", ""),
+        ('"$PYTHON_RESULT" "$SERVER_RESULT" "$EXTENSION_RESULT"', '"$PYTHON_RESULT" "$EXTENSION_RESULT"'),
+    ):
+        text = text.replace(old, new)
+    return text
+
+
 class WorkflowNullValuesTest(unittest.TestCase):
     check = WorkflowContextsTest.check
     workflow = WorkflowContextsTest.workflow
@@ -694,7 +708,7 @@ class WorkflowNullValuesTest(unittest.TestCase):
         self.assertEqual((result.returncode, result.stdout, result.stderr), (0, "", ""))
 
     def test_the_r1_workflow_has_exactly_one_null_finding(self):
-        original = ci_with_selftest_env(WORKFLOW.read_text(encoding="utf-8"))
+        original = ci_with_selftest_env(without_server_lane(WORKFLOW.read_text(encoding="utf-8")))
         original = original.replace(
             "      - name: Fetch main for the design comparison\n"
             "        run: git -c credential.helper= fetch --no-tags --depth=1 origin main:refs/remotes/origin/main\n\n",

@@ -1,0 +1,91 @@
+{
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Content-Security-Policy": "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+    "Referrer-Policy": "strict-origin",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Content-Length": "1324"
+  },
+  "body": {
+    "card": {
+      "qd": "card/1",
+      "card": "bot-a-8",
+      "id": "bot-a-8",
+      "project": "Fleet",
+      "lane": "Ops",
+      "title": "Retire the old dashboard",
+      "about": "Fleet work that needs a call.",
+      "context": "It is ready for a decision.\nNothing else is waiting on it.",
+      "options": [
+        {
+          "label": "A. Go with the plan",
+          "pick": true
+        },
+        {
+          "label": "B. Hold for now"
+        }
+      ],
+      "pick_why": "A keeps the schedule.",
+      "you_do": "Pick one option.",
+      "skip": "If no answer by due: the plan goes ahead.",
+      "category": [
+        "strategy"
+      ],
+      "door": "two-way",
+      "kind": "decision"
+    },
+    "rev": 1,
+    "state": "withdrawn",
+    "thread": [
+      {
+        "id": "msg-008",
+        "kind": "card",
+        "sender": "bot-a",
+        "sent": "2026-11-02T09:08:00-05:00",
+        "document": {
+          "qd": "card/1",
+          "card": "bot-a-8",
+          "id": "bot-a-8",
+          "project": "Fleet",
+          "lane": "Ops",
+          "title": "Retire the old dashboard",
+          "about": "Fleet work that needs a call.",
+          "context": "It is ready for a decision.\nNothing else is waiting on it.",
+          "options": [
+            {
+              "label": "A. Go with the plan",
+              "pick": true
+            },
+            {
+              "label": "B. Hold for now"
+            }
+          ],
+          "pick_why": "A keeps the schedule.",
+          "you_do": "Pick one option.",
+          "skip": "If no answer by due: the plan goes ahead.",
+          "category": [
+            "strategy"
+          ],
+          "door": "two-way",
+          "kind": "decision"
+        }
+      },
+      {
+        "id": "msg-039",
+        "kind": "withdraw",
+        "sender": "bot-a",
+        "sent": "2026-11-02T09:39:00-05:00",
+        "document": {
+          "qd": "withdraw/1",
+          "card": "bot-a-8",
+          "why": "The old dashboard stays for now."
+        }
+      }
+    ],
+    "csrf": "csrf-placeholder",
+    "freshUntil": 0
+  }
+}

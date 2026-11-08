@@ -1,0 +1,47 @@
+{
+  "using": [
+    "urn:ietf:params:jmap:core",
+    "urn:stalwart:jmap"
+  ],
+  "methodCalls": [
+    [
+      "x:Bootstrap/set",
+      {
+        "update": {
+          "singleton": {
+            "defaultHostname": "${deployment:hostname}",
+            "defaultDomain": "${deployment:mail-domain}",
+            "requestTlsCertificate": false,
+            "generateDkimKeys": false,
+            "dataStore": {
+              "@type": "RocksDb",
+              "path": "/var/lib/stalwart/data"
+            },
+            "blobStore": {
+              "@type": "Default"
+            },
+            "searchStore": {
+              "@type": "Default"
+            },
+            "inMemoryStore": {
+              "@type": "Default"
+            },
+            "directory": {
+              "@type": "Internal"
+            },
+            "tracer": {
+              "@type": "Log",
+              "path": "/var/log/stalwart",
+              "ansi": false,
+              "level": "info"
+            },
+            "dnsServer": {
+              "@type": "Manual"
+            }
+          }
+        }
+      },
+      "bootstrap"
+    ]
+  ]
+}

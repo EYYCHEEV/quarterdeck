@@ -1,0 +1,52 @@
+{
+  "format": 2,
+  "baseSha256": "be691bfa8a494db59d68a9b061e54c5a1ac344c3cf3d072e8d3c310a8ef7d781",
+  "integratedService": {
+    "name": "captain-app",
+    "imageFromService": "approval",
+    "definition": {
+      "user": "2700:2700",
+      "group_add": ["2701"],
+      "working_dir": "/opt/quarterdeck/captain-app",
+      "command": ["python3", "/opt/quarterdeck/captain-app/server.py", "--config", "/var/lib/quarterdeck-captain/runtime.json"],
+      "environment": {
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONUNBUFFERED": "1",
+        "PYTHONPATH": "/opt/quarterdeck/captain-app:/opt/quarterdeck/qd-cards:/opt/quarterdeck/qd-mail-stalwart:/opt/quarterdeck/approval:/opt/quarterdeck/shared:/opt/quarterdeck/door",
+        "QD_CARD_LINK_ORIGIN": "${QD_CARD_LINK_ORIGIN}"
+      },
+      "read_only": true,
+      "cap_drop": ["ALL"],
+      "security_opt": ["no-new-privileges:true"],
+      "init": true,
+      "restart": "unless-stopped",
+      "stop_grace_period": "30s",
+      "pids_limit": 96,
+      "mem_limit": "384m",
+      "memswap_limit": "384m",
+      "cpus": "0.75",
+      "ulimits": {"nofile": {"soft": 1024, "hard": 1024}},
+      "tmpfs": ["/tmp:rw,nosuid,nodev,noexec,size=32m", "/run:rw,nosuid,nodev,noexec,size=8m"],
+      "networks": {"service": {}},
+      "volumes": [
+        "${QD_PACKAGE}/captain-app:/opt/quarterdeck/captain-app:ro",
+        "${QD_PACKAGE}/qd-cards:/opt/quarterdeck/qd-cards:ro",
+        "${QD_PACKAGE}/qd-mail-stalwart:/opt/quarterdeck/qd-mail-stalwart:ro",
+        "${QD_PACKAGE}/golive/approval:/opt/quarterdeck/approval:ro",
+        "${QD_PACKAGE}/golive/shared:/opt/quarterdeck/shared:ro",
+        "${QD_PACKAGE}/golive/door:/opt/quarterdeck/door:ro",
+        "${QD_ROOT}/secrets/captain-mail-key:/run/quarterdeck-captain-mail:ro",
+        "${QD_ROOT}/volumes/captain-state:/var/lib/quarterdeck-captain:rw",
+        "${QD_ROOT}/volumes/captain-auth:/run/quarterdeck-captain-auth:rw"
+      ],
+      "logging": {"driver": "json-file", "options": {"max-size": "5m", "max-file": "3"}}
+    }
+  },
+  "integratedApproval": {
+    "name": "approval",
+    "groupAdd": "2701",
+    "authVolume": "${QD_ROOT}/volumes/captain-auth:/run/quarterdeck-captain-auth:rw",
+    "sourceVolume": "${QD_PACKAGE}/captain-app:/opt/quarterdeck/captain-app:ro",
+    "pythonPathPrefix": "/opt/quarterdeck/captain-app"
+  }
+}

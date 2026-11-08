@@ -1,0 +1,19 @@
+{
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Content-Security-Policy": "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+    "Referrer-Policy": "strict-origin",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "ETag": "\"03f3ab98fe5231092a15c11e0401c25a293d6acf336498d069cb46689a1b75c1\"",
+    "Content-Length": "73"
+  },
+  "body": {
+    "threads": [],
+    "truncated": false,
+    "csrf": "csrf-placeholder",
+    "freshUntil": 0
+  }
+}

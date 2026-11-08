@@ -65,6 +65,23 @@ jobs:
       - name: Wheel build tests
         run: python3 -m unittest discover -s qd-client-wheel -p 'test_*.py'
 
+  server:
+    name: Server tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    container:
+      image: docker.io/library/python@sha256:0aecac02dc3d4c5dbb024b753af084cafe41f5416e02193f1ce345d671ec966e
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Server suites, one process each
+        run: python3 deploy/server_lane.py
+
   extension:
     name: Wake extension tests
     runs-on: ubuntu-24.04
@@ -413,6 +430,7 @@ jobs:
     needs:
       - changes
       - python
+      - server
       - extension
       - no-comments
       - leaks
@@ -428,6 +446,7 @@ jobs:
       CHANGES_RESULT: ${{ needs.changes.result }}
       WEB: ${{ needs.changes.outputs.web }}
       PYTHON_RESULT: ${{ needs.python.result }}
+      SERVER_RESULT: ${{ needs.server.result }}
       EXTENSION_RESULT: ${{ needs.extension.result }}
       COMMENTS_RESULT: ${{ needs.no-comments.result }}
       LEAKS_RESULT: ${{ needs.leaks.result }}
@@ -439,7 +458,7 @@ jobs:
     steps:
       - name: Require every lane to pass
         run: |
-          for result in "$CHANGES_RESULT" "$PYTHON_RESULT" "$EXTENSION_RESULT" "$COMMENTS_RESULT" "$LEAKS_RESULT"; do
+          for result in "$CHANGES_RESULT" "$PYTHON_RESULT" "$SERVER_RESULT" "$EXTENSION_RESULT" "$COMMENTS_RESULT" "$LEAKS_RESULT"; do
             test "$result" = success || exit 1
           done
           if [ "$WEB" = "true" ]; then

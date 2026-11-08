@@ -1,0 +1,30 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/captain/cards/bot-a-3/answer",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "rev": 1,
+      "pick": "A",
+      "note": "",
+      "csrf": "csrf-placeholder"
+    }
+  },
+  "signIn": "real",
+  "status": 403,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Content-Security-Policy": "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+    "Referrer-Policy": "strict-origin",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Content-Length": "27"
+  },
+  "body": {
+    "error": "request refused"
+  },
+  "outbound": []
+}

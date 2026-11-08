@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "bindPort": 8080,
+  "jmapSessionUrl": "${deployment:jmap-session-url}",
+  "keyPath": "/run/quarterdeck-captain-mail/captain.key",
+  "keyReadbackPath": "/var/lib/quarterdeck-captain/key-readback.json",
+  "registryPath": "/var/lib/quarterdeck-captain/project-registry.json",
+  "authSocket": "/run/quarterdeck-qd-auth/auth.sock",
+  "bundleDir": "/opt/quarterdeck/qd-web/static",
+  "mailStatePath": "/var/lib/quarterdeck-qd-web/mail-threads.json"
+}

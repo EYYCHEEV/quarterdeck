@@ -1,0 +1,14 @@
+{
+  "status": 304,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Content-Security-Policy": "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+    "Referrer-Policy": "strict-origin",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "ETag": "\"9831ca503ba9c4fa33db5a50a89f163b7d31377551bef9ca861dce631987f8b5\"",
+    "Content-Length": "0"
+  },
+  "body": null
+}
