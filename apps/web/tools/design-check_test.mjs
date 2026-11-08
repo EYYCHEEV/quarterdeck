@@ -177,3 +177,54 @@ test("with a base the relative time and byte margins are unchanged even above 20
   assert.match(run(`judgeFirstScreen(${result(2100, 101025)})[0]`), /downloads 1025 bytes more/);
   assert.equal(run(`firstScreenLines(${result(2100)}).some((line) => line.startsWith('CARD '))`), false);
 });
+
+function chatPage(enter = "new line") {
+  const state = { text: "", own: [], history: false, typedBeforeHistory: false };
+  const arrive = () => {
+    if (state.history) return;
+    state.history = true;
+    state.own.push("Did the build pass last night?", "Pick A on c1. I will look at c2 later.", "What are those two cards?");
+  };
+  const rows = (hasText) => ({
+    count: async () => state.own.filter((row) => hasText === undefined || row.includes(hasText)).length,
+    first: () => ({ waitFor: async () => arrive() }),
+    filter: (by) => rows(by.hasText),
+  });
+  const input = {
+    waitFor: async () => {},
+    fill: async (text) => {
+      state.typedBeforeHistory ||= !state.history;
+      state.text = text;
+    },
+    press: async () => {
+      if (enter === "sends") {
+        state.own.push(state.text);
+        state.text = "";
+        return;
+      }
+      state.text += "\n";
+      if (enter === "new line and sends") state.own.push(state.text.trim());
+    },
+    pressSequentially: async (text) => {
+      arrive();
+      state.text += text;
+    },
+    inputValue: async () => state.text,
+    evaluate: async () => true,
+  };
+  return { page: { locator: (selector) => (selector === '[data-testid="chat-input"]' ? input : rows()) }, state };
+}
+
+test("chat history that arrives while the Return step types is not taken for a send, and the step types only once the history is in", async () => {
+  const { page, state } = chatPage();
+  await checker()("returnNewline")({}, page);
+  assert.equal(state.typedBeforeHistory, false);
+});
+
+test("a Return that sends and empties the box still fails the step", async () => {
+  await assert.rejects(() => checker()("returnNewline")({}, chatPage("sends").page), /Return did not start a new line/);
+});
+
+test("a Return that adds the new line but also sends the words still fails the step", async () => {
+  await assert.rejects(() => checker()("returnNewline")({}, chatPage("new line and sends").page), /Return sent the message/);
+});
