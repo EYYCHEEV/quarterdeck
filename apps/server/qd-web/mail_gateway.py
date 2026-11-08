@@ -95,6 +95,8 @@ PROPERTIES = [
 ]
 MARK_PER_CALL = 16
 MARK_CALLS = 8
+ANSWER_FIELDS = frozenset({"qd", "card", "rev", "pick", "note", "at"})
+ANSWER_SAME = ("qd", "card", "rev", "pick", "note")
 
 
 class CaptainMailbox:
@@ -399,6 +401,17 @@ class CaptainMailbox:
     ) -> str:
         return self._send(recipient, subject, body, resend_key, False)
 
+    def send_answer(self, recipient: str, subject: str, body: str, resend_key: str) -> str | None:
+        try:
+            self.send(recipient, subject, body, resend_key)
+        except qd_jmap.Refused:
+            kept = self._kept_body(recipient, subject, resend_key)
+            first = None if kept is None else self._first_answer_time(kept[1], body)
+            if first is None:
+                raise
+            return first
+        return None
+
     def _send(
         self,
         recipient: str,
@@ -436,23 +449,12 @@ class CaptainMailbox:
         try:
             return self._send(recipient, subject, body, resend_key, True), wanted["fresh"]
         except qd_jmap.Refused:
-            message_id = qd_jmap.message_id(self.mailbox.bot, resend_key, self.mailbox.domain)
-            kept = self.mailbox.sent_copy(message_id)
-            if not kept:
+            kept = self._kept_body(recipient, subject, resend_key)
+            if kept is None:
                 raise
-            [reply] = self.mailbox.jmap.call(("Email/get", {"ids": kept[:1], "properties": PROPERTIES, "fetchTextBodyValues": True}))
-            rows = reply.get("list", [])
-            if len(rows) != 1:
-                raise
-            original = rows[0]
-            sender = (original.get("from") or [{}])[0].get("email", "").partition("@")[0]
-            if (
-                sender != self.account_name or self._recipient(original) != recipient
-                or original.get("subject") != subject or qd_jmap.first_id(original) != message_id
-            ):
-                raise
+            message_id, text = kept
             try:
-                document = json.loads(self._body(original))
+                document = json.loads(text)
             except (ValueError, TypeError):
                 raise security.SecurityRefused("Captain chat resend is invalid") from None
             if (
@@ -462,6 +464,45 @@ class CaptainMailbox:
             ):
                 raise
             return message_id, document.get("fresh", False)
+
+    def _kept_body(self, recipient: str, subject: str, resend_key: str) -> tuple[str, str] | None:
+        message_id = qd_jmap.message_id(self.mailbox.bot, resend_key, self.mailbox.domain)
+        kept = self.mailbox.sent_copy(message_id)
+        if not kept:
+            return None
+        [reply] = self.mailbox.jmap.call(("Email/get", {"ids": kept[:1], "properties": PROPERTIES, "fetchTextBodyValues": True}))
+        rows = reply.get("list", [])
+        if len(rows) != 1:
+            return None
+        original = rows[0]
+        sender = (original.get("from") or [{}])[0].get("email", "").partition("@")[0]
+        if (
+            sender != self.account_name or self._recipient(original) != recipient
+            or original.get("subject") != subject or qd_jmap.first_id(original) != message_id
+        ):
+            return None
+        return message_id, self._body(original)
+
+    @staticmethod
+    def _first_answer_time(kept: str, wanted: str) -> str | None:
+        try:
+            before, now = json.loads(kept), json.loads(wanted)
+        except (ValueError, TypeError):
+            return None
+        if not isinstance(before, dict) or not isinstance(now, dict):
+            return None
+        if set(before) != ANSWER_FIELDS or set(now) != ANSWER_FIELDS:
+            return None
+        if any(json.dumps(before[field], sort_keys=True) != json.dumps(now[field], sort_keys=True) for field in ANSWER_SAME):
+            return None
+        first = before["at"]
+        if not isinstance(first, str):
+            return None
+        try:
+            zone = datetime.fromisoformat(first).tzinfo
+        except ValueError:
+            return None
+        return first if zone is not None else None
 
     def close(self) -> None:
         if self._closed:
