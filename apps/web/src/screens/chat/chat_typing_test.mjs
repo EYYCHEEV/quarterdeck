@@ -261,6 +261,38 @@ for (const [label, size, newline, hit] of [
   });
 }
 
+const MAC = { viewport: { width: 1512, height: 982 } };
+const DRAFT = "Draft in progress";
+
+const drafted = async (p) => {
+  await p.goto(origin + "/chat/iris");
+  await T(p, "chat-bot-message").first().waitFor();
+  await T(p, "chat-input").click();
+  await p.keyboard.type(DRAFT);
+  await frames(p);
+};
+
+it("Chat on the Mac (1512 x 982): the Enter that ends an IME composition (keyCode 229) sends nothing and keeps the text", MAC, async (p) => {
+  await drafted(p);
+  await T(p, "chat-input").evaluate((el) => {
+    const event = new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true, cancelable: true });
+    Object.defineProperty(event, "keyCode", { get: () => 229 });
+    el.dispatchEvent(event);
+  });
+  await frames(p);
+  await frames(p);
+  assert.equal(await T(p, "chat-input").inputValue(), DRAFT, "the box after the Enter that ends a composition");
+});
+
+it("Chat on the Mac (1512 x 982): Option+Return sends nothing, as Shift+Return", MAC, async (p) => {
+  await drafted(p);
+  await p.keyboard.press("Alt+Enter");
+  await frames(p);
+  await frames(p);
+  const value = await T(p, "chat-input").inputValue();
+  assert.ok(value.startsWith(DRAFT), `the box after Option+Return: ${JSON.stringify(value)}`);
+});
+
 const browser = await engines[ENGINE].launch(ENGINE === "chromium" ? chromeLaunchOptions({ args: ["--no-sandbox"] }) : {});
 try {
   for (const item of cases) {
