@@ -12,12 +12,12 @@ Each kind of rule has one owner. Everything else calls the owner.
 
 | Rule | Owner |
 |---|---|
-| Card meanings, revisions, limits and resend behavior | The card policy checker in the server. The web app uses its contract. It does not hold a second implementation of the policy |
-| Mailbox state and delivery | The mail server owns stored mail. The mail adapter owns the JMAP interaction and the resend and acknowledgement contract. The app and the bot tools call that adapter |
+| Card meanings, revisions, limits and resend behavior | The card policy checker in the server, in `apps/server/cards`. The web app uses its contract, in `apps/server/api`. It does not hold a second implementation of the policy |
+| Mailbox state and delivery | The mail server owns stored mail. The mail adapter, in `apps/server/mail`, owns the JMAP interaction and the resend and acknowledgement contract. The app and the bot tools call that adapter |
 | App views and requests | The web app uses one data interface. Fixtures implement the same interface |
 | Agent wake | The OMP extension takes mail notices through its supported boundary. In tests, every process call ends at a stand-in, never at a real session |
 
-The server parts of this table arrive in a later change.
+The server parts of this table are in `apps/server`, with one folder for each component. Its versioned API contracts are in `apps/server/api`. Packaging is in `deploy`: the container layout renderer, the compose templates, first-start steps, package manifests and per-service templates with placeholder values only. It holds no live instance configuration. The notes on the server are in `docs/internals/server-*.md`, for example [server-mail-seam.md](server-mail-seam.md).
 
 ### Contracts
 
