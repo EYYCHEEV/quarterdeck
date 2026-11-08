@@ -674,6 +674,29 @@ const boxOf = (locator) => locator.evaluate((el) => {
   return [Math.round(box.width), Math.round(box.height)];
 });
 
+const dotLines = (p) =>
+  p.evaluate(() =>
+    [...document.querySelectorAll('[data-testid="card-row"]')].flatMap((row) => {
+      const dot = row.querySelector('[data-testid="changed-dot"]');
+      if (!dot) return [];
+      const title = document.createRange();
+      title.selectNodeContents(row.querySelector("a"));
+      const lines = [...title.getClientRects()];
+      const middle = (box) => box.top + box.height / 2;
+      const first = middle(lines[0]);
+      return [{ id: row.dataset.id, wraps: new Set(lines.map((box) => Math.round(box.top))).size > 1, dot: middle(dot.getBoundingClientRect()) - first, tile: middle(row.querySelector("[data-pill]").getBoundingClientRect()) - first }];
+    }),
+  );
+
+for (const [where, size] of [["a phone", PHONE], ["iPad upright", IPAD_UPRIGHT], ["iPad sideways", TOUCH_SIDEWAYS], ["the Mac", MAC]])
+  it("Queue on " + where + ": a changed card's dot sits on the middle of its title's first line, for a one-line title and a wrapping one", size, async (p) => {
+    await open(p, "/queue");
+    await T(p, "changed-dot").first().waitFor();
+    const rows = await dotLines(p);
+    equal([rows.some((row) => !row.wraps), rows.some((row) => row.wraps)], [true, true], "a one-line title and a wrapping title among the rows with a dot");
+    equal(rows.filter((row) => Math.abs(row.dot) > 1).map((row) => row.id + ": dot " + row.dot.toFixed(1) + " px, tile " + row.tile.toFixed(1) + " px"), [], "rows whose dot is more than 1 px off the middle of the first line");
+  });
+
 it("Task Card on a phone: the floating top has the round Back with Queue · N waiting and a capsule with Talk and More, each at least 44 px", PHONE, async (p) => {
   await open(p, "/queue/alba-1");
   await p.locator('[data-float="capsule"]').waitFor();
