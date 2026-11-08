@@ -11,6 +11,7 @@ The stdlib-only `tools/ci/workflow-contexts` checker runs through the CI tool te
 | Lane | What it runs | Pinned by | Timeout |
 |---|---|---|---|
 | python | The bot-tool unittest suites: `signup`, `mail`, `golive/connect` and `qd-client-wheel` | The runner's `python3` | 10 min |
+| server | Each server suite in its own process with an allowlisted environment, through `deploy/server_lane.py`. The lane first builds each package layout and stops if one holds the public `signup_flow.py` or `qd_jmap.py`, a link, a linked folder or a special file. The job's only permission is `contents: read`, and it has no secrets | A job container pinned by digest to `docker.io/library/python@sha256:0aecac02dc3d4c5dbb024b753af084cafe41f5416e02193f1ce345d671ec966e`, the Python 3.14.0 slim image the server runs on | 20 min |
 | extension | `bun test` for `omp-quarterdeck` | `oven-sh/setup-bun` by commit, Bun 1.3.14 | 10 min |
 | web-static | In `apps/web`: `npm ci --ignore-scripts`, `npm audit signatures`, lint, typecheck, `test:data` and `test:taskcard` | Node 22.21.0 linux-x64 by checksum in `tools/ci/pins.json`, and the lock file's integrity values | 10 min |
 | web-build | Builds `npm run build:app -- --server` and `npm run build:app -- --server --chat`, and writes each bundle's sha256 to the job summary. It publishes no release artifact | As web-static | 10 min |
@@ -22,7 +23,7 @@ The stdlib-only `tools/ci/workflow-contexts` checker runs through the CI tool te
 | pr-title | The title is a conventional commit title | None | 2 min |
 | qd-check | The aggregate. It always runs. It fails if any lane failed or was skipped when it should not have been | None | 2 min |
 
-Lanes for the server and for the full stack arrive together with the server.
+A lane for the full stack, which runs the built web app against the real Python app, is added in a later change and is not part of this one.
 
 Path filters only choose which lanes do real work. `qd-check` always runs, so a required check is never left unreported.
 
@@ -47,7 +48,7 @@ The repository allows exactly four actions, each pinned by full commit SHA:
 | `actions/upload-artifact` | `cf430e030ddbb5b0abf93d22962f4752f3646cd9` |
 | `actions/download-artifact` | `9000827ccba6bdab643e8b6fd33ac0654aef8333` |
 
-A workflow never refers to an action by tag or branch. Node and the browser come from `tools/ci/pins.json` through `tools/ci/fetch-pinned`, so they need no extra action.
+A workflow never refers to an action by tag or branch. Node and the browser come from `tools/ci/pins.json` through `tools/ci/fetch-pinned`, so they need no extra action. The `server` job runs in a container image pinned by digest in `.github/workflows/ci.yml`, the same Python image the server runs on.
 
 The `ubuntu-24.04` runner image itself is updated by GitHub and cannot be pinned by digest. Every tool that matters is pinned inside it.
 
@@ -72,7 +73,7 @@ Before first-screen loads, `design:check` calibrates the same browser in a fresh
 
 ## Move a pin
 
-A pin is an action commit, a tool version in `tools/ci/pins.json`, the browser, or a lock file entry.
+A pin is an action commit, a tool version in `tools/ci/pins.json`, the browser, the container image digest of the `server` job, or a lock file entry.
 
 1. Make one pull request that moves only that pin and its record.
 2. Name the old value, the new value and the reason in the pull request.
