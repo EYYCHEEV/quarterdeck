@@ -9,6 +9,7 @@ import { pathToFileURL } from "node:url";
 import { chromium } from "playwright";
 import { chromeLaunchOptions } from "../../../tools/browser.mjs";
 import { startAppServer } from "../../../tools/app-server.mjs";
+import { standInKeyboard } from "../../../tools/stand-in-keyboard.mjs";
 import { measure } from "../../../tools/layout-measure.mjs";
 import { animationsOf, motionPair, QUICK, settle, STANDARD } from "../../../motion-steps.mjs";
 
@@ -1770,6 +1771,7 @@ it("Chat: with files attached, scrolling up 120 px lets go of the end, and typin
   const before = await place();
   const input = T(p, "chat-input");
   const one = await input.evaluate((el) => el.getBoundingClientRect().height);
+  await p.evaluate(standInKeyboard);
   await input.tap();
   await input.pressSequentially("Check the retry rule first.");
   await input.press("Enter");

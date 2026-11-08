@@ -4,6 +4,7 @@ import { chromeLaunchOptions } from "./tools/browser.mjs";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { startAppServer } from "./tools/app-server.mjs";
+import { standInKeyboard } from "./tools/stand-in-keyboard.mjs";
 import { animationsOf, blankSeen, frames, motionPair, moveOf, pseudos, QUICK, runningAnimations, SCREEN, settle, STANDARD, viewTransitionCalls, watchBlank } from "./motion-steps.mjs";
 
 const build = spawnSync(process.execPath, ["tools/build-app.mjs", "--fixtures"], { stdio: "inherit" });
@@ -5023,10 +5024,11 @@ const boxReads = (p, text) => p.waitForFunction((want) => document.querySelector
 const boxEmpty = (p) => boxReads(p, "");
 
 for (const [name, size] of [["a phone", PHONE], ["an iPad upright", IPAD_UPRIGHT]])
-  it("Server Chat on " + name + ": Return in the message box starts a new line and sends nothing, Send sends it, and Cmd or Ctrl plus Return sends", size, async (p) => {
+  it("Server Chat on " + name + " with the on-screen keyboard up: Return in the message box starts a new line and sends nothing, Send sends it, and Cmd or Ctrl plus Return sends", size, async (p) => {
     const asked = await serverBuildChat(p);
     await chatOpened(p);
     equal(await T(p, "chat-input").getAttribute("enterkeyhint"), "enter", "the Return key's hint");
+    await p.evaluate(standInKeyboard);
     await T(p, "chat-input").click();
     await p.keyboard.type("a");
     await p.keyboard.press("Enter");

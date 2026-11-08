@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import * as engines from "playwright";
 import { chromeLaunchOptions } from "../../../tools/browser.mjs";
 import { startAppServer } from "../../../tools/app-server.mjs";
+import { standInKeyboard } from "../../../tools/stand-in-keyboard.mjs";
 
 const ENGINE = process.env.QD_ENGINE ?? "chromium";
 const EXPECT = process.env.QD_EXPECT ?? "";
@@ -158,7 +159,7 @@ const hold = async (p, message) => {
 };
 
 const cases = [];
-const it = (name, size, run, probe = false) => cases.push({ name: "[" + ENGINE + "] " + name, size, run, probe });
+const it = (name, size, run, probe = false, hardware = false) => cases.push({ name: "[" + ENGINE + "] " + name, size, run, probe, hardware });
 
 for (const [label, width, height] of [
   ["390 x 500, the keyboard's height taken off", 390, 500],
@@ -293,22 +294,61 @@ it("Chat on the Mac (1512 x 982): Option+Return sends nothing, as Shift+Return",
   assert.ok(value.startsWith(DRAFT), `the box after Option+Return: ${JSON.stringify(value)}`);
 });
 
+for (const [label, width, height, hardware] of [
+  ["an iPad upright (744 x 1133) with a hardware keyboard", 744, 1133, true],
+  ["an iPad sideways (1133 x 744) with a hardware keyboard", 1133, 744, true],
+  ["a phone (390 x 844) with the on-screen keyboard up", 390, 844, false],
+]) {
+  it(
+    `Chat on ${label}: a tap on Send sends the message, and the box keeps focus`,
+    phone(width, height),
+    async (p) => {
+      await p.goto(origin + "/chat/iris");
+      await T(p, "chat-bot-message").first().waitFor();
+      await T(p, "chat-input").tap();
+      await p.keyboard.type("Sent with a tap.");
+      await T(p, "chat-send").tap();
+      await p
+        .waitForFunction(() => document.querySelector('[data-testid="chat-input"]').value === "", null, { timeout: 3000 })
+        .catch(() => assert.fail("the tap on Send sent nothing: the box still holds the text"));
+      await T(p, "chat-my-message").filter({ hasText: "Sent with a tap." }).first().waitFor();
+      assert.equal(await p.evaluate(() => document.activeElement?.getAttribute("data-testid")), "chat-input", "where the focus is after the tap on Send");
+    },
+    false,
+    hardware,
+  );
+}
+
 for (const [label, width, height] of [
   ["an iPad upright (744 x 1133)", 744, 1133],
   ["an iPad sideways (1133 x 744)", 1133, 744],
-  ["a phone (390 x 844)", 390, 844],
 ]) {
-  it(`Chat on ${label}: a tap on Send sends the message, and the box keeps focus`, phone(width, height), async (p) => {
+  it(
+    `Chat on ${label} with a hardware keyboard: Return sends the message`,
+    phone(width, height),
+    async (p) => {
+      await p.goto(origin + "/chat/iris");
+      await T(p, "chat-bot-message").first().waitFor();
+      await T(p, "chat-input").tap();
+      await p.keyboard.type("Sent with Return.");
+      await p.keyboard.press("Enter");
+      await p
+        .waitForFunction(() => document.querySelector('[data-testid="chat-input"]').value === "", null, { timeout: 3000 })
+        .catch(async () => assert.fail(`Return did not send: the box holds ${JSON.stringify(await T(p, "chat-input").inputValue())}`));
+      await T(p, "chat-my-message").filter({ hasText: "Sent with Return." }).first().waitFor();
+    },
+    false,
+    true,
+  );
+  it(`Chat on ${label} with the on-screen keyboard up: Return starts a new line and sends nothing`, phone(width, height), async (p) => {
     await p.goto(origin + "/chat/iris");
     await T(p, "chat-bot-message").first().waitFor();
     await T(p, "chat-input").tap();
-    await p.keyboard.type("Sent with a tap.");
-    await T(p, "chat-send").tap();
-    await p
-      .waitForFunction(() => document.querySelector('[data-testid="chat-input"]').value === "", null, { timeout: 3000 })
-      .catch(() => assert.fail("the tap on Send sent nothing: the box still holds the text"));
-    await T(p, "chat-my-message").filter({ hasText: "Sent with a tap." }).first().waitFor();
-    assert.equal(await p.evaluate(() => document.activeElement?.getAttribute("data-testid")), "chat-input", "where the focus is after the tap on Send");
+    await p.keyboard.type("First");
+    await p.keyboard.press("Enter");
+    await p.keyboard.type("Second");
+    await frames(p);
+    assert.equal(await T(p, "chat-input").inputValue(), "First\nSecond", "the box after Return");
   });
 }
 
@@ -318,6 +358,7 @@ try {
     if (only.length && !only.some((part) => item.name.includes(part))) continue;
     if (EXPECT && !item.probe) continue;
     const context = await browser.newContext({ ...item.size, reducedMotion: "reduce" });
+    if (item.size.hasTouch && !item.hardware) await context.addInitScript(standInKeyboard);
     const page = await context.newPage();
     page.setDefaultTimeout(5000);
     const errors = [];

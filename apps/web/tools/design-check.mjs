@@ -6,6 +6,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { measure, measurePills } from "./layout-measure.mjs";
+import { standInKeyboard } from "./stand-in-keyboard.mjs";
 import { measureUx } from "./ux-measure.mjs";
 
 const OUT = path.join("design-check", "shots");
@@ -151,6 +152,7 @@ const returnNewline = async (vp, p) => {
   const mine = p.locator(T("chat-my-message"));
   await input.waitFor();
   const sent = await mine.count();
+  await p.evaluate(standInKeyboard);
   await input.fill("Check the retry rule first.");
   await input.press("Enter");
   await input.pressSequentially("Then run the build once more.");
