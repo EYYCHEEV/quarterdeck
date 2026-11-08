@@ -22,6 +22,7 @@ import { QuoteBlock } from "./quote";
 import { SecretCard, SecretLine } from "./secret-box";
 
 const carriesFiles = (event: DragEvent) => event.dataTransfer?.types.includes("Files") ?? false;
+const PAGE_OVERLAP = 36;
 
 const refusal = (error: unknown): Pick<PendingSend, "reason" | "retry"> => {
   if (error instanceof RateLimited) return { reason: SEND_RATE_TEXT, retry: true };
@@ -221,6 +222,11 @@ export function ChatScreen({ botId }: { botId: string }) {
     setRefused([]);
     setDraft({ text: "", quote: null, files: [] });
     return true;
+  };
+
+  const page = (direction: -1 | 1) => {
+    const box = pane.current;
+    if (box) box.scrollBy(0, direction * Math.max(0, box.clientHeight - PAGE_OVERLAP));
   };
 
   const attach = (list: File[]) => {
@@ -424,6 +430,7 @@ export function ChatScreen({ botId }: { botId: string }) {
         draft={draft}
         onDraft={setDraft}
         onSend={send}
+        onPage={page}
         inputRef={input}
         onAttach={attach}
         onUnattach={unattach}

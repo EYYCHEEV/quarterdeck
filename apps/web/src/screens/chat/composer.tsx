@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Clipboa
 import type { ChatDraft } from "../../data/session";
 import { looksLikeSecret, SECRET_TEXT } from "../../domain/secrets";
 import type { World } from "../../domain/types";
-import { enterSends, watchKeyboard, type KeyboardWatch } from "../../platform/keyboard";
+import { enterSends, pageKey, watchKeyboard, type KeyboardWatch } from "../../platform/keyboard";
 import { useFilePicker, type PickSource } from "../../platform/pick-files";
 import { Button } from "../../ui/button";
 import { cx } from "../../ui/cx";
@@ -103,6 +103,7 @@ export function Composer({
   draft,
   onDraft,
   onSend,
+  onPage,
   cards,
   inputRef,
   onAttach,
@@ -117,6 +118,7 @@ export function Composer({
   draft: ChatDraft;
   onDraft: (draft: ChatDraft) => void;
   onSend: () => boolean;
+  onPage: (direction: -1 | 1) => void;
   cards: ReactNode;
   inputRef: RefObject<HTMLTextAreaElement | null>;
   onAttach: (files: File[]) => void;
@@ -327,6 +329,12 @@ export function Composer({
               onPaste={pasted}
               enterKeyHint="enter"
               onKeyDown={(event) => {
+                const direction = pageKey(event.nativeEvent, event.currentTarget);
+                if (direction !== 0) {
+                  event.preventDefault();
+                  onPage(direction);
+                  return;
+                }
                 if (!enterSends(event.nativeEvent, keyboard.current?.up() ?? false)) return;
                 event.preventDefault();
                 submit();

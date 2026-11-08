@@ -19,6 +19,19 @@ export function enterSends(event: ReturnKey, keyboardUp: boolean): boolean {
   return !event.shiftKey && !event.altKey && !keyboardUp;
 }
 
+type PageKeyInput = ReturnKey & Pick<KeyboardEvent, "defaultPrevented">;
+type Scroller = { scrollTop: number; scrollHeight: number; clientHeight: number };
+
+export function pageKey(event: PageKeyInput, box: Scroller): -1 | 0 | 1 {
+  if (event.key !== "PageUp" && event.key !== "PageDown") return 0;
+  if (event.defaultPrevented || event.isComposing || event.keyCode === 229) return 0;
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return 0;
+  const most = Math.max(0, box.scrollHeight - box.clientHeight);
+  const at = Math.min(most, Math.max(0, box.scrollTop));
+  if (event.key === "PageUp") return at > 1 ? 0 : -1;
+  return at < most - 1 ? 0 : 1;
+}
+
 export function watchKeyboard(win: KeyboardWindow): KeyboardWatch {
   const viewport = win.visualViewport;
   const tallest = new Map<number, number>();
