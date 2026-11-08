@@ -1043,7 +1043,7 @@ test("without cursor listed, the timed refresh reads the newest page as before a
 
 const STREAM_OPEN = 1;
 const afterCalls = (h, from = 0) => h.calls.slice(from).filter((call) => call.method === "GET" && call.path.includes("&after="));
-const creditsBefore = (h, at) => h.calls.filter((call) => call.at < at && call.at >= at - 60_000).reduce((total, call) => total + (call.method === "POST" ? 2 : 1), 0);
+const creditsBefore = (h, at) => h.calls.filter((call) => call.at < at && call.at > at - 60_000).reduce((total, call) => total + (call.method === "POST" ? 2 : 1), 0);
 
 test("with cursor listed and the chat open, a refresh that names chats makes the next request the read after the newest held message, at once and with no list read before it, and the list read follows five seconds later", async () => {
   const { h, watcher } = await cursorThread();
@@ -1192,10 +1192,13 @@ test("with the automatic budget spent, a refresh that names chats waits for a cr
     await h.refresh();
     await pass(h, 100);
   }
-  assert.equal(afterCalls(h, from).length, 21 - used);
+  const inside = afterCalls(h, from);
+  assert.equal(inside.length, 21 - used);
+  for (const call of inside) assert.ok(creditsBefore(h, call.at) + STREAM_OPEN <= 20, "read at " + call.at + " with " + creditsBefore(h, call.at) + " credits in the minute before");
   await h.time.advance(60_000);
   assert.equal(watcher.seen.at(-1).messages.at(-1).text, "reply 39");
-  for (const call of afterCalls(h, from)) assert.ok(creditsBefore(h, call.at) + STREAM_OPEN <= 20, "read at " + call.at + " with " + creditsBefore(h, call.at) + " credits in the minute before");
+  const waited = afterCalls(h, from).slice(inside.length);
+  assert.ok(waited.length >= 1 && waited[0].at >= 60_000, "the read that waited started at " + waited[0]?.at);
 });
 
 test("leaving the chat before the read after the newest held message starts cancels it, and opening the chat again reads the list first as it does without the event", async () => {
