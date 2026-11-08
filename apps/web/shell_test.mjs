@@ -688,12 +688,12 @@ const dotLines = (p) =>
     }),
   );
 
-for (const [where, size] of [["a phone", PHONE], ["iPad upright", IPAD_UPRIGHT], ["iPad sideways", TOUCH_SIDEWAYS], ["the Mac", MAC]])
-  it("Queue on " + where + ": a changed card's dot sits on the middle of its title's first line, for a one-line title and a wrapping one", size, async (p) => {
+for (const [where, size, wraps] of [["a phone", PHONE, true], ["iPad upright", IPAD_UPRIGHT, false], ["iPad sideways", TOUCH_SIDEWAYS, true], ["the Mac", MAC, true]])
+  it("Queue on " + where + ": a changed card's dot sits on the middle of its title's first line, " + (wraps ? "for a one-line title and a wrapping one" : "where every title fits on one line"), size, async (p) => {
     await open(p, "/queue");
     await T(p, "changed-dot").first().waitFor();
     const rows = await dotLines(p);
-    equal([rows.some((row) => !row.wraps), rows.some((row) => row.wraps)], [true, true], "a one-line title and a wrapping title among the rows with a dot");
+    equal([rows.some((row) => !row.wraps), rows.some((row) => row.wraps)], [true, wraps], "a one-line title and a wrapping title among the rows with a dot");
     equal(rows.filter((row) => Math.abs(row.dot) > 1).map((row) => row.id + ": dot " + row.dot.toFixed(1) + " px, tile " + row.tile.toFixed(1) + " px"), [], "rows whose dot is more than 1 px off the middle of the first line");
   });
 
