@@ -2,9 +2,9 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 
 export const BOTS_WORDS = {
-  approve: "Approve in the approval app for now.",
-  history: "Joins history is in the approval app for now.",
-  waiting: "Approve it in the approval app when it asks.",
+  approve: "Approve in Backchannel for now.",
+  history: "Joins history is in Backchannel for now.",
+  waiting: "Approve it in Backchannel when it asks.",
   list: "Could not load the bots.",
   failed: "Could not do that.",
   gone: "That request is no longer waiting.",

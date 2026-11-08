@@ -151,14 +151,14 @@ const returnNewline = async (vp, p) => {
   const input = p.locator(T("chat-input"));
   const mine = p.locator(T("chat-my-message"));
   await input.waitFor();
-  const sent = await mine.count();
+  await mine.first().waitFor();
   await p.evaluate(standInKeyboard);
   await input.fill("Check the retry rule first.");
   await input.press("Enter");
   await input.pressSequentially("Then run the build once more.");
   const value = await input.inputValue();
   if (value !== "Check the retry rule first.\nThen run the build once more.") throw new Error(`Return did not start a new line: ${JSON.stringify(value)}`);
-  if ((await mine.count()) !== sent) throw new Error("Return sent the message");
+  if (await mine.filter({ hasText: "Check the retry rule first." }).count()) throw new Error("Return sent the message");
   if (!(await input.evaluate((el) => el.scrollHeight <= el.clientHeight + 1))) throw new Error("the box did not grow to show the second line");
 };
 const selectInFirstReply = async (vp, p) => {
