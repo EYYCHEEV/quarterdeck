@@ -20,6 +20,10 @@ class FakeMail:
         self.sent.append((recipient, subject, body, resend_key))
         return f"sent-{len(self.sent)}"
 
+    def send_answer(self, recipient, subject, body, resend_key):
+        self.send(recipient, subject, body, resend_key)
+        return None
+
     def send_chat(self, recipient, subject, body, resend_key):
         return self.send(recipient, subject, body, resend_key), json.loads(body)["fresh"]
 
