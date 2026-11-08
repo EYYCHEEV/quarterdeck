@@ -369,6 +369,38 @@ for (const [label, width, height] of [
   });
 }
 
+const heightRule = (p) =>
+  p.evaluate(() => {
+    const view = document.querySelector('[data-testid="chat"]');
+    let found = "";
+    const walk = (rules) => {
+      for (const rule of rules) {
+        if (rule instanceof CSSMediaRule) {
+          if (matchMedia(rule.media.mediaText).matches) walk(rule.cssRules);
+        } else if (rule instanceof CSSStyleRule) {
+          if (rule.style.height && view.matches(rule.selectorText)) found = rule.style.height;
+        } else if (rule.cssRules) walk(rule.cssRules);
+      }
+    };
+    for (const sheet of document.styleSheets) walk(sheet.cssRules);
+    return found;
+  });
+
+for (const [width, height, unit] of [
+  [744, 1133, "svh"],
+  [767, 1024, "svh"],
+  [768, 1024, "dvh"],
+  [820, 1180, "dvh"],
+  [834, 1194, "dvh"],
+  [1133, 744, "dvh"],
+]) {
+  it(`Chat at ${width} x ${height}: the chat screen is as tall as the ${unit === "svh" ? "small" : "dynamic"} viewport (100${unit}), switching at 768 px as T3 Code does`, phone(width, height), async (p) => {
+    await p.goto(origin + "/chat/iris");
+    await T(p, "chat-bot-message").first().waitFor();
+    assert.equal(await heightRule(p), "100" + unit, "the chat screen's height rule");
+  });
+}
+
 const browser = await engines[ENGINE].launch(ENGINE === "chromium" ? chromeLaunchOptions({ args: ["--no-sandbox"] }) : {});
 try {
   for (const item of cases) {
