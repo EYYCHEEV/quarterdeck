@@ -1062,6 +1062,46 @@ test("with cursor listed and the chat open, a refresh that names chats makes the
   assert.equal(h.calls[from + 1].at - refreshedAt, 5_000);
 });
 
+test("with cursor listed and the chat open, the read after a refresh puts the new bot message in its row of the held chat list in the same update, with no list read before it and the dot off, and the list read that follows with the same newest message changes nothing", async () => {
+  const { h } = await cursorThread();
+  await h.source.chat.listChats();
+  const rows = await h.watchRows();
+  await h.time.advance(1_000);
+  const from = h.calls.length;
+  const heard = rows.heard.length;
+  const reply = h.add("steward", "bot", "a reply");
+  await h.refresh();
+  await pass(h, 100);
+  assert.deepEqual(h.chatRequests(from), [AFTER("steward", "m3")]);
+  assert.equal(rows.heard.length, heard + 1);
+  const row = (await h.source.chat.listChats()).find((one) => one.bot.id === "steward");
+  assert.deepEqual([row.preview, row.at, row.unread], ["a reply", reply.at, false]);
+  assert.deepEqual(h.chatRequests(from), [AFTER("steward", "m3")]);
+  await pass(h, 5_000);
+  assert.deepEqual(h.chatRequests(from), [AFTER("steward", "m3"), LIST]);
+  assert.equal(rows.heard.length, heard + 1);
+  const later = (await h.source.chat.listChats()).find((one) => one.bot.id === "steward");
+  assert.deepEqual([later.preview, later.at, later.unread], ["a reply", reply.at, false]);
+});
+
+test("with cursor listed and the chat open, a list read that lands after the read after a refresh and shows a newer message wins over the row that read gave", async () => {
+  const { h } = await cursorThread();
+  await h.source.chat.listChats();
+  const rows = await h.watchRows();
+  await h.time.advance(1_000);
+  const from = h.calls.length;
+  h.add("steward", "bot", "a reply");
+  await h.refresh();
+  await pass(h, 100);
+  const heard = rows.heard.length;
+  const newer = h.add("steward", "bot", "newer");
+  await pass(h, 5_000);
+  assert.equal(h.chatRequests(from)[1], LIST);
+  assert.equal(rows.heard.length, heard + 1);
+  const row = (await h.source.chat.listChats()).find((one) => one.bot.id === "steward");
+  assert.deepEqual([row.preview, row.at], ["newer", newer.at]);
+});
+
 test("twenty refreshes while a read after the newest held message is in flight make exactly one more read after it, no list read inside the spacing, and credits inside the automatic budget of twenty-one", async () => {
   const { s, h, watcher } = await cursorThread();
   const from = h.calls.length;
