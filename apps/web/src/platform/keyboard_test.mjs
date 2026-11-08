@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { loadTs } from "../../tools/load-ts.mjs";
 
-const { enterSends, watchKeyboard } = await loadTs("src/platform/keyboard.ts");
+const { enterSends, pageKey, watchKeyboard } = await loadTs("src/platform/keyboard.ts");
 
 const key = (over = {}) => ({ key: "Enter", shiftKey: false, altKey: false, metaKey: false, ctrlKey: false, isComposing: false, keyCode: 13, ...over });
 
@@ -128,3 +128,26 @@ test("stop takes the resize listener away", () => {
   watch.stop();
   assert.equal(s.listeners.size, 0);
 });
+
+const page = (name, over = {}) => ({ key: name, shiftKey: false, altKey: false, metaKey: false, ctrlKey: false, isComposing: false, keyCode: 33, defaultPrevented: false, ...over });
+const ONE_LINE = { scrollTop: 0, scrollHeight: 44, clientHeight: 44 };
+const TALL_TOP = { scrollTop: 0, scrollHeight: 400, clientHeight: 208 };
+const TALL_MIDDLE = { scrollTop: 100, scrollHeight: 400, clientHeight: 208 };
+const TALL_END = { scrollTop: 192, scrollHeight: 400, clientHeight: 208 };
+
+for (const [name, event, box, answer] of [
+  ["Page Up in a one-line box pages the list up", page("PageUp"), ONE_LINE, -1],
+  ["Page Down in a one-line box pages the list down", page("PageDown"), ONE_LINE, 1],
+  ["Page Up at the top of a tall draft pages the list up", page("PageUp"), TALL_TOP, -1],
+  ["Page Down at the top of a tall draft scrolls the draft, not the list", page("PageDown"), TALL_TOP, 0],
+  ["Page Up in the middle of a tall draft scrolls the draft, not the list", page("PageUp"), TALL_MIDDLE, 0],
+  ["Page Down at the end of a tall draft pages the list down", page("PageDown"), TALL_END, 1],
+  ["Shift+Page Up is left to the box", page("PageUp", { shiftKey: true }), ONE_LINE, 0],
+  ["Option, Ctrl or Cmd with Page Up is left to the box", page("PageUp", { altKey: true }), ONE_LINE, 0],
+  ["a page key inside an IME composition is left to the box", page("PageDown", { isComposing: true }), ONE_LINE, 0],
+  ["a page key with keyCode 229 is left to the box", page("PageDown", { keyCode: 229 }), ONE_LINE, 0],
+  ["a page key something else already handled is left alone", page("PageUp", { defaultPrevented: true }), ONE_LINE, 0],
+  ["other keys never page the list", page("ArrowUp"), ONE_LINE, 0],
+]) {
+  test(name, () => assert.equal(pageKey(event, box), answer));
+}

@@ -417,6 +417,53 @@ for (const [label, width, height, most] of [
   });
 }
 
+const still = (p) =>
+  p.evaluate(
+    () =>
+      new Promise((done) => {
+        const pane = document.querySelector('[data-testid="chat-scroll"]');
+        let last = pane.scrollTop;
+        let same = 0;
+        let left = 240;
+        const step = () => {
+          const now = pane.scrollTop;
+          same = now === last ? same + 1 : 0;
+          last = now;
+          if (same >= 6 || --left <= 0) done([Math.round(now), Math.round(window.scrollY)]);
+          else requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+      }),
+  );
+
+for (const [label, size, hit, hardware] of [
+  ["the Mac (1512 x 982)", MAC, "click", false],
+  ["an iPad upright (744 x 1133) with a hardware keyboard", phone(744, 1133), "tap", true],
+  ["an iPad sideways (1133 x 744) with a hardware keyboard", phone(1133, 744), "tap", true],
+]) {
+  it(
+    `Chat on ${label}: Page Up and Page Down typed in a one-line box page the list, and the window stays still`,
+    size,
+    async (p) => {
+      await p.goto(origin + "/chat/iris");
+      await T(p, "chat-bot-message").first().waitFor();
+      await T(p, "chat-input")[hit]();
+      await p.keyboard.type("One line.");
+      const [start] = await still(p);
+      await p.keyboard.press("PageUp");
+      const [up, upPage] = await still(p);
+      await p.keyboard.press("PageDown");
+      const [down, downPage] = await still(p);
+      assert.ok(up < start - 100, `Page Up moves the list up (from ${start} to ${up})`);
+      assert.ok(down > up + 100, `Page Down moves it back down (from ${up} to ${down})`);
+      assert.deepEqual([upPage, downPage], [0, 0], "the window's scroll after each key");
+      assert.equal(await T(p, "chat-input").inputValue(), "One line.", "the box keeps its text");
+    },
+    false,
+    hardware,
+  );
+}
+
 const browser = await engines[ENGINE].launch(ENGINE === "chromium" ? chromeLaunchOptions({ args: ["--no-sandbox"] }) : {});
 try {
   for (const item of cases) {
