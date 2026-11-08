@@ -4,8 +4,8 @@ import { loadTs } from "../../tools/load-ts.mjs";
 import { card, option } from "./fixture.mjs";
 
 const { startAnswer, answerStep, carryAnswer, sendButton, notePlaceholder, confirmPrompt, receiptText, cardKey, CONFIRM_GUARD_MS } = await loadTs("src/domain/answer.ts");
-const { sendingText, failedText } = await loadTs("src/domain/card-words.ts");
-const { RateLimited, NotConfirmed, Refused } = await loadTs("src/data/source.ts");
+const { sendingText, failedText, canTryAgain, NOT_SURE_TEXT, SIGN_IN_AGAIN_TEXT } = await loadTs("src/domain/card-words.ts");
+const { RateLimited, NotConfirmed, Refused, TimedOut, FreshSignInRequired } = await loadTs("src/data/source.ts");
 
 const twoWay = card({ id: "two", options: [option("A", "Show 5 per group", { pick: true }), option("B", "Show all results"), option("C", "Delete history", { door: "one-way", risk: "Gone for good." })] });
 const oneWay = card({ id: "one", options: [option("A", "Run it tonight", { pick: true, door: "one-way", risk: "Rooms lose their bridge." }), option("B", "Wait for Wednesday")] });
@@ -99,6 +99,21 @@ test("every other failed send says Not sent. Try again., also when the send befo
   }
   const limited = run(twoWay, [{ type: "send", at: 0 }, { type: "failed", error: new RateLimited() }]);
   assert.equal(failedText(run(twoWay, [{ type: "send", at: 0 }, { type: "failed", error: new NotConfirmed() }], limited)), "Not sent. Try again.");
+});
+
+test("a send cut for time says it may not have been sent and a send that meets a fresh sign-in says to sign in again; both keep his choice and note and offer no Try again", () => {
+  for (const [error, words] of [[new TimedOut(), NOT_SURE_TEXT], [new FreshSignInRequired(), SIGN_IN_AGAIN_TEXT]]) {
+    const failed = run(twoWay, [{ type: "choose", choice: { kind: "option", letter: "B" } }, { type: "note", text: "After Friday." }, { type: "send", at: 0 }, { type: "failed", error }]);
+    assert.deepEqual([failed.phase, failed.choice, failed.note, failedText(failed), canTryAgain(failed)], ["failed", { kind: "option", letter: "B" }, "After Friday.", words, false], error.name);
+  }
+});
+
+test("a plain failure after one of those says Not sent. Try again. and offers Try again", () => {
+  for (const error of [new TimedOut(), new FreshSignInRequired()]) {
+    const before = run(twoWay, [{ type: "send", at: 0 }, { type: "failed", error }]);
+    const plain = run(twoWay, [{ type: "send", at: 0 }, { type: "failed", error: new NotConfirmed() }], before);
+    assert.deepEqual([failedText(plain), canTryAgain(plain)], ["Not sent. Try again.", true], error.name);
+  }
 });
 
 test("approval cards approve or reject; a one-way approval asks before Approve only", () => {

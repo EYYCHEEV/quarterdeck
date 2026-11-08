@@ -128,7 +128,7 @@ function serve(post) {
   };
 }
 
-test("a hung answer POST is aborted after twenty seconds and the answer reads back as not confirmed", async () => {
+test("a hung answer POST is aborted after twenty seconds and the answer reads back as timed out, a kind of not confirmed that still checks the card", async () => {
   const h = serve((path, init) => hang(init));
   await h.boot();
   const from = h.calls.length;
@@ -140,7 +140,7 @@ test("a hung answer POST is aborted after twenty seconds and the answer reads ba
   await h.time.advance(2_000);
   await spin();
   assert.equal(outcome.done, true, "the POST was never aborted");
-  assert.equal(outcome.error?.name, "NotConfirmed");
+  assert.equal(outcome.error?.name, "TimedOut");
   assert.deepEqual(h.requests(from), [TOKEN, POST, CARD]);
 });
 
@@ -206,7 +206,7 @@ test("a POST in flight when the tab is hidden is aborted at twenty seconds, and 
   await h.time.advance(21_000);
   await spin();
   assert.equal(outcome.done, true, "the POST was never aborted while hidden");
-  assert.equal(outcome.error?.name, "NotConfirmed");
+  assert.equal(outcome.error?.name, "TimedOut");
   assert.equal(h.lists(from), 1, "no automatic list read while hidden");
   h.show();
   await h.time.advance(6_000);
@@ -268,7 +268,7 @@ test("an aborted answer that the server records late: Try again meets the server
   await h.time.advance(21_000);
   await spin();
   assert.equal(first.done, true, "the POST was never aborted");
-  assert.equal(first.error?.name, "NotConfirmed");
+  assert.equal(first.error?.name, "TimedOut");
   assert.equal(h.server.recorded.length, 0);
   h.server.record();
   const second = settle(h.answer());
