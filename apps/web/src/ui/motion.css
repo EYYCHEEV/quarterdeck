@@ -1,0 +1,161 @@
+@reference "./theme.css";
+
+.press {
+  transition: scale --theme(--transition-duration-quick inline) --theme(--ease-arrive inline);
+}
+
+.press:active {
+  scale: 0.97;
+}
+
+.arrive,
+.rise,
+.alert,
+[data-row="in"] {
+  transition: opacity --theme(--transition-duration-standard inline) --theme(--ease-arrive inline);
+}
+
+.rise {
+  transition-property: opacity, translate;
+}
+
+.alert {
+  transition-duration: --theme(--transition-duration-quick inline);
+}
+
+@starting-style {
+  .arrive,
+  .rise,
+  .alert,
+  [data-row="in"] {
+    opacity: 0;
+  }
+
+  .rise {
+    translate: 0 calc(var(--spacing) * 2);
+  }
+}
+
+[open] > summary > .turn {
+  transition: rotate --theme(--transition-duration-quick inline) --theme(--ease-arrive inline);
+}
+
+[data-row="out"] {
+  overflow: hidden;
+  animation: fold --theme(--transition-duration-quick inline) --theme(--ease-leave inline) both;
+}
+
+.leave {
+  animation: leave --theme(--transition-duration-quick inline) --theme(--ease-leave inline) both;
+}
+
+.sending-bar {
+  animation: sending 1200ms cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
+}
+
+[data-leaving],
+[data-leaving] * {
+  transition: none !important;
+}
+
+@keyframes leave {
+  to {
+    opacity: 0;
+    translate: 0 4px;
+  }
+}
+
+@keyframes sending {
+  to {
+    translate: 150% 0;
+  }
+}
+
+@keyframes fold {
+  from {
+    height: var(--fold-h);
+  }
+
+  to {
+    height: 0;
+    padding-block: 0;
+    border-block-width: 0;
+    margin-block-end: var(--fold-gap, 0);
+    opacity: 0;
+  }
+}
+
+:root[data-move~="forward"] {
+  --move: 12px;
+}
+
+:root[data-move~="back"] {
+  --move: -12px;
+}
+
+:root[data-move~="pane"],
+:root[data-move~="live"] {
+  view-transition-name: none;
+}
+
+:root[data-move~="pane"]:not([data-move~="live"]) [data-pane] {
+  view-transition-name: pane;
+}
+
+:root[data-move~="screen"]:not([data-move~="live"]) #stage > aside {
+  view-transition-name: still;
+}
+
+::view-transition {
+  pointer-events: none;
+}
+
+::view-transition-group(*) {
+  animation: none;
+}
+
+::view-transition-old(root),
+::view-transition-old(pane) {
+  animation: screen-leave --theme(--transition-duration-standard inline) --theme(--ease-leave inline) both;
+}
+
+:root[data-move~="fade"]::view-transition-old(root),
+:root[data-move~="fade"]::view-transition-old(pane) {
+  animation-name: screen-leave-fade;
+}
+
+::view-transition-old(still) {
+  display: none;
+}
+
+:root[data-move~="live"][data-move~="screen"] #main-scroll,
+:root[data-move~="live"][data-move~="pane"] [data-pane] {
+  animation: screen-arrive --theme(--transition-duration-screen inline) --theme(--ease-arrive inline) both;
+}
+
+@keyframes screen-leave {
+  to {
+    opacity: 0;
+    translate: calc(-1 * var(--move)) 0;
+  }
+}
+
+@keyframes screen-leave-fade {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes screen-arrive {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}

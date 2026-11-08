@@ -1,0 +1,19 @@
+{
+  "bot": {
+    "id": "alba",
+    "note": "Project lead"
+  },
+  "messages": [
+    {
+      "id": "alba-m1",
+      "from": "bot",
+      "text": "The flow page is ready for your feedback.",
+      "at": "2026-11-05T22:00:00-05:00",
+      "refs": []
+    }
+  ],
+  "seenUpTo": null,
+  "seenAt": null,
+  "working": null,
+  "older": false
+}

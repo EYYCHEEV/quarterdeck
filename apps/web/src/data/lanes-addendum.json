@@ -1,0 +1,330 @@
+{
+  "qd": "lanes-addendum/1",
+  "for": "Quarterdeck final design PR 3: what item 1 changes in the example data",
+  "author": "Quarterdeck contributors",
+  "written": "Tue Nov 3, 2026 (ET)",
+  "how": [
+    "Merge by id into the example data. `lanesChanged` replaces `name`, `status` and `now` of the Lane where it gives them, and `activityText` replaces the text of the Activity line with that time and bot (time, bot and refs stay, so no last-looked count changes). `activityAdded` appends these Activity lines to the Lane (the build orders Activity newest first). `newLanes`, `newTaskCards`, `answeredOutcome`, `evidence` and `aboutLines` add one Lane and one answered sign-off Task Card with its evidence.",
+    "Every line in `activityAdded` is older than its Lane's last-looked time (so it changes no new count) except two: l-sw2's Sun 4:00 PM line and l-da1's Mon 9:00 AM line. addendum-seen.json restates every Lane's new count and the project counts.",
+    "`waitingComputed` is what the build counts from the rows. The stored `waiting` of l-set is 3 only because it counts the FYI card alba-2 that the design spec removes; the computed total is 9. The blocker on c1 uses c1's new title from the the ruling sweep (the addendum item 6); every id stays.",
+    "The new Lane adds no `tasks` rows, so the Project view's 'Tasks: N done · N in progress' is unchanged."
+  ],
+  "lanesChanged": {
+    "l-set": {
+      "name": "Settings",
+      "now": "Alba is building the Appearance section; Shelvorn is drafting the Account page.",
+      "why": "the ruling removes the feature for good. the content lead's content call: the Lane is named Settings and its now line and two Activity texts speak of Appearance. The other worker's the ruling sweep (item 6) makes the same changes in the rest of the example data.",
+      "activityText": [
+        {
+          "at": "2026-11-02T09:50:00-05:00",
+          "bot": "Alba",
+          "text": "Wired Appearance to follow the device: System, Light or Dark."
+        },
+        {
+          "at": "2026-11-01T18:20:00-05:00",
+          "bot": "Alba",
+          "text": "Listed the Settings sections: Bots, Appearance, Add-ons, Storage, Account."
+        }
+      ]
+    },
+    "l-sw2": {
+      "status": "Active",
+      "now": "Shelvorn is waiting for your answer on retries; Dr. Kivo checks the bridge after that.",
+      "was": {
+        "status": "Done",
+        "now": "Done. The bridge change waits on a Task Card."
+      },
+      "why": "A Done Lane is a read-only record and this one still holds the waiting card shelvorn-2. It is Active, in its Check stage, with the blocker 'Waiting on you' linked to shelvorn-2 (the content lead's call)."
+    }
+  },
+  "activityAdded": {
+    "l-sea": [
+      {
+        "at": "2026-10-31T11:00:00-04:00",
+        "bot": "Dr. Kivo",
+        "text": "Plan done: Search groups its results by type, recent searches first.",
+        "mailRef": null,
+        "pageRef": null,
+        "artifactRef": null
+      }
+    ],
+    "l-sid": [
+      {
+        "at": "2026-10-28T15:00:00-04:00",
+        "bot": "Alba",
+        "text": "Plan done: one sidebar and one page layout for every screen.",
+        "mailRef": null,
+        "pageRef": null,
+        "artifactRef": null
+      },
+      {
+        "at": "2026-10-30T12:40:00-04:00",
+        "bot": "Shelvorn",
+        "text": "Checked the sidebar and layout: 4 of 4 checks pass.",
+        "mailRef": null,
+        "pageRef": null,
+        "artifactRef": null
+      },
+      {
+        "at": "2026-10-30T12:41:00-04:00",
+        "bot": "Alba",
+        "text": "Lane done.",
+        "mailRef": null,
+        "pageRef": null,
+        "artifactRef": null
+      }
+    ],
+    "l-sw2": [
+      {
+        "at": "2026-10-20T15:00:00-04:00",
+        "bot": "Shelvorn",
+        "text": "Plan done: how the bridge handles a failed message.",
+        "mailRef": null,
+        "pageRef": null,
+        "artifactRef": null
+      },
+      {
+        "at": "2026-11-01T16:00:00-05:00",
+        "bot": "Shelvorn",
+        "text": "Asked you whether the bridge should retry a failed message: Task Card shelvorn-2. The Check waits on your answer.",
+        "mailRef": null,
+        "pageRef": null,
+        "artifactRef": null
+      }
+    ],
+    "l-da1": [
+      {
+        "at": "2026-10-29T11:00:00-04:00",
+        "bot": "Dale",
+        "text": "Set the stages for the export: seven in all.",
+        "mailRef": null,
+        "pageRef": null,
+        "artifactRef": null
+      },
+      {
+        "at": "2026-10-29T16:00:00-04:00",
+        "bot": "Dale",
+        "text": "Plan done: Title, Lane and State are the first columns.",
+        "mailRef": null,
+        "pageRef": null,
+        "artifactRef": null
+      },
+      {
+        "at": "2026-10-30T10:00:00-04:00",
+        "bot": "Dale",
+        "text": "Design done: the column order is written down.",
+        "mailRef": null,
+        "pageRef": null,
+        "artifactRef": null
+      },
+      {
+        "at": "2026-10-30T15:00:00-04:00",
+        "bot": "Dale",
+        "text": "Prototype done: a ten-row file opens in a spreadsheet. Added 12 build steps.",
+        "mailRef": null,
+        "pageRef": null,
+        "artifactRef": null
+      },
+      {
+        "at": "2026-10-31T12:00:00-04:00",
+        "bot": "Dale",
+        "text": "Finished three build steps: the folder, the example cards and the Title column.",
+        "mailRef": null,
+        "pageRef": null,
+        "artifactRef": null
+      },
+      {
+        "at": "2026-11-02T09:00:00-05:00",
+        "bot": "Dr. Kivo",
+        "text": "Asked you which columns the export should have: Task Card dr-kivo-1.",
+        "mailRef": "MT-104.2",
+        "pageRef": null,
+        "artifactRef": null
+      }
+    ]
+  },
+  "newLanes": [
+    {
+      "id": "l-da2",
+      "projectId": "dale-tools",
+      "name": "Dale help text",
+      "status": "Done",
+      "lead": "Dale",
+      "now": "Done. Nothing running.",
+      "activity": [
+        {
+          "at": "2026-11-01T20:41:00-05:00",
+          "bot": "Dale",
+          "text": "Lane done. You signed it off on Task Card dale-1.",
+          "mailRef": null,
+          "pageRef": null,
+          "artifactRef": null
+        },
+        {
+          "at": "2026-10-30T17:35:00-04:00",
+          "bot": "Dale",
+          "text": "Sent the sign-off Task Card dale-1 with its evidence.",
+          "mailRef": null,
+          "pageRef": null,
+          "artifactRef": null
+        },
+        {
+          "at": "2026-10-30T17:30:00-04:00",
+          "bot": "Dr. Kivo",
+          "text": "Checked the help text: 3 of 3 checks pass.",
+          "mailRef": null,
+          "pageRef": null,
+          "artifactRef": null
+        },
+        {
+          "at": "2026-10-30T16:00:00-04:00",
+          "bot": "Dale",
+          "text": "Wrote the help text for the three Dale tools.",
+          "mailRef": null,
+          "pageRef": null,
+          "artifactRef": null
+        },
+        {
+          "at": "2026-10-29T10:00:00-04:00",
+          "bot": "Dale",
+          "text": "Plan done: help text for the three Dale tools. It ends with your sign-off.",
+          "mailRef": null,
+          "pageRef": null,
+          "artifactRef": null
+        }
+      ],
+      "waiting": 0
+    }
+  ],
+  "newTaskCards": [
+    {
+      "laneId": "l-da2",
+      "card": {
+        "qd": "card/1",
+        "card": "dale-1",
+        "id": "dale-1",
+        "project": "dale-tools",
+        "lane": "Dale help text",
+        "title": "Sign off: Dale help text is done?",
+        "about": "Help text for the three Dale tools.",
+        "context": "The plan for this Lane ends with your sign-off.\nDr. Kivo checked the help text: 3 of 3 checks pass.\nThe evidence shows the help screen on a phone.",
+        "ascii": " dale --help, on a phone\n ------------------------------------------\n export   Write Task Cards to a file\n rooms    Count the rooms a change moves\n notes    Print a Lane's notes\n Run dale <tool> --help for its options.",
+        "options": [
+          {
+            "label": "A. Approve",
+            "pick": true,
+            "does": "Marks the Lane Done. It stays as a read-only record.",
+            "cost": "Nothing more.",
+            "risk": "A wording mistake stays until someone reports it.",
+            "undo": "Ask Dale to reopen the Lane."
+          },
+          {
+            "label": "B. Reject",
+            "does": "Sends the help text back to Dale for another round.",
+            "cost": "About an hour.",
+            "risk": "The Lane stays open longer.",
+            "undo": "Not needed."
+          }
+        ],
+        "pick_why": "Another bot checked all three tools, and the help screen matches the plan.",
+        "you_do": "Look at the evidence, then pick A or B.",
+        "skip": "If no answer by due: the Lane stays open and we ask again tomorrow.",
+        "due": "2026-11-02T17:00:00-05:00",
+        "door": "two-way",
+        "category": [
+          "try-it"
+        ],
+        "kind": "decision"
+      },
+      "rev": 1,
+      "from": "dale",
+      "at": "2026-10-30T17:35:00-04:00",
+      "comments": [],
+      "answers": [
+        {
+          "qd": "answer/1",
+          "card": "dale-1",
+          "rev": 1,
+          "pick": "A",
+          "note": "Looks good.",
+          "at": "2026-11-01T20:40:00-05:00"
+        }
+      ],
+      "priority": "P2",
+      "type": "approval",
+      "unblocks": [],
+      "edits": [],
+      "seenAt": "2026-11-01T20:38:00-05:00"
+    }
+  ],
+  "answeredOutcome": {
+    "dale-1": {
+      "by": "Dale",
+      "at": "2026-11-01T20:41:00-05:00",
+      "text": "Marked Dale help text Done."
+    }
+  },
+  "aboutLines": {
+    "dale-1": {
+      "about": "Help text for the three Dale tools.",
+      "width": 305.3,
+      "limit": 355.1,
+      "measured": "With 'About: ' in front, B's font stack at 15 px, on our own local page (pages/measure.html, shoot-lanes.mjs), the same method as about-lines.json."
+    }
+  },
+  "evidence": {
+    "cards": {
+      "dale-1": {
+        "doneBy": "Dale",
+        "media": [
+          {
+            "id": "ev-d1-help",
+            "kind": "image",
+            "role": "image",
+            "file": "media/dale-1-help-phone.png",
+            "width": 880,
+            "height": 1120,
+            "caption": "The dale --help screen on a phone",
+            "by": "Dale",
+            "at": "2026-10-30T16:00:00-04:00"
+          }
+        ],
+        "links": [],
+        "check": {
+          "by": "Dr. Kivo",
+          "at": "2026-10-30T17:30:00-04:00",
+          "checks": [
+            {
+              "name": "Every tool has a one-line help",
+              "result": "pass"
+            },
+            {
+              "name": "The help fits a phone screen at 44 columns",
+              "result": "pass"
+            },
+            {
+              "name": "Every example command in the help runs",
+              "result": "pass"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "waitingComputed": {
+    "l-set": 2,
+    "l-sea": 2,
+    "l-mai": 0,
+    "l-sid": 0,
+    "l-sw1": 2,
+    "l-sw2": 1,
+    "l-da1": 2,
+    "l-da2": 0
+  },
+  "ripples": [
+    "The Queue's Answered view gains dale-1 (answered Sun 8:40 PM), after c10 (Sun 9:10 PM). The waiting Queue is unchanged: 9 cards.",
+    "dale-tools has 2 Lanes (was 1); Done (1) there. quarterdeck keeps 4 Lanes with Done (1). heron-forge keeps 2 Lanes.",
+    "l-sw2 leaves the Done group: heron-forge has no Done Lane.",
+    "New counts change for l-sw2 (0 to 1) and l-da1 (1 to 2): heron-forge 1 to 2, dale-tools 1 to 2. quarterdeck stays 3. See addendum-seen.json."
+  ]
+}

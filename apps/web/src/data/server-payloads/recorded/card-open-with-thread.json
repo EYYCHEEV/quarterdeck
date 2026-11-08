@@ -1,0 +1,212 @@
+{
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Content-Security-Policy": "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+    "Referrer-Policy": "strict-origin",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Content-Length": "3708"
+  },
+  "body": {
+    "card": {
+      "id": "repo-lead-7",
+      "project": "Repo",
+      "lane": "Review",
+      "title": "Choose the release cut and its owner",
+      "about": "Repo work that needs a call.",
+      "context": "It is ready for a decision.\nNothing else is waiting on it.",
+      "options": [
+        {
+          "label": "A. Cut from main",
+          "pick": true,
+          "pros": [
+            "Simple",
+            "Fast"
+          ],
+          "cons": [
+            "Less review time"
+          ],
+          "does": "Tags the newest change for release.",
+          "cost": "No extra work for the team.",
+          "risk": "Late fixes wait for the next cut.",
+          "undo": "Delete the tag and cut again.",
+          "tradeoff": "Speed over review time.",
+          "why": "It keeps the release train moving."
+        },
+        {
+          "label": "B. Cut from the review lane",
+          "pros": [
+            "More review time"
+          ],
+          "cons": [
+            "Slower"
+          ],
+          "does": "Tags the newest change for release.",
+          "cost": "No extra work for the team.",
+          "risk": "Late fixes wait for the next cut.",
+          "undo": "Delete the tag and cut again.",
+          "tradeoff": "Speed over review time.",
+          "why": "It keeps the release train moving."
+        }
+      ],
+      "pick_why": "A keeps the schedule.",
+      "you_do": "Pick one option.",
+      "skip": "If no answer by due: the plan goes ahead.",
+      "category": [
+        "strategy"
+      ],
+      "door": "two-way",
+      "kind": "decision",
+      "due": "2026-11-04T18:00:00-05:00",
+      "ascii": "[Launch] --> [Review]",
+      "words": [
+        [
+          "cut",
+          "the moment a release is tagged"
+        ]
+      ],
+      "principles": {
+        "follows": "Small steps",
+        "departs": "None"
+      },
+      "learn": [
+        {
+          "label": "Release guide",
+          "url": "https://example.com/release-guide"
+        }
+      ],
+      "note": "A longer page for this card.\nSecond line of the note."
+    },
+    "rev": 3,
+    "state": "open",
+    "thread": [
+      {
+        "id": "msg-017",
+        "kind": "card",
+        "sender": "repo-lead",
+        "sent": "2026-11-02T09:17:00-05:00",
+        "document": {
+          "qd": "card/1",
+          "card": "repo-lead-7",
+          "id": "repo-lead-7",
+          "project": "Repo",
+          "lane": "Launch",
+          "title": "Choose the release cut",
+          "about": "Repo work that needs a call.",
+          "context": "It is ready for a decision.\nNothing else is waiting on it.",
+          "options": [
+            {
+              "label": "A. Cut from main",
+              "pick": true,
+              "pros": [
+                "Simple",
+                "Fast"
+              ],
+              "cons": [
+                "Less review time"
+              ],
+              "does": "Tags the newest change for release.",
+              "cost": "No extra work for the team.",
+              "risk": "Late fixes wait for the next cut.",
+              "undo": "Delete the tag and cut again.",
+              "tradeoff": "Speed over review time.",
+              "why": "It keeps the release train moving."
+            },
+            {
+              "label": "B. Cut from the review lane",
+              "pros": [
+                "More review time"
+              ],
+              "cons": [
+                "Slower"
+              ],
+              "does": "Tags the newest change for release.",
+              "cost": "No extra work for the team.",
+              "risk": "Late fixes wait for the next cut.",
+              "undo": "Delete the tag and cut again.",
+              "tradeoff": "Speed over review time.",
+              "why": "It keeps the release train moving."
+            }
+          ],
+          "pick_why": "A keeps the schedule.",
+          "you_do": "Pick one option.",
+          "skip": "If no answer by due: the plan goes ahead.",
+          "category": [
+            "strategy"
+          ],
+          "door": "two-way",
+          "kind": "decision",
+          "due": "2026-11-04T18:00:00-05:00",
+          "ascii": "[Launch] --> [Review]",
+          "words": [
+            [
+              "cut",
+              "the moment a release is tagged"
+            ]
+          ],
+          "principles": {
+            "follows": "Small steps",
+            "departs": "None"
+          },
+          "learn": [
+            {
+              "label": "Release guide",
+              "url": "https://example.com/release-guide"
+            }
+          ],
+          "note": "A longer page for this card.\nSecond line of the note."
+        }
+      },
+      {
+        "id": "msg-034",
+        "kind": "comment",
+        "sender": "bot-a",
+        "sent": "2026-11-02T09:34:00-05:00",
+        "document": {
+          "qd": "comment/1",
+          "card": "repo-lead-7",
+          "text": "This one needs a date before the review lane picks it up."
+        }
+      },
+      {
+        "id": "msg-035",
+        "kind": "update",
+        "sender": "repo-lead",
+        "sent": "2026-11-02T09:35:00-05:00",
+        "document": {
+          "qd": "update/1",
+          "card": "repo-lead-7",
+          "rev": 2,
+          "lane": "Review"
+        }
+      },
+      {
+        "id": "msg-038",
+        "kind": "comment",
+        "sender": "repo-lead",
+        "sent": "2026-11-02T09:38:00-05:00",
+        "document": {
+          "qd": "comment/1",
+          "card": "repo-lead-7",
+          "text": "Moved to the review lane as asked."
+        }
+      },
+      {
+        "id": "msg-041",
+        "kind": "update",
+        "sender": "repo-lead",
+        "sent": "2026-11-02T09:41:00-05:00",
+        "document": {
+          "qd": "update/1",
+          "card": "repo-lead-7",
+          "rev": 3,
+          "title": "Choose the release cut and its owner"
+        }
+      }
+    ],
+    "csrf": "csrf-placeholder",
+    "freshUntil": 0
+  }
+}

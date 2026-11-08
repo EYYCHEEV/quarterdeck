@@ -1,0 +1,18 @@
+{
+  "pending": [
+    {"code": "K7P42Q9M", "name": "tarn", "invitedBy": "Captain", "at": "2026-11-05T06:58:00-05:00", "ends": "2026-11-05T07:08:00-05:00"},
+    {"code": "M3X85T2R", "name": "quorl", "invitedBy": "fern", "at": "2026-11-05T06:51:00-05:00", "ends": "2026-11-05T07:01:00-05:00"}
+  ],
+  "invites": [
+    {"id": "inv-12charsxx", "forName": "tarn", "by": "Captain", "ends": "2026-11-06T06:05:00-05:00"},
+    {"id": "inv-anybot001", "forName": null, "by": "fern", "ends": "2026-11-05T09:30:00-05:00"}
+  ],
+  "joined": [
+    {"id": "iris", "name": "iris"},
+    {"id": "alba", "name": "alba"},
+    {"id": "dale", "name": "dale"}
+  ],
+  "approveHere": false,
+  "csrf": "csrf-placeholder",
+  "freshUntil": 0
+}

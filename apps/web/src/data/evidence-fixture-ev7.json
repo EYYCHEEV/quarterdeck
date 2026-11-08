@@ -1,0 +1,242 @@
+{
+  "qd": "evidence-fixtures/2",
+  "testOnly": true,
+  "for": "Quarterdeck final build, EV-7 test: a card whose Page has no file and that cites six evidence items, so the phone folds at three slots",
+  "author": "Quarterdeck contributors",
+  "written": "Tue Nov 3, 2026 (ET)",
+  "rules": [
+    "Test-only: loaded only by the build's test mode, never in the example data, never in anything shown to the Captain as example content.",
+    "The fixture is a taskCards entry in the example data's shape plus its 'evidence' record in the evidence.json shape, plus one fixture-only Page record in the example data's pages shape ('pages'). Paths are relative to this file's folder.",
+    "Fixture-only records are listed in 'fixtureOnly': the card ev7-card and the Page PG-901 (numbers from 900 up are never in the example data). AR-1 and MT-101 are the example data's own records: this card cites them and copies or changes nothing in them. In the example data they belong to alba-1.",
+    "The three pictures are the numbered test pictures in ../theme-sweep/evidence/media, the same files EV-1 in theme-sweep/evidence-fixtures.v2.json uses; they say 'Test fixture only' on them.",
+    "Order of the evidence items is the C-6 order built on main (the design lead's 1:47 PM calls): the pictures of the 'media' list first, in list order (and any video), then the Page, the Artifact and the Mail. For EV-7 that is picture 1, picture 2, picture 3, PG-901, AR-1, MT-101.",
+    "The expectations are the design lead's calls of Tue Nov 3, 1:47 PM (the design lead's review), and the ruling and the design spec lines where they still hold. Each expectation says which. None is left as a suggestion.",
+    "Bot names in 'by' and 'doneBy' are display names (bots[].name in the example data)."
+  ],
+  "fixtures": [
+    {
+      "fixture": "EV-7 Page with no file, six items, the phone folds at three tiles",
+      "expect": [
+        "Phone and upright iPad: 3 slots (the design lead's 1:47 PM calls). The card cites 6 items, in the C-6 order: picture 1, picture 2, picture 3, Page PG-901, Artifact AR-1, Mail MT-101. They show as 2 items, picture 1 and picture 2 (the media list, the design spec 4.3, line 243), and a third tile that reads '+4 more'. N is 6 minus the 2 items shown, which is 4; picture 3, PG-901, AR-1 and MT-101 are the 4 not shown.",
+        "Sideways iPad and Mac: 6 slots (the design lead's 1:47 PM calls; the ruling, gives the Mac 6). The card cites exactly 6 items, so all six show, in the same order, and there is no '+N more' tile. The Artifact tile (AR-1) draws its first 3 lines in mono, then 'log' and 'search-groups-test.log'.",
+        "Tapping '+4 more' while the Page has no file (the design lead's 1:47 PM calls) shows every item in the grid, in place, with nothing hidden: all six items, and no '+N more' tile. It does not open Whole card and it does not open the viewer.",
+        "The Page tile reads its title, 'Search order notes', and 'No file yet', and is not a link: tapping it opens nothing (the design spec 4.3, line 237; the design lead's 1:47 PM calls). In the grid it comes after the pictures (C-6 order).",
+        "No 'See all on Page' shows at the right of the Evidence heading, because PG-901 has no file (the design spec 4.3, line 237; the design lead's 1:47 PM calls). EV-1 tests the state where it shows.",
+        "In the full-screen viewer of a picture, 'Open the Page' is hidden, because the Page has no file (the design lead's 1:47 PM calls; the ruling, names the button)."
+      ],
+      "taskCard": {
+        "laneId": "l-sea",
+        "card": {
+          "qd": "card/1",
+          "card": "ev7-card",
+          "id": "ev7-card",
+          "project": "quarterdeck",
+          "lane": "Search",
+          "title": "Sign off the Search order test?",
+          "about": "A test card for the Evidence section. Its Page has no file and it cites six items.",
+          "context": "Test fixture for the Evidence section.\nThe card cites a Page without a file, a log, a mail thread and three pictures.",
+          "ascii": " Sign-off test card\n ------------------------------------------\n work  ->  evidence  ->  check  ->  you",
+          "options": [
+            {
+              "label": "A. Sign it off",
+              "pick": true,
+              "does": "Accepts the work as shown.",
+              "cost": "Nothing more.",
+              "risk": "A flaw the evidence missed ships.",
+              "undo": "Reopen the work."
+            },
+            {
+              "label": "B. Send it back",
+              "does": "Asks for another round.",
+              "cost": "About a day.",
+              "risk": "It ships a day later.",
+              "undo": "Not needed."
+            }
+          ],
+          "pick_why": "The evidence shows the work is done.",
+          "you_do": "Look at the evidence, then pick A or B.",
+          "skip": "If no answer by due: we hold it and ask again tomorrow.",
+          "due": "2026-11-05T12:00:00-05:00",
+          "door": "two-way",
+          "category": [
+            "try-it"
+          ],
+          "kind": "approval",
+          "mailRef": "MT-101",
+          "pageRefs": [
+            "PG-901"
+          ],
+          "artifactRefs": [
+            "AR-1"
+          ]
+        },
+        "rev": 1,
+        "from": "alba",
+        "at": "2026-11-02T09:00:00-05:00",
+        "comments": [],
+        "answers": [],
+        "priority": "P2",
+        "type": "approval",
+        "unblocks": [],
+        "edits": [],
+        "seenAt": null
+      },
+      "pages": [
+        {
+          "ref": "PG-901",
+          "projectId": "quarterdeck",
+          "title": "Search order notes",
+          "by": "Alba",
+          "updatedAt": "2026-11-02T09:15:00-05:00",
+          "live": false,
+          "file": null
+        }
+      ],
+      "evidence": {
+        "doneBy": "Alba",
+        "pageRef": "PG-901",
+        "media": [
+          {
+            "id": "ev-fx7-p1",
+            "kind": "image",
+            "role": "image",
+            "file": "media/fixture-picture-1.png",
+            "width": 440,
+            "height": 956,
+            "caption": "Test picture 1 of 8",
+            "by": "Alba",
+            "at": "2026-11-02T09:01:00-05:00"
+          },
+          {
+            "id": "ev-fx7-p2",
+            "kind": "image",
+            "role": "image",
+            "file": "media/fixture-picture-2.png",
+            "width": 440,
+            "height": 956,
+            "caption": "Test picture 2 of 8",
+            "by": "Alba",
+            "at": "2026-11-02T09:02:00-05:00"
+          },
+          {
+            "id": "ev-fx7-p3",
+            "kind": "image",
+            "role": "image",
+            "file": "media/fixture-picture-3.png",
+            "width": 440,
+            "height": 956,
+            "caption": "Test picture 3 of 8",
+            "by": "Alba",
+            "at": "2026-11-02T09:03:00-05:00"
+          }
+        ],
+        "links": [],
+        "check": null
+      },
+      "fixtureOnly": {
+        "cards": [
+          "ev7-card"
+        ],
+        "pages": [
+          "PG-901"
+        ]
+      },
+      "computed": {
+        "items": [
+          {
+            "n": 1,
+            "kind": "image",
+            "ref": "ev-fx7-p1",
+            "from": "evidence.media[0]"
+          },
+          {
+            "n": 2,
+            "kind": "image",
+            "ref": "ev-fx7-p2",
+            "from": "evidence.media[1]"
+          },
+          {
+            "n": 3,
+            "kind": "image",
+            "ref": "ev-fx7-p3",
+            "from": "evidence.media[2]"
+          },
+          {
+            "n": 4,
+            "kind": "page",
+            "ref": "PG-901",
+            "from": "taskCard.card.pageRefs[0]",
+            "tile": {
+              "title": "Search order notes",
+              "line": "No file yet",
+              "link": false
+            }
+          },
+          {
+            "n": 5,
+            "kind": "artifact",
+            "ref": "AR-1",
+            "from": "taskCard.card.artifactRefs[0]",
+            "tile": {
+              "mono": "first 3 lines of AR-1 text, clipped",
+              "kindAndName": "log search-groups-test.log"
+            }
+          },
+          {
+            "n": 6,
+            "kind": "mail",
+            "ref": "MT-101",
+            "from": "taskCard.card.mailRef",
+            "tile": {
+              "sender": "Alba",
+              "line": "first line of MT-101.1",
+              "ref": "MT-101"
+            }
+          }
+        ],
+        "total": 6,
+        "seeAllOnPage": false,
+        "viewerOpenThePage": false,
+        "slots": {
+          "phone": 3,
+          "uprightIpad": 3,
+          "sidewaysIpad": 6,
+          "mac": 6
+        },
+        "phoneAndUprightIpad": {
+          "tiles": [
+            "ev-fx7-p1",
+            "ev-fx7-p2",
+            "+4 more"
+          ],
+          "drawn": 2,
+          "plusMore": 4,
+          "notShown": [
+            "ev-fx7-p3",
+            "PG-901",
+            "AR-1",
+            "MT-101"
+          ],
+          "tapPlusMore": "every item in the grid, in place, nothing hidden; not Whole card, not the viewer"
+        },
+        "sidewaysIpadAndMac": {
+          "tiles": [
+            "ev-fx7-p1",
+            "ev-fx7-p2",
+            "ev-fx7-p3",
+            "PG-901",
+            "AR-1",
+            "MT-101"
+          ],
+          "plusMore": null
+        }
+      }
+    }
+  ],
+  "how": [
+    "One fixture, EV-7, asked for during review: until now no fixture had a card that cites a Page with no file and enough items to fold. EV-1's PG-1 has a file; F-1 to F-5 cite at most three items; after item 5, PG-2 has a file too.",
+    "The card ev7-card and the Page PG-901 are fixture-only and appear nowhere else. The Page is in the example data's pages shape (ref, projectId, title, by, updatedAt, live, file) with file null. check-ev7.py recomputes the six items, the tile text sources and N from the example data.",
+    "The expectations in 'expect' are the design lead's calls of Tue Nov 3, 1:47 PM and the ruling and the design spec lines where they still hold, each cited. The spec's older drawing of three tiles on the Mac gives way to C-6, per the design lead. check-ev7.py reads the cited lines and checks the words each expectation relies on.",
+    "Times are ISO with -05:00 and are at or before the example 'now' (Mon Nov 2, 10:00 AM ET); only the card's due (Thu Nov 5, 12:00 PM) is later. All are after Sun Nov 1, 2:00 AM, so -05:00 is the real offset."
+  ]
+}

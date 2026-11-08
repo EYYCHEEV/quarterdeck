@@ -1,0 +1,37 @@
+{
+  "name": "quarterdeck-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "Quarterdeck web app",
+  "engines": {
+    "node": ">=22.21.0"
+  },
+  "scripts": {
+    "build:app": "node tools/build-app.mjs",
+    "build:preview": "node tools/build-app.mjs --preview",
+    "serve:app": "node tools/serve-app.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:app": "node shell_test.mjs",
+    "test:chat": "node src/screens/chat/chat_test.mjs && node src/screens/chat/chat_typing_test.mjs",
+    "test:taskcard": "node --test src/domain/card_test.mjs src/domain/answer_test.mjs",
+    "test:data": "node --test src/data/*_test.mjs src/domain/*_test.mjs src/platform/*_test.mjs src/ui/*_test.mjs src/screens/page/*_test.mjs tools/*_test.mjs tools/lint/*_test.mjs",
+    "design:check": "node tools/design-check.mjs --sizes=phone-390,ipad-744x1133,ipad-1133x744,mac-1512",
+    "design:check:all": "node tools/design-check.mjs",
+    "lint:comments": "node tools/lint/no-comments.mjs",
+    "lint": "npm run lint:comments && node tools/arch-check.mjs && node tools/colour-check.mjs && node tools/lint/one-glass.mjs && node tools/lint/theme-vars.mjs && node tools/lint/motion.mjs",
+    "test": "npm run lint && npm run typecheck && npm run test:data && npm run test:app && npm run test:chat && npm run test:taskcard"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "4.3.3",
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "esbuild": "0.28.2",
+    "playwright": "1.64.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "tailwindcss": "4.3.3",
+    "typescript": "5.9.3"
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Content-Security-Policy": "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+    "Referrer-Policy": "strict-origin",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Content-Length": "1365"
+  },
+  "body": {
+    "card": {
+      "qd": "card/1",
+      "card": "bot-a-3",
+      "id": "bot-a-3",
+      "project": "Crew",
+      "lane": "Ops",
+      "title": "Choose the alert channel",
+      "about": "Crew work that needs a call.",
+      "context": "It is ready for a decision.\nNothing else is waiting on it.",
+      "options": [
+        {
+          "label": "A. Go with the plan",
+          "pick": true
+        },
+        {
+          "label": "B. Hold for now"
+        }
+      ],
+      "pick_why": "A keeps the schedule.",
+      "you_do": "Pick one option.",
+      "skip": "If no answer by due: the plan goes ahead.",
+      "category": [
+        "strategy"
+      ],
+      "door": "two-way",
+      "kind": "decision"
+    },
+    "rev": 1,
+    "state": "done",
+    "thread": [
+      {
+        "id": "msg-003",
+        "kind": "card",
+        "sender": "bot-a",
+        "sent": "2026-11-02T09:03:00-05:00",
+        "document": {
+          "qd": "card/1",
+          "card": "bot-a-3",
+          "id": "bot-a-3",
+          "project": "Crew",
+          "lane": "Ops",
+          "title": "Choose the alert channel",
+          "about": "Crew work that needs a call.",
+          "context": "It is ready for a decision.\nNothing else is waiting on it.",
+          "options": [
+            {
+              "label": "A. Go with the plan",
+              "pick": true
+            },
+            {
+              "label": "B. Hold for now"
+            }
+          ],
+          "pick_why": "A keeps the schedule.",
+          "you_do": "Pick one option.",
+          "skip": "If no answer by due: the plan goes ahead.",
+          "category": [
+            "strategy"
+          ],
+          "door": "two-way",
+          "kind": "decision"
+        }
+      },
+      {
+        "id": "msg-036",
+        "kind": "answer",
+        "sender": "account-user",
+        "sent": "2026-11-02T09:36:00-05:00",
+        "document": {
+          "qd": "answer/1",
+          "card": "bot-a-3",
+          "rev": 1,
+          "pick": "A",
+          "note": "Use the first channel.",
+          "at": "2026-11-02T09:35:40-05:00"
+        }
+      }
+    ],
+    "csrf": "csrf-placeholder",
+    "freshUntil": 0
+  }
+}

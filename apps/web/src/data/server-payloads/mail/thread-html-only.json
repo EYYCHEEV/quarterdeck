@@ -1,0 +1,45 @@
+{
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Content-Security-Policy": "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+    "Referrer-Policy": "strict-origin",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Content-Length": "486"
+  },
+  "body": {
+    "thread": {
+      "ref": "MT-2",
+      "subject": "Weekly build summary",
+      "project": null,
+      "lane": null,
+      "card": null,
+      "bots": [
+        "bot-b",
+        "account-user"
+      ],
+      "lastAt": "2026-11-03T08:00:00-05:00",
+      "count": 1,
+      "omitted": 0,
+      "mails": [
+        {
+          "ref": "MT-2.1",
+          "from": "bot-b",
+          "to": [
+            "account-user"
+          ],
+          "cc": [],
+          "at": "2026-11-03T08:00:00-05:00",
+          "text": "Weekly build summary\n\nAll 12 builds passed.\n\nCrew: 5 builds\nWeb: 7 builds\n\nDetails: build page.",
+          "cut": false,
+          "refs": [],
+          "attachments": []
+        }
+      ]
+    },
+    "csrf": "csrf-placeholder",
+    "freshUntil": 0
+  }
+}

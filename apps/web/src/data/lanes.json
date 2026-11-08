@@ -1,0 +1,1380 @@
+{
+  "qd": "lanes/1",
+  "for": "Quarterdeck final design PR 3: the Lane tracker (the ruling to the ruling)",
+  "author": "Quarterdeck contributors",
+  "written": "Tue Nov 3, 2026 (ET)",
+  "now": "2026-11-02T10:00:00-05:00",
+  "how": [
+    "'lanes' holds one tracker per Lane id, merged by Lane id into the example data's lanes. The three standard stages are Plan, Execute, Check; bots may rename, add and remove stages and steps, and l-da1 does (7 stages, 12 steps).",
+    "Every field a screen shows is a field here: stage names, marks and times, 'Done when', 'Now' (the data's own `now`, except l-sw2 and l-set, whose restated lines are in addendum-data.json `lanesChanged`), 'Next', blockers (what, who waits, since when, the Task Card it links to), 'Updated <time> by <bot>' and 'Changed by <bot> <time>: <what>'. Strings under `display` are the expected text; the build computes them from the fields and must match.",
+    "Every tracker change in `changes` lands in the Lane's Activity: each change has an Activity line with the same time and bot, either an existing line in the example data or a line listed in addendum-data.json `activityAdded`. 'Updated' is the newest Activity line.",
+    "'No update for N hours' shows on an Active Lane with no blocker and no Activity line for 2 hours or more. N is whole hours at the example 'now'. Only l-mai is quiet: its last update is Sun 2:00 PM, 20 hours before now.",
+    "The Project view has no project-level tracker: `projectView` lists each Lane's own row. Done Lanes fold into 'Done (N)'.",
+    "Wording the rulings leave open is marked 'suggested' and is the design lead's call: the date formats, whole hours, the 'Blocked' mark, the count line when no steps exist, where a long mark wraps.",
+    "Times are New York time, -04:00 before Sun Nov 1, 2026, 2:00 AM and -05:00 after, as in the example data. Nothing is later than the example 'now'."
+  ],
+  "rules": {
+    "rowWidth": 44,
+    "rowWidthUnit": "characters, counting each of ✓ ● ○ · … as one; the ▸ Stages control is not counted",
+    "unfoldedRow": "marks and names joined by two spaces, for example '✓ Plan  ● Execute  ○ Check'",
+    "foldedRow": "'✓ N done · ● <current> · ○ N more'; the current name is cut with '…' so the row is at most 44 characters; a part whose count is 0 is left out (suggested)",
+    "countLine": "'Stage S of N · step X of Y: <step name>', the step name cut with '…' so the line is at most 44 characters; 'countLineFull' keeps the whole name",
+    "stepLine": "when the row does not fold and steps exist: '<stage>, step X of Y: <step name>', at most 44 characters in this data",
+    "projectRow": "'<stage> (S of N) · step X of Y' with the stage name cut to fit 44 characters, then the mark ('! Waiting on you', '! Blocked: <bot>' or 'No update for N hours') on the same line when it fits and on the next line when it does not (suggested)",
+    "staleAfterHours": 2,
+    "timeLabels": "same day: '9:50 AM'; within 7 days: 'Sun 6:20 PM'; older: 'Oct 21, 12:00 PM' (suggested; matches seen.json for the first two)"
+  },
+  "lanes": {
+    "l-set": {
+      "lane": "Settings",
+      "project": "quarterdeck",
+      "status": "Active",
+      "lead": "Alba",
+      "plan": {
+        "endsWithSignOff": false,
+        "doneBy": [
+          "Alba",
+          "Shelvorn"
+        ],
+        "checkedBy": "Dr. Kivo"
+      },
+      "stages": [
+        {
+          "n": 1,
+          "name": "Plan",
+          "state": "done",
+          "startedAt": null,
+          "doneAt": "2026-11-01T18:20:00-05:00",
+          "time": "done Sun 6:20 PM",
+          "doneWhen": "The Settings sections are listed: Bots, Appearance, Add-ons, Storage, Account",
+          "steps": []
+        },
+        {
+          "n": 2,
+          "name": "Execute",
+          "state": "current",
+          "startedAt": "2026-11-01T18:20:00-05:00",
+          "doneAt": null,
+          "time": "since Sun 6:20 PM",
+          "doneWhen": "Appearance (System, Light, Dark) and Account are built and shown on the example data",
+          "steps": []
+        },
+        {
+          "n": 3,
+          "name": "Check",
+          "state": "todo",
+          "startedAt": null,
+          "doneAt": null,
+          "time": null,
+          "doneWhen": "Dr. Kivo checks Appearance in System, Light and Dark on the phone and the Mac",
+          "steps": []
+        }
+      ],
+      "stageCount": 3,
+      "currentStage": 2,
+      "currentStep": null,
+      "doneWhen": "Appearance (System, Light, Dark) and Account are built and shown on the example data",
+      "now": "Alba is building the Appearance section; Shelvorn is drafting the Account page.",
+      "next": "Dr. Kivo checks Appearance in System, Light and Dark on the phone and the Mac.",
+      "blockers": [
+        {
+          "id": "l-set-b1",
+          "what": "Approve the Settings sections",
+          "waitingOn": "Captain",
+          "waitingOnYou": true,
+          "since": "2026-11-02T09:10:00-05:00",
+          "sinceLine": "since 9:10 AM",
+          "recordedBy": "Shelvorn",
+          "taskCard": "c2",
+          "line": "! Waiting on you: Approve the Settings sections, since 9:10 AM",
+          "projectMark": null
+        },
+        {
+          "id": "l-set-b2",
+          "what": "Pick what a new device shows first",
+          "waitingOn": "Captain",
+          "waitingOnYou": true,
+          "since": "2026-11-01T18:20:00-05:00",
+          "sinceLine": "since Sun 6:20 PM",
+          "recordedBy": "Alba",
+          "taskCard": "c1",
+          "line": "! Waiting on you: Pick what a new device shows first, since Sun 6:20 PM",
+          "projectMark": null
+        }
+      ],
+      "updated": {
+        "at": "2026-11-02T09:50:00-05:00",
+        "by": "Alba",
+        "line": "Updated 9:50 AM by Alba"
+      },
+      "stagesChanged": {
+        "at": "2026-11-01T18:20:00-05:00",
+        "by": "Alba",
+        "what": "set the stages, Plan done",
+        "line": "Changed by Alba Sun 6:20 PM: set the stages, Plan done"
+      },
+      "stale": null,
+      "done": null,
+      "display": {
+        "stageRow": "✓ Plan  ● Execute  ○ Check",
+        "stageRowLength": 26,
+        "stageRowFolded": false,
+        "unfoldedRowLength": 26,
+        "stepLine": null,
+        "countLine": null,
+        "countLineFull": null,
+        "blockersHeading": "Blockers (2)",
+        "projectLine": "Execute (2 of 3)",
+        "projectRow": "Execute (2 of 3) · ! Waiting on you",
+        "projectMark": "! Waiting on you",
+        "trackerLines": [
+          "✓ Plan  ● Execute  ○ Check",
+          "Done when: Appearance (System, Light, Dark) and Account are built and shown on the example data",
+          "Now: Alba is building the Appearance section; Shelvorn is drafting the Account page.",
+          "Next: Dr. Kivo checks Appearance in System, Light and Dark on the phone and the Mac.",
+          "Blockers (2)",
+          "! Waiting on you: Approve the Settings sections, since 9:10 AM",
+          "! Waiting on you: Pick what a new device shows first, since Sun 6:20 PM",
+          "Updated 9:50 AM by Alba"
+        ],
+        "stagesSheet": [
+          "Stages of Settings",
+          "✓ Plan  done Sun 6:20 PM",
+          "● Execute  since Sun 6:20 PM",
+          "  Done when: Appearance (System, Light, Dark) and Account are built and shown on the example data",
+          "○ Check  Done when: Dr. Kivo checks Appearance in System, Light and Dark on the phone and the Mac",
+          "Changed by Alba Sun 6:20 PM: set the stages, Plan done"
+        ]
+      },
+      "changes": [
+        {
+          "at": "2026-11-01T18:20:00-05:00",
+          "by": "Alba",
+          "what": "Set the stages Plan, Execute, Check. Plan done: Settings sections listed. Execute started."
+        },
+        {
+          "at": "2026-11-01T18:20:00-05:00",
+          "by": "Alba",
+          "what": "Blocker added: Waiting on you: Pick what a new device shows first."
+        },
+        {
+          "at": "2026-11-02T09:10:00-05:00",
+          "by": "Shelvorn",
+          "what": "Blocker added: Waiting on you: Approve the Settings sections."
+        },
+        {
+          "at": "2026-11-02T09:50:00-05:00",
+          "by": "Alba",
+          "what": "Now set: Alba is building the Appearance section; Shelvorn is drafting the Account page."
+        }
+      ]
+    },
+    "l-sea": {
+      "lane": "Search",
+      "project": "quarterdeck",
+      "status": "Active",
+      "lead": "Dr. Kivo",
+      "plan": {
+        "endsWithSignOff": false,
+        "doneBy": [
+          "Dr. Kivo"
+        ],
+        "checkedBy": "Shelvorn"
+      },
+      "stages": [
+        {
+          "n": 1,
+          "name": "Plan",
+          "state": "done",
+          "startedAt": null,
+          "doneAt": "2026-10-31T11:00:00-04:00",
+          "time": "done Sat 11:00 AM",
+          "doneWhen": "Groups and their order agreed",
+          "steps": []
+        },
+        {
+          "n": 2,
+          "name": "Execute",
+          "state": "current",
+          "startedAt": "2026-10-31T11:00:00-04:00",
+          "doneAt": null,
+          "time": "since Sat 11:00 AM",
+          "doneWhen": "Every Search group shows its rows and a See all row",
+          "steps": [
+            {
+              "n": 1,
+              "name": "Ship recent searches",
+              "state": "done",
+              "doneAt": "2026-11-01T16:00:00-05:00"
+            },
+            {
+              "n": 2,
+              "name": "Try 5 rows per group",
+              "state": "done",
+              "doneAt": "2026-11-02T09:05:00-05:00"
+            },
+            {
+              "n": 3,
+              "name": "Build the group rows",
+              "state": "current",
+              "doneAt": null
+            },
+            {
+              "n": 4,
+              "name": "Check Search on the phone",
+              "state": "todo",
+              "doneAt": null
+            }
+          ]
+        },
+        {
+          "n": 3,
+          "name": "Check",
+          "state": "todo",
+          "startedAt": null,
+          "doneAt": null,
+          "time": null,
+          "doneWhen": "Shelvorn checks Search on the phone and the Mac",
+          "steps": []
+        }
+      ],
+      "stageCount": 3,
+      "currentStage": 2,
+      "currentStep": {
+        "n": 3,
+        "of": 4,
+        "name": "Build the group rows"
+      },
+      "doneWhen": "Every Search group shows its rows and a See all row",
+      "now": "Dr. Kivo is testing Search groups on the example data.",
+      "next": "Shelvorn checks Search on the phone and the Mac.",
+      "blockers": [
+        {
+          "id": "l-sea-b1",
+          "what": "How many results should each Search group show?",
+          "waitingOn": "Captain",
+          "waitingOnYou": true,
+          "since": "2026-11-02T09:05:00-05:00",
+          "sinceLine": "since 9:05 AM",
+          "recordedBy": "Dr. Kivo",
+          "taskCard": "alba-1",
+          "line": "! Waiting on you: How many results should each Search group show?, since 9:05 AM",
+          "projectMark": null
+        }
+      ],
+      "updated": {
+        "at": "2026-11-02T09:05:00-05:00",
+        "by": "Dr. Kivo",
+        "line": "Updated 9:05 AM by Dr. Kivo"
+      },
+      "stagesChanged": {
+        "at": "2026-10-31T11:00:00-04:00",
+        "by": "Dr. Kivo",
+        "what": "added 4 steps under Execute",
+        "line": "Changed by Dr. Kivo Sat 11:00 AM: added 4 steps under Execute"
+      },
+      "stale": null,
+      "done": null,
+      "display": {
+        "stageRow": "✓ Plan  ● Execute  ○ Check",
+        "stageRowLength": 26,
+        "stageRowFolded": false,
+        "unfoldedRowLength": 26,
+        "stepLine": "Execute, step 3 of 4: Build the group rows",
+        "countLine": null,
+        "countLineFull": null,
+        "blockersHeading": "Blockers (1)",
+        "projectLine": "Execute (2 of 3) · step 3 of 4",
+        "projectRow": "Execute (2 of 3) · step 3 of 4\n! Waiting on you",
+        "projectMark": "! Waiting on you",
+        "trackerLines": [
+          "✓ Plan  ● Execute  ○ Check",
+          "Execute, step 3 of 4: Build the group rows",
+          "Done when: Every Search group shows its rows and a See all row",
+          "Now: Dr. Kivo is testing Search groups on the example data.",
+          "Next: Shelvorn checks Search on the phone and the Mac.",
+          "Blockers (1)",
+          "! Waiting on you: How many results should each Search group show?, since 9:05 AM",
+          "Updated 9:05 AM by Dr. Kivo"
+        ],
+        "stagesSheet": [
+          "Stages of Search",
+          "✓ Plan  done Sat 11:00 AM",
+          "● Execute  since Sat 11:00 AM",
+          "   ✓ Ship recent searches",
+          "   ✓ Try 5 rows per group",
+          "   ● Build the group rows",
+          "   ○ Check Search on the phone",
+          "  Done when: Every Search group shows its rows and a See all row",
+          "○ Check  Done when: Shelvorn checks Search on the phone and the Mac",
+          "Changed by Dr. Kivo Sat 11:00 AM: added 4 steps under Execute"
+        ]
+      },
+      "changes": [
+        {
+          "at": "2026-10-31T11:00:00-04:00",
+          "by": "Dr. Kivo",
+          "what": "Set the stages Plan, Execute, Check. Plan done, Execute started. Added 4 steps under Execute."
+        },
+        {
+          "at": "2026-11-01T16:00:00-05:00",
+          "by": "Dr. Kivo",
+          "what": "Step done: Ship recent searches."
+        },
+        {
+          "at": "2026-11-02T09:05:00-05:00",
+          "by": "Dr. Kivo",
+          "what": "Step done: Try 5 rows per group."
+        },
+        {
+          "at": "2026-11-02T09:05:00-05:00",
+          "by": "Dr. Kivo",
+          "what": "Blocker added: Waiting on you: How many results should each Search group show?"
+        }
+      ]
+    },
+    "l-mai": {
+      "lane": "Mail client",
+      "project": "quarterdeck",
+      "status": "Active",
+      "lead": "Shelvorn",
+      "plan": {
+        "endsWithSignOff": false,
+        "doneBy": [
+          "Shelvorn"
+        ],
+        "checkedBy": "Alba"
+      },
+      "stages": [
+        {
+          "n": 1,
+          "name": "Plan",
+          "state": "current",
+          "startedAt": "2026-11-01T14:00:00-05:00",
+          "doneAt": null,
+          "time": "since Sun 2:00 PM",
+          "doneWhen": "The plan is written and the Captain agrees it",
+          "steps": [
+            {
+              "n": 1,
+              "name": "Write the first plan page",
+              "state": "done",
+              "doneAt": "2026-11-01T14:00:00-05:00"
+            },
+            {
+              "n": 2,
+              "name": "Write the full plan",
+              "state": "current",
+              "doneAt": null
+            },
+            {
+              "n": 3,
+              "name": "Agree it with the Captain",
+              "state": "todo",
+              "doneAt": null
+            }
+          ]
+        },
+        {
+          "n": 2,
+          "name": "Execute",
+          "state": "todo",
+          "startedAt": null,
+          "doneAt": null,
+          "time": null,
+          "doneWhen": "The mail client screens are built from the plan",
+          "steps": []
+        },
+        {
+          "n": 3,
+          "name": "Check",
+          "state": "todo",
+          "startedAt": null,
+          "doneAt": null,
+          "time": null,
+          "doneWhen": "Alba checks the mail client on the phone",
+          "steps": []
+        }
+      ],
+      "stageCount": 3,
+      "currentStage": 1,
+      "currentStep": {
+        "n": 2,
+        "of": 3,
+        "name": "Write the full plan"
+      },
+      "doneWhen": "The plan is written and the Captain agrees it",
+      "now": "Shelvorn is writing the mail client plan.",
+      "next": "Shelvorn sends the plan to the Captain on a Task Card.",
+      "blockers": [],
+      "updated": {
+        "at": "2026-11-01T14:00:00-05:00",
+        "by": "Shelvorn",
+        "line": "Updated Sun 2:00 PM by Shelvorn"
+      },
+      "stagesChanged": {
+        "at": "2026-11-01T14:00:00-05:00",
+        "by": "Shelvorn",
+        "what": "set the stages and 3 steps under Plan",
+        "line": "Changed by Shelvorn Sun 2:00 PM: set the stages and 3 steps under Plan"
+      },
+      "stale": {
+        "hours": 20,
+        "line": "No update for 20 hours"
+      },
+      "done": null,
+      "display": {
+        "stageRow": "● Plan  ○ Execute  ○ Check",
+        "stageRowLength": 26,
+        "stageRowFolded": false,
+        "unfoldedRowLength": 26,
+        "stepLine": "Plan, step 2 of 3: Write the full plan",
+        "countLine": null,
+        "countLineFull": null,
+        "blockersHeading": "No blockers",
+        "projectLine": "Plan (1 of 3) · step 2 of 3",
+        "projectRow": "Plan (1 of 3) · step 2 of 3\nNo update for 20 hours",
+        "projectMark": "No update for 20 hours",
+        "trackerLines": [
+          "● Plan  ○ Execute  ○ Check",
+          "Plan, step 2 of 3: Write the full plan",
+          "Done when: The plan is written and the Captain agrees it",
+          "Now: Shelvorn is writing the mail client plan.",
+          "Next: Shelvorn sends the plan to the Captain on a Task Card.",
+          "No blockers",
+          "Updated Sun 2:00 PM by Shelvorn",
+          "No update for 20 hours."
+        ],
+        "stagesSheet": [
+          "Stages of Mail client",
+          "● Plan  since Sun 2:00 PM",
+          "   ✓ Write the first plan page",
+          "   ● Write the full plan",
+          "   ○ Agree it with the Captain",
+          "  Done when: The plan is written and the Captain agrees it",
+          "○ Execute  Done when: The mail client screens are built from the plan",
+          "○ Check  Done when: Alba checks the mail client on the phone",
+          "Changed by Shelvorn Sun 2:00 PM: set the stages and 3 steps under Plan"
+        ]
+      },
+      "changes": [
+        {
+          "at": "2026-11-01T14:00:00-05:00",
+          "by": "Shelvorn",
+          "what": "Set the stages Plan, Execute, Check. Added 3 steps under Plan."
+        },
+        {
+          "at": "2026-11-01T14:00:00-05:00",
+          "by": "Shelvorn",
+          "what": "Step done: Write the first plan page."
+        }
+      ]
+    },
+    "l-sid": {
+      "lane": "Sidebar and layout",
+      "project": "quarterdeck",
+      "status": "Done",
+      "lead": "Alba",
+      "plan": {
+        "endsWithSignOff": false,
+        "doneBy": [
+          "Alba"
+        ],
+        "checkedBy": "Shelvorn"
+      },
+      "stages": [
+        {
+          "n": 1,
+          "name": "Plan",
+          "state": "done",
+          "startedAt": "2026-10-28T15:00:00-04:00",
+          "doneAt": "2026-10-28T15:00:00-04:00",
+          "time": "done Wed 3:00 PM",
+          "doneWhen": "One sidebar and one page layout agreed",
+          "steps": []
+        },
+        {
+          "n": 2,
+          "name": "Execute",
+          "state": "done",
+          "startedAt": "2026-10-28T15:00:00-04:00",
+          "doneAt": "2026-10-30T12:00:00-04:00",
+          "time": "done Fri 12:00 PM",
+          "doneWhen": "Sidebar and layout built for phone, iPad and Mac",
+          "steps": []
+        },
+        {
+          "n": 3,
+          "name": "Check",
+          "state": "done",
+          "startedAt": "2026-10-30T12:00:00-04:00",
+          "doneAt": "2026-10-30T12:40:00-04:00",
+          "time": "done Fri 12:40 PM",
+          "doneWhen": "Shelvorn checks every size and all checks pass",
+          "steps": []
+        }
+      ],
+      "stageCount": 3,
+      "currentStage": null,
+      "currentStep": null,
+      "doneWhen": null,
+      "now": "Done. Nothing running.",
+      "next": null,
+      "blockers": [],
+      "updated": {
+        "at": "2026-10-30T12:41:00-04:00",
+        "by": "Alba",
+        "line": "Updated Fri 12:41 PM by Alba"
+      },
+      "stagesChanged": {
+        "at": "2026-10-28T15:00:00-04:00",
+        "by": "Alba",
+        "what": "set the stages, Plan done",
+        "line": "Changed by Alba Wed 3:00 PM: set the stages, Plan done"
+      },
+      "stale": null,
+      "done": {
+        "at": "2026-10-30T12:41:00-04:00",
+        "by": "Alba",
+        "checkedBy": "Shelvorn",
+        "signedOff": false,
+        "activityLine": "Lane done.",
+        "line": "Done Fri 12:41 PM. Checked by Shelvorn."
+      },
+      "display": {
+        "stageRow": "✓ Plan  ✓ Execute  ✓ Check",
+        "stageRowLength": 26,
+        "stageRowFolded": false,
+        "unfoldedRowLength": 26,
+        "stepLine": null,
+        "countLine": null,
+        "countLineFull": null,
+        "blockersHeading": "No blockers",
+        "projectLine": "Done Fri 12:41 PM · checked by Shelvorn",
+        "projectRow": "Done Fri 12:41 PM · checked by Shelvorn",
+        "projectMark": null,
+        "trackerLines": [
+          "✓ Plan  ✓ Execute  ✓ Check",
+          "Done Fri 12:41 PM. Checked by Shelvorn.",
+          "Updated Fri 12:41 PM by Alba"
+        ],
+        "stagesSheet": [
+          "Stages of Sidebar and layout",
+          "✓ Plan  done Wed 3:00 PM",
+          "✓ Execute  done Fri 12:00 PM",
+          "✓ Check  done Fri 12:40 PM",
+          "Changed by Alba Wed 3:00 PM: set the stages, Plan done"
+        ]
+      },
+      "changes": [
+        {
+          "at": "2026-10-28T15:00:00-04:00",
+          "by": "Alba",
+          "what": "Set the stages Plan, Execute, Check. Plan done, Execute started."
+        },
+        {
+          "at": "2026-10-30T12:00:00-04:00",
+          "by": "Alba",
+          "what": "Execute done, Check started."
+        },
+        {
+          "at": "2026-10-30T12:40:00-04:00",
+          "by": "Shelvorn",
+          "what": "Check done: 4 of 4 checks pass. Shelvorn did not do the work."
+        },
+        {
+          "at": "2026-10-30T12:41:00-04:00",
+          "by": "Alba",
+          "what": "Lane done. The plan has no sign-off, so the Lane went Done by itself."
+        }
+      ]
+    },
+    "l-sw1": {
+      "lane": "Matrix rooms",
+      "project": "heron-forge",
+      "status": "Active",
+      "lead": "Shelvorn",
+      "plan": {
+        "endsWithSignOff": false,
+        "doneBy": [
+          "Shelvorn"
+        ],
+        "checkedBy": "Dr. Kivo"
+      },
+      "stages": [
+        {
+          "n": 1,
+          "name": "Plan",
+          "state": "done",
+          "startedAt": null,
+          "doneAt": "2026-10-31T10:00:00-04:00",
+          "time": "done Sat 10:00 AM",
+          "doneWhen": "The invite flow draft is ready for review",
+          "steps": []
+        },
+        {
+          "n": 2,
+          "name": "Execute",
+          "state": "current",
+          "startedAt": "2026-10-31T10:00:00-04:00",
+          "doneAt": null,
+          "time": "since Sat 10:00 AM",
+          "doneWhen": "Every room is mapped and the Matrix rooms are live",
+          "steps": [
+            {
+              "n": 1,
+              "name": "List the rooms to move",
+              "state": "done",
+              "doneAt": "2026-11-02T08:45:00-05:00"
+            },
+            {
+              "n": 2,
+              "name": "Run the room check",
+              "state": "current",
+              "doneAt": null
+            },
+            {
+              "n": 3,
+              "name": "Refresh the room map",
+              "state": "todo",
+              "doneAt": null
+            },
+            {
+              "n": 4,
+              "name": "Take the rooms live",
+              "state": "todo",
+              "doneAt": null
+            }
+          ]
+        },
+        {
+          "n": 3,
+          "name": "Check",
+          "state": "todo",
+          "startedAt": null,
+          "doneAt": null,
+          "time": null,
+          "doneWhen": "Dr. Kivo confirms every room moved",
+          "steps": []
+        }
+      ],
+      "stageCount": 3,
+      "currentStage": 2,
+      "currentStep": {
+        "n": 2,
+        "of": 4,
+        "name": "Run the room check"
+      },
+      "doneWhen": "Every room is mapped and the Matrix rooms are live",
+      "now": "Shelvorn is drafting the invite flow and mapping rooms.",
+      "next": "Shelvorn refreshes the Matrix room map after the check.",
+      "blockers": [
+        {
+          "id": "l-sw1-b1",
+          "what": "Run the room list check before the bridge change?",
+          "waitingOn": "Captain",
+          "waitingOnYou": true,
+          "since": "2026-11-02T08:45:00-05:00",
+          "sinceLine": "since 8:45 AM",
+          "recordedBy": "Shelvorn",
+          "taskCard": "shelvorn-1",
+          "line": "! Waiting on you: Run the room list check before the bridge change?, since 8:45 AM",
+          "projectMark": null
+        }
+      ],
+      "updated": {
+        "at": "2026-11-02T08:45:00-05:00",
+        "by": "Shelvorn",
+        "line": "Updated 8:45 AM by Shelvorn"
+      },
+      "stagesChanged": {
+        "at": "2026-10-31T10:00:00-04:00",
+        "by": "Shelvorn",
+        "what": "added 4 steps under Execute",
+        "line": "Changed by Shelvorn Sat 10:00 AM: added 4 steps under Execute"
+      },
+      "stale": null,
+      "done": null,
+      "display": {
+        "stageRow": "✓ Plan  ● Execute  ○ Check",
+        "stageRowLength": 26,
+        "stageRowFolded": false,
+        "unfoldedRowLength": 26,
+        "stepLine": "Execute, step 2 of 4: Run the room check",
+        "countLine": null,
+        "countLineFull": null,
+        "blockersHeading": "Blockers (1)",
+        "projectLine": "Execute (2 of 3) · step 2 of 4",
+        "projectRow": "Execute (2 of 3) · step 2 of 4\n! Waiting on you",
+        "projectMark": "! Waiting on you",
+        "trackerLines": [
+          "✓ Plan  ● Execute  ○ Check",
+          "Execute, step 2 of 4: Run the room check",
+          "Done when: Every room is mapped and the Matrix rooms are live",
+          "Now: Shelvorn is drafting the invite flow and mapping rooms.",
+          "Next: Shelvorn refreshes the Matrix room map after the check.",
+          "Blockers (1)",
+          "! Waiting on you: Run the room list check before the bridge change?, since 8:45 AM",
+          "Updated 8:45 AM by Shelvorn"
+        ],
+        "stagesSheet": [
+          "Stages of Matrix rooms",
+          "✓ Plan  done Sat 10:00 AM",
+          "● Execute  since Sat 10:00 AM",
+          "   ✓ List the rooms to move",
+          "   ● Run the room check",
+          "   ○ Refresh the room map",
+          "   ○ Take the rooms live",
+          "  Done when: Every room is mapped and the Matrix rooms are live",
+          "○ Check  Done when: Dr. Kivo confirms every room moved",
+          "Changed by Shelvorn Sat 10:00 AM: added 4 steps under Execute"
+        ]
+      },
+      "changes": [
+        {
+          "at": "2026-10-31T10:00:00-04:00",
+          "by": "Shelvorn",
+          "what": "Set the stages Plan, Execute, Check. Plan done, Execute started. Added 4 steps under Execute."
+        },
+        {
+          "at": "2026-11-02T08:45:00-05:00",
+          "by": "Shelvorn",
+          "what": "Step done: List the rooms to move."
+        },
+        {
+          "at": "2026-11-02T08:45:00-05:00",
+          "by": "Shelvorn",
+          "what": "Blocker added: Waiting on you: Run the room list check before the bridge change?"
+        }
+      ]
+    },
+    "l-sw2": {
+      "lane": "Bridge",
+      "project": "heron-forge",
+      "status": "Active",
+      "lead": "Shelvorn",
+      "plan": {
+        "endsWithSignOff": false,
+        "doneBy": [
+          "Shelvorn"
+        ],
+        "checkedBy": "Dr. Kivo"
+      },
+      "stages": [
+        {
+          "n": 1,
+          "name": "Plan",
+          "state": "done",
+          "startedAt": null,
+          "doneAt": "2026-10-20T15:00:00-04:00",
+          "time": "done Oct 20, 3:00 PM",
+          "doneWhen": "The retry rule for a failed message is written",
+          "steps": []
+        },
+        {
+          "n": 2,
+          "name": "Execute",
+          "state": "done",
+          "startedAt": "2026-10-20T15:00:00-04:00",
+          "doneAt": "2026-10-21T12:00:00-04:00",
+          "time": "done Oct 21, 12:00 PM",
+          "doneWhen": "The bridge retry work is built",
+          "steps": []
+        },
+        {
+          "n": 3,
+          "name": "Check",
+          "state": "current",
+          "startedAt": "2026-10-21T12:00:00-04:00",
+          "doneAt": null,
+          "time": "since Oct 21, 12:00 PM",
+          "doneWhen": "Dr. Kivo confirms a failed message follows the rule you chose",
+          "steps": []
+        }
+      ],
+      "stageCount": 3,
+      "currentStage": 3,
+      "currentStep": null,
+      "doneWhen": "Dr. Kivo confirms a failed message follows the rule you chose",
+      "now": "Shelvorn is waiting for your answer on retries; Dr. Kivo checks the bridge after that.",
+      "next": "Dr. Kivo checks the retry, then the bridge change can move every room.",
+      "blockers": [
+        {
+          "id": "l-sw2-b1",
+          "what": "Should the bridge retry a failed message?",
+          "waitingOn": "Captain",
+          "waitingOnYou": true,
+          "since": "2026-11-01T16:00:00-05:00",
+          "sinceLine": "since Sun 4:00 PM",
+          "recordedBy": "Shelvorn",
+          "taskCard": "shelvorn-2",
+          "line": "! Waiting on you: Should the bridge retry a failed message?, since Sun 4:00 PM",
+          "projectMark": null
+        }
+      ],
+      "updated": {
+        "at": "2026-11-01T16:00:00-05:00",
+        "by": "Shelvorn",
+        "line": "Updated Sun 4:00 PM by Shelvorn"
+      },
+      "stagesChanged": {
+        "at": "2026-10-20T15:00:00-04:00",
+        "by": "Shelvorn",
+        "what": "set the stages, Plan done",
+        "line": "Changed by Shelvorn Oct 20, 3:00 PM: set the stages, Plan done"
+      },
+      "stale": null,
+      "done": null,
+      "display": {
+        "stageRow": "✓ Plan  ✓ Execute  ● Check",
+        "stageRowLength": 26,
+        "stageRowFolded": false,
+        "unfoldedRowLength": 26,
+        "stepLine": null,
+        "countLine": null,
+        "countLineFull": null,
+        "blockersHeading": "Blockers (1)",
+        "projectLine": "Check (3 of 3)",
+        "projectRow": "Check (3 of 3) · ! Waiting on you",
+        "projectMark": "! Waiting on you",
+        "trackerLines": [
+          "✓ Plan  ✓ Execute  ● Check",
+          "Done when: Dr. Kivo confirms a failed message follows the rule you chose",
+          "Now: Shelvorn is waiting for your answer on retries; Dr. Kivo checks the bridge after that.",
+          "Next: Dr. Kivo checks the retry, then the bridge change can move every room.",
+          "Blockers (1)",
+          "! Waiting on you: Should the bridge retry a failed message?, since Sun 4:00 PM",
+          "Updated Sun 4:00 PM by Shelvorn"
+        ],
+        "stagesSheet": [
+          "Stages of Bridge",
+          "✓ Plan  done Oct 20, 3:00 PM",
+          "✓ Execute  done Oct 21, 12:00 PM",
+          "● Check  since Oct 21, 12:00 PM",
+          "  Done when: Dr. Kivo confirms a failed message follows the rule you chose",
+          "Changed by Shelvorn Oct 20, 3:00 PM: set the stages, Plan done"
+        ]
+      },
+      "changes": [
+        {
+          "at": "2026-10-20T15:00:00-04:00",
+          "by": "Shelvorn",
+          "what": "Set the stages Plan, Execute, Check. Plan done, Execute started."
+        },
+        {
+          "at": "2026-10-21T12:00:00-04:00",
+          "by": "Shelvorn",
+          "what": "Execute done, Check started."
+        },
+        {
+          "at": "2026-11-01T16:00:00-05:00",
+          "by": "Shelvorn",
+          "what": "Blocker added: Waiting on you: Should the bridge retry a failed message?"
+        }
+      ]
+    },
+    "l-da1": {
+      "lane": "Task export",
+      "project": "dale-tools",
+      "status": "Active",
+      "lead": "Dale",
+      "plan": {
+        "endsWithSignOff": false,
+        "doneBy": [
+          "Dale"
+        ],
+        "checkedBy": "Dr. Kivo"
+      },
+      "stages": [
+        {
+          "n": 1,
+          "name": "Plan",
+          "state": "done",
+          "startedAt": "2026-10-29T11:00:00-04:00",
+          "doneAt": "2026-10-29T16:00:00-04:00",
+          "time": "done Thu 4:00 PM",
+          "doneWhen": "Title, Lane and State agreed as the first columns",
+          "steps": []
+        },
+        {
+          "n": 2,
+          "name": "Design the column order",
+          "state": "done",
+          "startedAt": "2026-10-29T16:00:00-04:00",
+          "doneAt": "2026-10-30T10:00:00-04:00",
+          "time": "done Fri 10:00 AM",
+          "doneWhen": "The column order is written down",
+          "steps": []
+        },
+        {
+          "n": 3,
+          "name": "Prototype the CSV file",
+          "state": "done",
+          "startedAt": "2026-10-30T10:00:00-04:00",
+          "doneAt": "2026-10-30T15:00:00-04:00",
+          "time": "done Fri 3:00 PM",
+          "doneWhen": "A ten-row file opens in a spreadsheet",
+          "steps": []
+        },
+        {
+          "n": 4,
+          "name": "Build the export sheet from real tasks",
+          "state": "current",
+          "startedAt": "2026-10-30T15:00:00-04:00",
+          "doneAt": null,
+          "time": "since Fri 3:00 PM",
+          "doneWhen": "The sheet exports every Task Card",
+          "steps": [
+            {
+              "n": 1,
+              "name": "Set up the export folder",
+              "state": "done",
+              "doneAt": "2026-10-31T12:00:00-04:00"
+            },
+            {
+              "n": 2,
+              "name": "Read the example Task Cards",
+              "state": "done",
+              "doneAt": "2026-10-31T12:00:00-04:00"
+            },
+            {
+              "n": 3,
+              "name": "Write the Title column",
+              "state": "done",
+              "doneAt": "2026-10-31T12:00:00-04:00"
+            },
+            {
+              "n": 4,
+              "name": "Write the Lane and State columns",
+              "state": "done",
+              "doneAt": "2026-11-02T08:00:00-05:00"
+            },
+            {
+              "n": 5,
+              "name": "Add the Owner column to the sheet",
+              "state": "current",
+              "doneAt": null
+            },
+            {
+              "n": 6,
+              "name": "Sort the rows by Lane",
+              "state": "todo",
+              "doneAt": null
+            },
+            {
+              "n": 7,
+              "name": "Handle a Task Card with no Lane",
+              "state": "todo",
+              "doneAt": null
+            },
+            {
+              "n": 8,
+              "name": "Write the file as tasks.csv",
+              "state": "todo",
+              "doneAt": null
+            },
+            {
+              "n": 9,
+              "name": "Open the file in a spreadsheet",
+              "state": "todo",
+              "doneAt": null
+            },
+            {
+              "n": 10,
+              "name": "Test with 200 example Task Cards",
+              "state": "todo",
+              "doneAt": null
+            },
+            {
+              "n": 11,
+              "name": "Write the help line for the export",
+              "state": "todo",
+              "doneAt": null
+            },
+            {
+              "n": 12,
+              "name": "Hand the sheet to the checker",
+              "state": "todo",
+              "doneAt": null
+            }
+          ]
+        },
+        {
+          "n": 5,
+          "name": "Check",
+          "state": "todo",
+          "startedAt": null,
+          "doneAt": null,
+          "time": null,
+          "doneWhen": "Dr. Kivo opens tasks.csv and every column matches",
+          "steps": []
+        },
+        {
+          "n": 6,
+          "name": "Send the first sheet to the team",
+          "state": "todo",
+          "startedAt": null,
+          "doneAt": null,
+          "time": null,
+          "doneWhen": "The team has the sheet",
+          "steps": []
+        },
+        {
+          "n": 7,
+          "name": "Watch the exports for a week",
+          "state": "todo",
+          "startedAt": null,
+          "doneAt": null,
+          "time": null,
+          "doneWhen": "No export error for 7 days",
+          "steps": []
+        }
+      ],
+      "stageCount": 7,
+      "currentStage": 4,
+      "currentStep": {
+        "n": 5,
+        "of": 12,
+        "name": "Add the Owner column to the sheet"
+      },
+      "doneWhen": "The sheet exports every Task Card",
+      "now": "Dale is building the first export sheet.",
+      "next": "Dale sorts the rows by Lane.",
+      "blockers": [
+        {
+          "id": "l-da1-b1",
+          "what": "Which columns should the Task Card export have?",
+          "waitingOn": "Captain",
+          "waitingOnYou": true,
+          "since": "2026-11-02T09:00:00-05:00",
+          "sinceLine": "since 9:00 AM",
+          "recordedBy": "Dr. Kivo",
+          "taskCard": "dr-kivo-1",
+          "line": "! Waiting on you: Which columns should the Task Card export have?, since 9:00 AM",
+          "projectMark": null
+        }
+      ],
+      "updated": {
+        "at": "2026-11-02T09:00:00-05:00",
+        "by": "Dr. Kivo",
+        "line": "Updated 9:00 AM by Dr. Kivo"
+      },
+      "stagesChanged": {
+        "at": "2026-10-30T15:00:00-04:00",
+        "by": "Dale",
+        "what": "added 12 steps under Build the export sheet from real tasks",
+        "line": "Changed by Dale Fri 3:00 PM: added 12 steps under Build the export sheet from real tasks"
+      },
+      "stale": null,
+      "done": null,
+      "display": {
+        "stageRow": "✓ 3 done · ● Build the export sh… · ○ 3 more",
+        "stageRowLength": 44,
+        "stageRowFolded": true,
+        "unfoldedRowLength": 178,
+        "stepLine": null,
+        "countLine": "Stage 4 of 7 · step 5 of 12: Add the Owner…",
+        "countLineFull": "Stage 4 of 7 · step 5 of 12: Add the Owner column to the sheet",
+        "blockersHeading": "Blockers (1)",
+        "projectLine": "Build the export sh… (4 of 7) · step 5 of 12",
+        "projectRow": "Build the export sh… (4 of 7) · step 5 of 12\n! Waiting on you",
+        "projectMark": "! Waiting on you",
+        "trackerLines": [
+          "✓ 3 done · ● Build the export sh… · ○ 3 more",
+          "Stage 4 of 7 · step 5 of 12: Add the Owner…",
+          "Done when: The sheet exports every Task Card",
+          "Now: Dale is building the first export sheet.",
+          "Next: Dale sorts the rows by Lane.",
+          "Blockers (1)",
+          "! Waiting on you: Which columns should the Task Card export have?, since 9:00 AM",
+          "Updated 9:00 AM by Dr. Kivo"
+        ],
+        "stagesSheet": [
+          "Stages of Task export (7)",
+          "✓ Plan, Design the column order, Prototype the CSV file (3 done)  ▸",
+          "● Build the export sheet from real tasks  since Fri 3:00 PM",
+          "   ✓ 4 steps done  ▸",
+          "   ● Add the Owner column to the sheet",
+          "   ○ Sort the rows by Lane",
+          "   ○ 6 more steps  ▸",
+          "  Done when: The sheet exports every Task Card",
+          "○ Check  Done when: Dr. Kivo opens tasks.csv and every column matches",
+          "○ Send the first sheet to the team  Done when: The team has the sheet",
+          "○ Watch the exports for a week  Done when: No export error for 7 days",
+          "Changed by Dale Fri 3:00 PM: added 12 steps under Build the export sheet from real tasks"
+        ]
+      },
+      "changes": [
+        {
+          "at": "2026-10-29T11:00:00-04:00",
+          "by": "Dale",
+          "what": "Set seven stages for the export. Plan started."
+        },
+        {
+          "at": "2026-10-29T16:00:00-04:00",
+          "by": "Dale",
+          "what": "Plan done, Design the column order started."
+        },
+        {
+          "at": "2026-10-30T10:00:00-04:00",
+          "by": "Dale",
+          "what": "Design the column order done, Prototype the CSV file started."
+        },
+        {
+          "at": "2026-10-30T15:00:00-04:00",
+          "by": "Dale",
+          "what": "Prototype the CSV file done, Build the export sheet from real tasks started. Added 12 steps."
+        },
+        {
+          "at": "2026-10-31T12:00:00-04:00",
+          "by": "Dale",
+          "what": "Steps done: Set up the export folder, Read the example Task Cards, Write the Title column."
+        },
+        {
+          "at": "2026-11-02T08:00:00-05:00",
+          "by": "Dale",
+          "what": "Step done: Write the Lane and State columns."
+        },
+        {
+          "at": "2026-11-02T09:00:00-05:00",
+          "by": "Dr. Kivo",
+          "what": "Blocker added: Waiting on you: Which columns should the Task Card export have?"
+        }
+      ]
+    },
+    "l-da2": {
+      "lane": "Dale help text",
+      "project": "dale-tools",
+      "status": "Done",
+      "lead": "Dale",
+      "plan": {
+        "endsWithSignOff": true,
+        "doneBy": [
+          "Dale"
+        ],
+        "checkedBy": "Dr. Kivo"
+      },
+      "stages": [
+        {
+          "n": 1,
+          "name": "Plan",
+          "state": "done",
+          "startedAt": "2026-10-29T10:00:00-04:00",
+          "doneAt": "2026-10-29T10:00:00-04:00",
+          "time": "done Thu 10:00 AM",
+          "doneWhen": "Help text planned for the three Dale tools",
+          "steps": []
+        },
+        {
+          "n": 2,
+          "name": "Execute",
+          "state": "done",
+          "startedAt": "2026-10-29T10:00:00-04:00",
+          "doneAt": "2026-10-30T16:00:00-04:00",
+          "time": "done Fri 4:00 PM",
+          "doneWhen": "Help text written for the three Dale tools",
+          "steps": []
+        },
+        {
+          "n": 3,
+          "name": "Check",
+          "state": "done",
+          "startedAt": "2026-10-30T16:00:00-04:00",
+          "doneAt": "2026-10-30T17:30:00-04:00",
+          "time": "done Fri 5:30 PM",
+          "doneWhen": "Dr. Kivo checks the help text and all checks pass",
+          "steps": []
+        }
+      ],
+      "stageCount": 3,
+      "currentStage": null,
+      "currentStep": null,
+      "doneWhen": null,
+      "now": "Done. Nothing running.",
+      "next": null,
+      "blockers": [],
+      "updated": {
+        "at": "2026-11-01T20:41:00-05:00",
+        "by": "Dale",
+        "line": "Updated Sun 8:41 PM by Dale"
+      },
+      "stagesChanged": {
+        "at": "2026-10-29T10:00:00-04:00",
+        "by": "Dale",
+        "what": "set the stages, Plan done",
+        "line": "Changed by Dale Thu 10:00 AM: set the stages, Plan done"
+      },
+      "stale": null,
+      "done": {
+        "at": "2026-11-01T20:41:00-05:00",
+        "by": "Dale",
+        "checkedBy": "Dr. Kivo",
+        "signedOff": true,
+        "signOffCard": "dale-1",
+        "activityLine": "Lane done. You signed it off on Task Card dale-1.",
+        "line": "Done Sun 8:41 PM. Checked by Dr. Kivo. Signed off by you."
+      },
+      "display": {
+        "stageRow": "✓ Plan  ✓ Execute  ✓ Check",
+        "stageRowLength": 26,
+        "stageRowFolded": false,
+        "unfoldedRowLength": 26,
+        "stepLine": null,
+        "countLine": null,
+        "countLineFull": null,
+        "blockersHeading": "No blockers",
+        "projectLine": "Done Sun 8:41 PM · signed off by you",
+        "projectRow": "Done Sun 8:41 PM · signed off by you",
+        "projectMark": null,
+        "trackerLines": [
+          "✓ Plan  ✓ Execute  ✓ Check",
+          "Done Sun 8:41 PM. Checked by Dr. Kivo. Signed off by you.",
+          "Updated Sun 8:41 PM by Dale"
+        ],
+        "stagesSheet": [
+          "Stages of Dale help text",
+          "✓ Plan  done Thu 10:00 AM",
+          "✓ Execute  done Fri 4:00 PM",
+          "✓ Check  done Fri 5:30 PM",
+          "Changed by Dale Thu 10:00 AM: set the stages, Plan done"
+        ]
+      },
+      "changes": [
+        {
+          "at": "2026-10-29T10:00:00-04:00",
+          "by": "Dale",
+          "what": "Set the stages Plan, Execute, Check. The plan ends with your sign-off. Plan done, Execute started."
+        },
+        {
+          "at": "2026-10-30T16:00:00-04:00",
+          "by": "Dale",
+          "what": "Execute done, Check started."
+        },
+        {
+          "at": "2026-10-30T17:30:00-04:00",
+          "by": "Dr. Kivo",
+          "what": "Check done: 3 of 3 checks pass. Dr. Kivo did not do the work."
+        },
+        {
+          "at": "2026-10-30T17:35:00-04:00",
+          "by": "Dale",
+          "what": "Blocker added: Waiting on you: Sign off: Dale help text is done?"
+        },
+        {
+          "at": "2026-11-01T20:41:00-05:00",
+          "by": "Dale",
+          "what": "Blocker cleared: you approved the sign-off at 8:40 PM. Lane done."
+        }
+      ]
+    }
+  },
+  "projectView": {
+    "quarterdeck": {
+      "lanes": 4,
+      "withTaskCards": [
+        "l-set",
+        "l-sea"
+      ],
+      "active": [
+        "l-mai"
+      ],
+      "done": [
+        "l-sid"
+      ],
+      "doneHeading": "Done (1)",
+      "rows": {
+        "l-set": {
+          "projectRow": "Execute (2 of 3) · ! Waiting on you",
+          "waiting": 2,
+          "newMark": "● 2 new"
+        },
+        "l-sea": {
+          "projectRow": "Execute (2 of 3) · step 3 of 4\n! Waiting on you",
+          "waiting": 2,
+          "newMark": "● 1 new"
+        },
+        "l-mai": {
+          "projectRow": "Plan (1 of 3) · step 2 of 3\nNo update for 20 hours",
+          "waiting": 0,
+          "newMark": null
+        },
+        "l-sid": {
+          "projectRow": "Done Fri 12:41 PM · checked by Shelvorn",
+          "waiting": 0,
+          "newMark": null
+        }
+      },
+      "newCount": 3
+    },
+    "heron-forge": {
+      "lanes": 2,
+      "withTaskCards": [
+        "l-sw1",
+        "l-sw2"
+      ],
+      "active": [],
+      "done": [],
+      "doneHeading": "Done (0)",
+      "rows": {
+        "l-sw1": {
+          "projectRow": "Execute (2 of 3) · step 2 of 4\n! Waiting on you",
+          "waiting": 2,
+          "newMark": "● 1 new"
+        },
+        "l-sw2": {
+          "projectRow": "Check (3 of 3) · ! Waiting on you",
+          "waiting": 1,
+          "newMark": "● 1 new"
+        }
+      },
+      "newCount": 2
+    },
+    "dale-tools": {
+      "lanes": 2,
+      "withTaskCards": [
+        "l-da1"
+      ],
+      "active": [],
+      "done": [
+        "l-da2"
+      ],
+      "doneHeading": "Done (1)",
+      "rows": {
+        "l-da1": {
+          "projectRow": "Build the export sh… (4 of 7) · step 5 of 12\n! Waiting on you",
+          "waiting": 2,
+          "newMark": "● 2 new"
+        },
+        "l-da2": {
+          "projectRow": "Done Sun 8:41 PM · signed off by you",
+          "waiting": 0,
+          "newMark": null
+        }
+      },
+      "newCount": 2
+    }
+  },
+  "counts": {
+    "waitingByLane": {
+      "l-set": 2,
+      "l-sea": 2,
+      "l-mai": 0,
+      "l-sid": 0,
+      "l-sw1": 2,
+      "l-sw2": 1,
+      "l-da1": 2,
+      "l-da2": 0
+    },
+    "waitingTotal": 9,
+    "quietLanes": [
+      "l-mai"
+    ],
+    "foldedLanes": [
+      "l-da1"
+    ],
+    "doneLanes": [
+      "l-sid",
+      "l-da2"
+    ]
+  }
+}

@@ -1,0 +1,22 @@
+[
+  {
+    "bot": {
+      "id": "bot-a"
+    },
+    "preview": "Looking at it now.",
+    "at": "2026-11-06T15:45:00-05:00",
+    "last": "Mb0a4",
+    "unread": true,
+    "rev": 42
+  },
+  {
+    "bot": {
+      "id": "bot-b"
+    },
+    "preview": "",
+    "at": "",
+    "last": "",
+    "unread": false,
+    "rev": 7
+  }
+]

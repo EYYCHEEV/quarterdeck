@@ -1,0 +1,105 @@
+{
+  "qd": "seen-addendum/1",
+  "for": "Quarterdeck final design PR 3: seen.json restated after item 1's Activity lines",
+  "author": "Quarterdeck contributors",
+  "written": "Tue Nov 3, 2026 (ET)",
+  "person": "Captain",
+  "how": [
+    "Replaces lanes, projectCounts and sidebarProjectsDot of seen/seen.json. A Lane's new count is the number of its Activity lines newer than its last-looked time (strictly newer).",
+    "Last-looked times are unchanged for the seven Lanes already in seen.json. The new Lane l-da2 was last looked at Sun 8:50 PM, after he approved its sign-off, so nothing in it is new.",
+    "`was` shows the value in seen.json before this addendum; only l-sw2 and l-da1 changed."
+  ],
+  "lanes": {
+    "l-set": {
+      "lane": "Settings",
+      "project": "quarterdeck",
+      "lastLooked": "2026-11-02T09:00:00-05:00",
+      "newCount": 2,
+      "line": "You last looked: 9:00 AM",
+      "was": {
+        "newCount": 2,
+        "line": "You last looked: 9:00 AM"
+      }
+    },
+    "l-sea": {
+      "lane": "Search",
+      "project": "quarterdeck",
+      "lastLooked": "2026-11-02T08:30:00-05:00",
+      "newCount": 1,
+      "line": "You last looked: 8:30 AM",
+      "was": {
+        "newCount": 1,
+        "line": "You last looked: 8:30 AM"
+      }
+    },
+    "l-mai": {
+      "lane": "Mail client",
+      "project": "quarterdeck",
+      "lastLooked": "2026-11-01T17:00:00-05:00",
+      "newCount": 0,
+      "line": null,
+      "was": {
+        "newCount": 0,
+        "line": null
+      }
+    },
+    "l-sid": {
+      "lane": "Sidebar and layout",
+      "project": "quarterdeck",
+      "lastLooked": "2026-10-30T15:00:00-04:00",
+      "newCount": 0,
+      "line": null,
+      "was": {
+        "newCount": 0,
+        "line": null
+      }
+    },
+    "l-sw1": {
+      "lane": "Matrix rooms",
+      "project": "heron-forge",
+      "lastLooked": "2026-11-01T09:00:00-05:00",
+      "newCount": 1,
+      "line": "You last looked: Sun 9:00 AM",
+      "was": {
+        "newCount": 1,
+        "line": "You last looked: Sun 9:00 AM"
+      }
+    },
+    "l-sw2": {
+      "lane": "Bridge",
+      "project": "heron-forge",
+      "lastLooked": "2026-10-22T09:00:00-04:00",
+      "newCount": 1,
+      "line": "You last looked: Oct 22, 9:00 AM",
+      "was": {
+        "newCount": 0,
+        "line": null
+      }
+    },
+    "l-da1": {
+      "lane": "Task export",
+      "project": "dale-tools",
+      "lastLooked": "2026-11-01T20:00:00-05:00",
+      "newCount": 2,
+      "line": "You last looked: Sun 8:00 PM",
+      "was": {
+        "newCount": 1,
+        "line": "You last looked: Sun 8:00 PM"
+      }
+    },
+    "l-da2": {
+      "lane": "Dale help text",
+      "project": "dale-tools",
+      "lastLooked": "2026-11-01T20:50:00-05:00",
+      "newCount": 0,
+      "line": null,
+      "was": "new Lane, not in seen.json"
+    }
+  },
+  "projectCounts": {
+    "quarterdeck": 3,
+    "heron-forge": 2,
+    "dale-tools": 2
+  },
+  "sidebarProjectsDot": true
+}

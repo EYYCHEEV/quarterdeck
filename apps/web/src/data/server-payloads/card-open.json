@@ -1,0 +1,42 @@
+{
+  "card": {
+    "id": "alba-1",
+    "project": "quarterdeck",
+    "lane": "Search",
+    "title": "How many results should each Search group show?",
+    "about": "Rows per Search group on the results screen.",
+    "context": "Search shows results in groups.\nA longer group pushes the next group off the phone screen.",
+    "ascii": "[ Chats  5 ]\n[ Cards  5 ]",
+    "options": [
+      { "label": "A. Three rows", "does": "Each group shows three rows.", "cost": "More taps to see the rest.", "pros": ["Fits a phone with the keyboard open"], "cons": ["Hides the fourth match"] },
+      { "label": "B. Five rows", "pick": true, "why": "Five fits the screen with room for the keyboard.", "pros": ["Fits a phone"], "cons": ["Longer scroll"], "tradeoff": "Between speed and reach." },
+      { "label": "C. Eight rows", "risk": "Pushes later groups off the screen.", "undo": "Change it back in Settings.", "door": "one-way" }
+    ],
+    "pick_why": "Five rows is the most that still leaves the keyboard room.",
+    "skip": "If you skip this, Search keeps showing five rows.",
+    "due": "2026-11-03T17:00:00-05:00",
+    "door": "two-way",
+    "category": ["design"],
+    "kind": "decision",
+    "you_do": "Pick one.",
+    "words": [["group", "the set of results of one kind"]],
+    "learn": [{ "label": "Search results", "url": "https://example.com/search-results" }],
+    "commands": [{ "where": "Mac terminal", "run": "npm run test:data" }],
+    "principles": { "follows": "Small screens come first.", "departs": "None." },
+    "note": "Tried five on the iPhone.",
+    "mailRef": "MT-101",
+    "pageRefs": ["PG-1"],
+    "artifactRefs": ["AR-1"],
+    "media": [{ "kind": "image", "file": "media/search-groups.png", "caption": "Five rows on a phone" }]
+  },
+  "rev": 3,
+  "state": "open",
+  "thread": [
+    { "id": "mail-101", "kind": "card", "sender": "alba", "sent": "2026-11-02T08:30:00-05:00", "document": { "qd": "card/1", "card": "alba-1", "id": "alba-1", "project": "quarterdeck", "lane": "Search" } },
+    { "id": "mail-102", "kind": "update", "sender": "alba", "sent": "2026-11-02T09:00:00-05:00", "document": { "qd": "update/1", "card": "alba-1", "rev": 2, "title": "How many results should each Search group show?" } },
+    { "id": "mail-103", "kind": "comment", "sender": "kivo", "sent": "2026-11-02T09:05:00-05:00", "document": { "qd": "comment/1", "card": "alba-1", "text": "Five fits the iPhone screen with room for the keyboard." } },
+    { "id": "mail-104", "kind": "update", "sender": "alba", "sent": "2026-11-02T09:40:00-05:00", "document": { "qd": "update/1", "card": "alba-1", "rev": 3, "about": "Rows per Search group on the results screen." } }
+  ],
+  "csrf": "sample-csrf-token-not-real",
+  "freshUntil": 1793836800.25
+}

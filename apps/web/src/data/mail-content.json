@@ -1,0 +1,637 @@
+{
+  "qd": "mail/1",
+  "for": "Quarterdeck build PR 7, Mail content: To and Cc on every mail, many bots in one thread, a forward linked both ways",
+  "author": "Quarterdeck contributors",
+  "written": "Tue Nov 3, 2026 (ET)",
+  "now": "2026-11-02T10:00:00-05:00",
+  "how": [
+    "Example data. Merge by reference. 'ccAdd' gives the Cc list of every existing mail, by mail reference: set it as 'cc' on that mail in data.js mail (MT-101 to MT-104) and in bots.json mailAdd (MT-105). A mail's 'to' and 'from' stay as they are. An empty list means no one was copied. There is no Bcc field anywhere.",
+    "'threadsAdd' lists two new threads in data.js mail shape (ref, subject, projectId, laneId, cardId, bots, mails) with 'cc' on every mail. Append them to the mail list. MT-106 is the forward of MT-101.2; MT-107 is the thread with four bots. 'bots' is the set of bots in the thread (alphabetical, as data.js has it); the order to show is 'botsOrdered' in 'expected.threads'.",
+    "A thread's bots are every bot that sent, received or was copied on any of its mails. Their display order is first appearance, reading the mails in order and each mail as From, then To, then Cc (the order the flow and preview m3 draw). The Mac list row shows the first two names and '+N' for the rest; the thread header lists them all. 'expected.threads[ref].listRow' holds both.",
+    "'forwardedFrom' on a mail (MT-106.1) names the mail it forwards; its quoted text, writer, recipient and time come from that mail. 'forwardedBy' on the original (MT-101.2) names who forwarded it, to whom and where (the ruling, flow step 4). 'expected.forward' holds the lines both ways.",
+    "'existingMailFixes' is the one change to an existing mail field other than cc and forwardedBy: MT-101.2 'artifactRefs' becomes [] (it was ['AR-1']). MT-101.2 is from 8:20 AM and AR-1 is added by data.js at 9:05 AM, so the mail cannot link it yet. Set it on that mail in data.js. The 9:05 AM Activity line in Lane Search still links AR-1 with MT-101.2, so nothing else moves.",
+    "'expected' is computed from the merged data so a build can check itself: bot order and row, day headings and list order (newest last mail first, the ruling: Today, Yesterday, then one heading per earlier day), the To line, Cc line, quote header and Ask list of every mail, and the bot filter (a bot matches when it sent, received or was copied, the ruling).",
+    "Ask list: the writer first marked '(wrote it)', then the thread's other bots in thread order, then 'Another bot...'. A removed bot (Pib) is not listed and gets '(removed)' beside its name where it is named (flow 'A removed bot', US-23).",
+    "Times are ISO in New York time, -04:00 before Sun Nov 1, 2026, 2:00 AM and -05:00 after, as in data.js mail. Every time is at or before 'now'. No bot's mail is later than that bot's lastActiveAt in bots.json; no mail reaches Pib after it was removed.",
+    "Nothing here edits a Lane, a card, a Page, an Artifact or a chat. MT-105 is as bots.json has it; only its Cc is added here."
+  ],
+  "ccAdd": {
+    "MT-101.1": [],
+    "MT-101.2": [],
+    "MT-101.3": [
+      "Dr. Kivo"
+    ],
+    "MT-101.4": [
+      "Dr. Kivo"
+    ],
+    "MT-102.1": [],
+    "MT-102.2": [],
+    "MT-102.3": [],
+    "MT-103.1": [
+      "Iris"
+    ],
+    "MT-103.2": [],
+    "MT-104.1": [],
+    "MT-104.2": [],
+    "MT-105.1": [],
+    "MT-105.2": [],
+    "MT-105.3": []
+  },
+  "threadsAdd": [
+    {
+      "ref": "MT-106",
+      "subject": "Fwd: Search group limit: how many rows per group?",
+      "projectId": "quarterdeck",
+      "laneId": "l-sea",
+      "cardId": null,
+      "bots": [
+        "Alba",
+        "Iris"
+      ],
+      "mails": [
+        {
+          "ref": "MT-106.1",
+          "from": "Alba",
+          "to": [
+            "Iris"
+          ],
+          "cc": [],
+          "at": "2026-11-02T09:52:00-05:00",
+          "text": "Please add this to the plan.",
+          "forwardedFrom": {
+            "ref": "MT-101.2"
+          }
+        }
+      ]
+    },
+    {
+      "ref": "MT-107",
+      "subject": "Recent searches on a phone",
+      "projectId": "quarterdeck",
+      "laneId": "l-sea",
+      "cardId": null,
+      "bots": [
+        "Alba",
+        "Dr. Kivo",
+        "Iris",
+        "Shelvorn"
+      ],
+      "mails": [
+        {
+          "ref": "MT-107.1",
+          "from": "Dr. Kivo",
+          "to": [
+            "Alba"
+          ],
+          "cc": [
+            "Shelvorn",
+            "Iris"
+          ],
+          "at": "2026-11-01T16:05:00-05:00",
+          "text": "Recent searches are shipped: the last five show under the field. Can Shelvorn check them on a phone?"
+        },
+        {
+          "ref": "MT-107.2",
+          "from": "Alba",
+          "to": [
+            "Shelvorn"
+          ],
+          "cc": [
+            "Dr. Kivo",
+            "Iris"
+          ],
+          "at": "2026-11-01T16:30:00-05:00",
+          "text": "Shelvorn, please check recent searches on a phone with the keyboard up."
+        },
+        {
+          "ref": "MT-107.3",
+          "from": "Shelvorn",
+          "to": [
+            "Alba"
+          ],
+          "cc": [
+            "Dr. Kivo",
+            "Iris"
+          ],
+          "at": "2026-11-01T17:15:00-05:00",
+          "text": "Checked on a phone. The five show, but the sheet runs under the keyboard."
+        },
+        {
+          "ref": "MT-107.4",
+          "from": "Alba",
+          "to": [
+            "Dr. Kivo"
+          ],
+          "cc": [
+            "Shelvorn",
+            "Iris"
+          ],
+          "at": "2026-11-01T19:10:00-05:00",
+          "text": "I wrote the Search notes down as AR-4. We still need a rows-per-group number.",
+          "artifactRefs": [
+            "AR-4"
+          ]
+        }
+      ]
+    }
+  ],
+  "forwardedBy": {
+    "MT-101.2": [
+      {
+        "by": "Alba",
+        "to": [
+          "Iris"
+        ],
+        "thread": "MT-106",
+        "mail": "MT-106.1"
+      }
+    ]
+  },
+  "existingMailFixes": {
+    "MT-101.2": {
+      "artifactRefs": {
+        "was": [
+          "AR-1"
+        ],
+        "now": []
+      }
+    }
+  },
+  "expected": {
+    "note": "Computed from data.js mail, bots.json mailAdd and this file. A checker merges them and compares.",
+    "threads": {
+      "MT-101": {
+        "botsOrdered": [
+          "Alba",
+          "Dr. Kivo",
+          "Iris"
+        ],
+        "count": 3,
+        "listRow": {
+          "shown": [
+            "Alba",
+            "Dr. Kivo"
+          ],
+          "plus": 1,
+          "text": "Alba, Dr. Kivo +1"
+        },
+        "lastMailAt": "2026-11-02T09:36:00-05:00",
+        "dayHeading": "Today",
+        "askThread": [
+          "Alba",
+          "Dr. Kivo",
+          "Iris",
+          "Another bot..."
+        ]
+      },
+      "MT-102": {
+        "botsOrdered": [
+          "Shelvorn",
+          "Iris"
+        ],
+        "count": 2,
+        "listRow": {
+          "shown": [
+            "Shelvorn",
+            "Iris"
+          ],
+          "plus": 0,
+          "text": "Shelvorn, Iris"
+        },
+        "lastMailAt": "2026-11-02T08:52:00-05:00",
+        "dayHeading": "Today",
+        "askThread": [
+          "Shelvorn",
+          "Iris",
+          "Another bot..."
+        ]
+      },
+      "MT-103": {
+        "botsOrdered": [
+          "Alba",
+          "Shelvorn",
+          "Iris"
+        ],
+        "count": 3,
+        "listRow": {
+          "shown": [
+            "Alba",
+            "Shelvorn"
+          ],
+          "plus": 1,
+          "text": "Alba, Shelvorn +1"
+        },
+        "lastMailAt": "2026-11-02T07:28:00-05:00",
+        "dayHeading": "Today",
+        "askThread": [
+          "Alba",
+          "Shelvorn",
+          "Iris",
+          "Another bot..."
+        ]
+      },
+      "MT-104": {
+        "botsOrdered": [
+          "Dale",
+          "Dr. Kivo"
+        ],
+        "count": 2,
+        "listRow": {
+          "shown": [
+            "Dale",
+            "Dr. Kivo"
+          ],
+          "plus": 0,
+          "text": "Dale, Dr. Kivo"
+        },
+        "lastMailAt": "2026-11-02T08:15:00-05:00",
+        "dayHeading": "Today",
+        "askThread": [
+          "Dale",
+          "Dr. Kivo",
+          "Another bot..."
+        ]
+      },
+      "MT-105": {
+        "botsOrdered": [
+          "Pib",
+          "Dr. Kivo"
+        ],
+        "count": 2,
+        "listRow": {
+          "shown": [
+            "Pib",
+            "Dr. Kivo"
+          ],
+          "plus": 0,
+          "text": "Pib, Dr. Kivo"
+        },
+        "lastMailAt": "2026-10-30T16:20:00-04:00",
+        "dayHeading": "Fri Oct 30",
+        "askThread": [
+          "Dr. Kivo",
+          "Another bot..."
+        ]
+      },
+      "MT-106": {
+        "botsOrdered": [
+          "Alba",
+          "Iris"
+        ],
+        "count": 2,
+        "listRow": {
+          "shown": [
+            "Alba",
+            "Iris"
+          ],
+          "plus": 0,
+          "text": "Alba, Iris"
+        },
+        "lastMailAt": "2026-11-02T09:52:00-05:00",
+        "dayHeading": "Today",
+        "askThread": [
+          "Alba",
+          "Iris",
+          "Another bot..."
+        ]
+      },
+      "MT-107": {
+        "botsOrdered": [
+          "Dr. Kivo",
+          "Alba",
+          "Shelvorn",
+          "Iris"
+        ],
+        "count": 4,
+        "listRow": {
+          "shown": [
+            "Dr. Kivo",
+            "Alba"
+          ],
+          "plus": 2,
+          "text": "Dr. Kivo, Alba +2"
+        },
+        "lastMailAt": "2026-11-01T19:10:00-05:00",
+        "dayHeading": "Yesterday",
+        "askThread": [
+          "Dr. Kivo",
+          "Alba",
+          "Shelvorn",
+          "Iris",
+          "Another bot..."
+        ]
+      }
+    },
+    "mails": {
+      "MT-101.1": {
+        "toLine": "Alba to Dr. Kivo",
+        "ccLine": null,
+        "quoteHeader": "MT-101.1 Alba to Dr. Kivo",
+        "ask": [
+          "Alba (wrote it)",
+          "Dr. Kivo",
+          "Iris",
+          "Another bot..."
+        ]
+      },
+      "MT-101.2": {
+        "toLine": "Dr. Kivo to Alba",
+        "ccLine": null,
+        "quoteHeader": "MT-101.2 Dr. Kivo to Alba",
+        "ask": [
+          "Dr. Kivo (wrote it)",
+          "Alba",
+          "Iris",
+          "Another bot..."
+        ]
+      },
+      "MT-101.3": {
+        "toLine": "Alba to Iris",
+        "ccLine": "cc Dr. Kivo",
+        "quoteHeader": "MT-101.3 Alba to Iris",
+        "ask": [
+          "Alba (wrote it)",
+          "Dr. Kivo",
+          "Iris",
+          "Another bot..."
+        ]
+      },
+      "MT-101.4": {
+        "toLine": "Iris to Alba",
+        "ccLine": "cc Dr. Kivo",
+        "quoteHeader": "MT-101.4 Iris to Alba",
+        "ask": [
+          "Iris (wrote it)",
+          "Alba",
+          "Dr. Kivo",
+          "Another bot..."
+        ]
+      },
+      "MT-102.1": {
+        "toLine": "Shelvorn to Iris",
+        "ccLine": null,
+        "quoteHeader": "MT-102.1 Shelvorn to Iris",
+        "ask": [
+          "Shelvorn (wrote it)",
+          "Iris",
+          "Another bot..."
+        ]
+      },
+      "MT-102.2": {
+        "toLine": "Iris to Shelvorn",
+        "ccLine": null,
+        "quoteHeader": "MT-102.2 Iris to Shelvorn",
+        "ask": [
+          "Iris (wrote it)",
+          "Shelvorn",
+          "Another bot..."
+        ]
+      },
+      "MT-102.3": {
+        "toLine": "Shelvorn to Iris",
+        "ccLine": null,
+        "quoteHeader": "MT-102.3 Shelvorn to Iris",
+        "ask": [
+          "Shelvorn (wrote it)",
+          "Iris",
+          "Another bot..."
+        ]
+      },
+      "MT-103.1": {
+        "toLine": "Alba to Shelvorn",
+        "ccLine": "cc Iris",
+        "quoteHeader": "MT-103.1 Alba to Shelvorn",
+        "ask": [
+          "Alba (wrote it)",
+          "Shelvorn",
+          "Iris",
+          "Another bot..."
+        ]
+      },
+      "MT-103.2": {
+        "toLine": "Shelvorn to Alba, Iris",
+        "ccLine": null,
+        "quoteHeader": "MT-103.2 Shelvorn to Alba, Iris",
+        "ask": [
+          "Shelvorn (wrote it)",
+          "Alba",
+          "Iris",
+          "Another bot..."
+        ]
+      },
+      "MT-104.1": {
+        "toLine": "Dale to Dr. Kivo",
+        "ccLine": null,
+        "quoteHeader": "MT-104.1 Dale to Dr. Kivo",
+        "ask": [
+          "Dale (wrote it)",
+          "Dr. Kivo",
+          "Another bot..."
+        ]
+      },
+      "MT-104.2": {
+        "toLine": "Dr. Kivo to Dale",
+        "ccLine": null,
+        "quoteHeader": "MT-104.2 Dr. Kivo to Dale",
+        "ask": [
+          "Dr. Kivo (wrote it)",
+          "Dale",
+          "Another bot..."
+        ]
+      },
+      "MT-105.1": {
+        "toLine": "Pib (removed) to Dr. Kivo",
+        "ccLine": null,
+        "quoteHeader": "MT-105.1 Pib to Dr. Kivo",
+        "ask": [
+          "Dr. Kivo",
+          "Another bot..."
+        ]
+      },
+      "MT-105.2": {
+        "toLine": "Dr. Kivo to Pib (removed)",
+        "ccLine": null,
+        "quoteHeader": "MT-105.2 Dr. Kivo to Pib",
+        "ask": [
+          "Dr. Kivo (wrote it)",
+          "Another bot..."
+        ]
+      },
+      "MT-105.3": {
+        "toLine": "Pib (removed) to Dr. Kivo",
+        "ccLine": null,
+        "quoteHeader": "MT-105.3 Pib to Dr. Kivo",
+        "ask": [
+          "Dr. Kivo",
+          "Another bot..."
+        ]
+      },
+      "MT-106.1": {
+        "toLine": "Alba to Iris",
+        "ccLine": null,
+        "quoteHeader": "MT-106.1 Alba to Iris",
+        "ask": [
+          "Alba (wrote it)",
+          "Iris",
+          "Another bot..."
+        ]
+      },
+      "MT-107.1": {
+        "toLine": "Dr. Kivo to Alba",
+        "ccLine": "cc Shelvorn, Iris",
+        "quoteHeader": "MT-107.1 Dr. Kivo to Alba",
+        "ask": [
+          "Dr. Kivo (wrote it)",
+          "Alba",
+          "Shelvorn",
+          "Iris",
+          "Another bot..."
+        ]
+      },
+      "MT-107.2": {
+        "toLine": "Alba to Shelvorn",
+        "ccLine": "cc Dr. Kivo, Iris",
+        "quoteHeader": "MT-107.2 Alba to Shelvorn",
+        "ask": [
+          "Alba (wrote it)",
+          "Dr. Kivo",
+          "Shelvorn",
+          "Iris",
+          "Another bot..."
+        ]
+      },
+      "MT-107.3": {
+        "toLine": "Shelvorn to Alba",
+        "ccLine": "cc Dr. Kivo, Iris",
+        "quoteHeader": "MT-107.3 Shelvorn to Alba",
+        "ask": [
+          "Shelvorn (wrote it)",
+          "Dr. Kivo",
+          "Alba",
+          "Iris",
+          "Another bot..."
+        ]
+      },
+      "MT-107.4": {
+        "toLine": "Alba to Dr. Kivo",
+        "ccLine": "cc Shelvorn, Iris",
+        "quoteHeader": "MT-107.4 Alba to Dr. Kivo",
+        "ask": [
+          "Alba (wrote it)",
+          "Dr. Kivo",
+          "Shelvorn",
+          "Iris",
+          "Another bot..."
+        ]
+      }
+    },
+    "list": [
+      {
+        "heading": "Today",
+        "threads": [
+          "MT-106",
+          "MT-101",
+          "MT-102",
+          "MT-104",
+          "MT-103"
+        ]
+      },
+      {
+        "heading": "Yesterday",
+        "threads": [
+          "MT-107"
+        ]
+      },
+      {
+        "heading": "Fri Oct 30",
+        "threads": [
+          "MT-105"
+        ]
+      }
+    ],
+    "botFilter": {
+      "Alba": {
+        "threads": [
+          "MT-101",
+          "MT-103",
+          "MT-106",
+          "MT-107"
+        ],
+        "onlyThroughCc": []
+      },
+      "Dale": {
+        "threads": [
+          "MT-104"
+        ],
+        "onlyThroughCc": []
+      },
+      "Dr. Kivo": {
+        "threads": [
+          "MT-101",
+          "MT-104",
+          "MT-105",
+          "MT-107"
+        ],
+        "onlyThroughCc": []
+      },
+      "Iris": {
+        "threads": [
+          "MT-101",
+          "MT-102",
+          "MT-103",
+          "MT-106",
+          "MT-107"
+        ],
+        "onlyThroughCc": [
+          "MT-107"
+        ]
+      },
+      "Pib": {
+        "threads": [
+          "MT-105"
+        ],
+        "onlyThroughCc": []
+      },
+      "Shelvorn": {
+        "threads": [
+          "MT-102",
+          "MT-103",
+          "MT-107"
+        ],
+        "onlyThroughCc": []
+      }
+    },
+    "forward": {
+      "original": "MT-101.2",
+      "forwardMail": "MT-106.1",
+      "forwardThread": "MT-106",
+      "forwardedLine": "Forwarded from MT-101.2 >",
+      "quoted": {
+        "writerToRecipient": "Dr. Kivo to Alba",
+        "time": "8:20 AM",
+        "text": "Five fits the iPhone with the keyboard up. Three is too few for Chats."
+      },
+      "originalLine": "Forwarded by Alba to Iris in MT-106 >"
+    },
+    "counts": {
+      "threads": 7,
+      "mails": 19
+    }
+  },
+  "changesToExisting": [
+    "data.js mail MT-101 to MT-104 and bots.json mailAdd MT-105: every mail gains 'cc' (values in ccAdd). The only non-empty ones on existing mails are MT-101.3 (cc Dr. Kivo), MT-101.4 (cc Dr. Kivo) and MT-103.1 (cc Iris). No thread gains or loses a bot, so no existing 'bots' list changes.",
+    "data.js mail MT-101.2 gains 'forwardedBy' (Alba to Iris in MT-106).",
+    "data.js mail MT-101.2: 'artifactRefs' becomes [] (it was ['AR-1']), because MT-101.2 (8:20 AM) is earlier than AR-1, which data.js adds at 9:05 AM. The 9:05 AM Activity line in Lane Search still links AR-1 with MT-101.2, so nothing else moves. The change is in 'existingMailFixes'.",
+    "The mail list grows from 5 threads (MT-101 to MT-105) to 7 (MT-106 and MT-107 added). Newest first: MT-106 9:52 AM, MT-101 9:36, MT-102 8:52, MT-104 8:15, MT-103 7:28 under Today; MT-107 under Yesterday; MT-105 under Fri Oct 30. Nothing in Search, the Queue, a Lane or the last-looked counts depends on mail, so nothing else changes.",
+    "No bots.json value changes. MT-105 is exactly as the content lead fixed it."
+  ],
+  "openCalls": [
+    "Bot order: data.js lists each thread's bots alphabetically, but the flow and preview m3 order them by first appearance (writer, then To, then Cc). This file follows the flow and gives 'botsOrdered'. For MT-102 the header reads 'Shelvorn, Iris', not 'Iris, Shelvorn'; for MT-103 'Alba, Shelvorn, Iris'. The design lead's call.",
+    "An empty Cc: the ruling says every mail shows 'cc <bots>'. For an empty Cc this file suggests drawing no cc line at all (not 'cc' with nothing). The design lead's call.",
+    "Removed bot: '(removed)' is suggested beside Pib's name wherever it is named (To line, Cc line, thread header), as the flow draws it for the writer. The design lead's call.",
+    "Earlier-day heading: the ruling says 'Today, Yesterday and earlier day headings'. This file writes 'Fri Oct 30'. The design lead's call.",
+    "Thread-header Ask (the ruling gives the writer-first list for a single mail only): suggested list is every bot in the thread in thread order, then 'Another bot...'. The design lead's call.",
+    "MT-106 has cardId null. MT-101 already sits behind alba-1, and the card's Mail tile points at one thread; a second thread on the same card could break a one-thread assumption. The forward links back to MT-101.2 instead.",
+    "Cc choices on the existing mails (MT-101.3, MT-101.4 and MT-103.1) are content calls made here, using only bots already in each thread, so no thread's bot list changes."
+  ]
+}
