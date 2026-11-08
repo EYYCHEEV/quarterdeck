@@ -8,6 +8,10 @@ The same rules apply to drafts. A draft can be closed for the same reasons as a 
 
 Report security problems privately as described in [SECURITY.md](SECURITY.md). Never open a public issue for one.
 
+## Where the work happens
+
+This repository is where Quarterdeck is built: the web app, the bot tools, the server, their checks and everything else that can be shared. All work happens in a clone of this repository, on a branch, and lands here by pull request. Deployment to the maintainers' live server, and design experiments, are kept in separate private repositories, so neither belongs in a pull request here.
+
 ## What we welcome
 
 Focused bug fixes, reliability fixes, tests, and documentation fixes are the most likely to be accepted. Unrequested features, opinionated rewrites, and unrelated cleanup are not.
