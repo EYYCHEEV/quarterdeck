@@ -1,13 +1,15 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useQd } from "../../data/hooks";
-import { useReceipt, useSession } from "../../data/session";
-import { SessionUnconfirmed, SignInRequired } from "../../data/source";
-import { answerStep, cardKey, carryAnswer, confirmPrompt, notePlaceholder, receiptText, sendButton, startAnswer, type AnswerEvent, type AnswerState } from "../../domain/answer";
+import { readSession, sessionGeneration, useReceipt, useSession, writeSession } from "../../data/session";
+import { TimedOut } from "../../data/source";
+import { answerStep, cardKey, carryAnswer, confirmPrompt, notePlaceholder, receiptText, SEND_LIMIT_MS, sendButton, startAnswer, type AnswerEvent, type AnswerState } from "../../domain/answer";
 import { noAnswerLine, oneWayBlock } from "../../domain/card";
-import { failedText, pastDueLine, sendingText } from "../../domain/card-words";
+import { canTryAgain, failedText, pastDueLine, sendingText, SIGN_IN_AGAIN_PATH } from "../../domain/card-words";
 import { nextAfter, rankQueue } from "../../domain/queue";
 import { href } from "../../domain/routes";
 import type { Card, CardOption, Choice, World } from "../../domain/types";
+import { reducedMotion } from "../../platform/motion";
+import { schedule } from "../../platform/timer";
 import { Button, IconButton } from "../../ui/button";
 import { cx } from "../../ui/cx";
 import { TextArea } from "../../ui/field";
@@ -237,9 +239,13 @@ function OneWayBlock({ risk }: { risk: string }) {
 export function AnswerFlow({ card, world, whole, keys }: { card: Card; world: World; whole: boolean; keys: boolean }) {
   const qd = useQd();
   const [, setReceipt] = useReceipt();
-  const [stored, setStored] = useSession<AnswerState | null>("answer." + card.id, null);
+  const key = "answer." + card.id;
+  const [stored, setStored] = useSession<AnswerState | null>(key, null);
   const state = stored ? carryAnswer(card, stored) : startAnswer(card);
   const back = useRef<HTMLButtonElement>(null);
+  const sendRef = useRef<HTMLButtonElement>(null);
+  const confirmRef = useRef<HTMLDivElement>(null);
+  const reveal = useRef(false);
   const latest = useRef(state);
   const lifetime = __QD_SOURCE__ === "server" ? useRef(0) : null;
   if (__QD_SOURCE__ === "server") useEffect(() => () => { lifetime!.current += 1; }, [card.id]);
@@ -257,28 +263,52 @@ export function AnswerFlow({ card, world, whole, keys }: { card: Card; world: Wo
   const locked = state.phase === "sending";
   const confirming = state.phase === "confirm";
 
+  useLayoutEffect(() => {
+    if (!reveal.current) return;
+    reveal.current = false;
+    (confirmRef.current ?? sendRef.current)?.scrollIntoView({ block: "nearest", behavior: reducedMotion() ? "instant" : "smooth" });
+  });
+
   useEffect(() => {
-    if (confirming) back.current?.focus();
+    if (confirming) back.current?.focus({ preventScroll: true });
   }, [confirming]);
 
   const deliver = async (after: AnswerState) => {
     if (after.phase !== "sending" || !after.choice) return;
     const from = currentPath();
+    const since = sessionGeneration();
     const mine = __QD_SOURCE__ === "server" ? lifetime!.current : 0;
+    let stop = () => {};
     try {
-      const answer = await qd.answer(card.id, { choice: after.choice, note: after.note, version: card.version });
+      const answer = await Promise.race([
+        qd.answer(card.id, { choice: after.choice, note: after.note, version: card.version }),
+        new Promise<never>((_, reject) => {
+          stop = schedule(() => reject(new TimedOut()), SEND_LIMIT_MS);
+        }),
+      ]);
+      if (sessionGeneration() !== since) return;
+      writeSession(key, null);
       if (__QD_SOURCE__ === "server" && mine !== lifetime!.current) return;
       const nextId = nextAfter(rankQueue(world.cards, world.tasks, qd.now()), card.id);
-      setStored(null);
       setReceipt({ text: receiptText(card, answer), cardId: nextId });
       if (currentPath() === from) go(href.queue(nextId), { replace: true });
     } catch (error) {
-      if (__QD_SOURCE__ === "server" && (mine !== lifetime!.current || error instanceof SignInRequired || error instanceof SessionUnconfirmed)) return;
-      step({ type: "failed", error });
+      if (sessionGeneration() !== since) return;
+      writeSession(key, answerStep(card, readSession<AnswerState | null>(key, null) ?? after, { type: "failed", error }));
+    } finally {
+      stop();
     }
   };
 
-  const send = (choice?: Choice) => deliver(step({ type: "send", at: Date.now(), choice }));
+  const pick = (choice: Choice) => {
+    reveal.current = true;
+    step({ type: "choose", choice });
+  };
+  const send = (choice?: Choice) => {
+    const next = step({ type: "send", at: Date.now(), choice });
+    if (next.phase === "confirm") reveal.current = true;
+    return deliver(next);
+  };
   const confirm = () => deliver(step({ type: "confirm", at: Date.now() }));
   const button = sendButton(card, state);
   const prompt = confirmPrompt(card, state);
@@ -290,7 +320,7 @@ export function AnswerFlow({ card, world, whole, keys }: { card: Card; world: Wo
     const onChoice = event.target instanceof Element && event.target.closest("[data-choice]") !== null;
     if (action.type === "choose") {
       event.preventDefault();
-      step({ type: "choose", choice: action.choice });
+      pick(action.choice);
     } else if (action.type === "send" && now.phase !== "confirm" && (onChoice || !onControl(event.target)) && !sendButton(card, now).disabled) {
       event.preventDefault();
       send();
@@ -322,7 +352,7 @@ export function AnswerFlow({ card, world, whole, keys }: { card: Card; world: Wo
                 on={same(state.choice, { kind: "option", letter: option.letter })}
                 locked={locked}
                 whole={whole}
-                onPick={() => step({ type: "choose", choice: { kind: "option", letter: option.letter } })}
+                onPick={() => pick({ kind: "option", letter: option.letter })}
               />
             ))}
             <li>
@@ -331,7 +361,7 @@ export function AnswerFlow({ card, world, whole, keys }: { card: Card; world: Wo
                 role="radio"
                 aria-checked={none}
                 disabled={locked}
-                onClick={() => step({ type: "choose", choice: { kind: "none" } })}
+                onClick={() => pick({ kind: "none" })}
                 data-choice=""
                 className={cx("flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-panel border bg-panel px-3.5 py-2 text-left text-row font-semibold disabled:cursor-default", none ? CHOSEN : "border-line-3")}
                 data-testid="none-of-these"
@@ -378,11 +408,18 @@ export function AnswerFlow({ card, world, whole, keys }: { card: Card; world: Wo
         />
         {state.phase === "failed" && (
           <div className="mt-2.5" data-testid="send-failed">
-            <ErrorLine onRetry={() => send()} retryLabel="Try again">{failedText(state)}</ErrorLine>
+            <ErrorLine onRetry={canTryAgain(state) ? () => send() : undefined} retryLabel="Try again">
+              {failedText(state)}
+            </ErrorLine>
+            {state.cause === "sign-in" && (
+              <a href={SIGN_IN_AGAIN_PATH} className="inline-flex min-h-11 items-center px-1 text-meta text-link hover:underline">
+                Sign in again
+              </a>
+            )}
           </div>
         )}
         {confirming ? (
-          <div className="mt-2.5 rounded-panel border border-line-3 bg-panel p-3" role="group" aria-label="Confirm" data-testid="confirm">
+          <div ref={confirmRef} className="mt-2.5 rounded-panel border border-line-3 bg-panel p-3" role="group" aria-label="Confirm" data-testid="confirm">
             <p className="text-body font-semibold">{prompt.question}</p>
             <div className="mt-2.5 grid grid-cols-2 gap-2">
               <Button kind="primary" onClick={confirm} data-testid="confirm-send">
@@ -403,7 +440,7 @@ export function AnswerFlow({ card, world, whole, keys }: { card: Card; world: Wo
             </Button>
           </div>
         ) : (
-          <Button kind="primary" block className="mt-2.5" disabled={button.disabled || locked} onClick={() => send()} data-testid="send">
+          <Button ref={sendRef} kind="primary" block className="mt-2.5" disabled={button.disabled || locked} onClick={() => send()} data-testid="send">
             {locked ? sendingText(state) : button.text}
           </Button>
         )}

@@ -40,6 +40,13 @@ export class NotConfirmed extends Error {
   }
 }
 
+export class TimedOut extends NotConfirmed {
+  constructor() {
+    super();
+    this.name = "TimedOut";
+  }
+}
+
 export class RateLimited extends Error {
   constructor() {
     super("too many requests, wait");
