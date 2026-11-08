@@ -177,7 +177,7 @@ export function Composer({
     if (!el || !form) return;
     form.style.minHeight = form.offsetHeight + "px";
     el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, 160) + "px";
+    el.style.height = Math.min(el.scrollHeight, window.matchMedia("(min-width: 640px)").matches ? 208 : 160) + "px";
     form.style.minHeight = "";
   }, [draft.text, inputRef]);
 
