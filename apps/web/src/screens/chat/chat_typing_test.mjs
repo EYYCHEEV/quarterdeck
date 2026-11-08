@@ -293,6 +293,25 @@ it("Chat on the Mac (1512 x 982): Option+Return sends nothing, as Shift+Return",
   assert.ok(value.startsWith(DRAFT), `the box after Option+Return: ${JSON.stringify(value)}`);
 });
 
+for (const [label, width, height] of [
+  ["an iPad upright (744 x 1133)", 744, 1133],
+  ["an iPad sideways (1133 x 744)", 1133, 744],
+  ["a phone (390 x 844)", 390, 844],
+]) {
+  it(`Chat on ${label}: a tap on Send sends the message, and the box keeps focus`, phone(width, height), async (p) => {
+    await p.goto(origin + "/chat/iris");
+    await T(p, "chat-bot-message").first().waitFor();
+    await T(p, "chat-input").tap();
+    await p.keyboard.type("Sent with a tap.");
+    await T(p, "chat-send").tap();
+    await p
+      .waitForFunction(() => document.querySelector('[data-testid="chat-input"]').value === "", null, { timeout: 3000 })
+      .catch(() => assert.fail("the tap on Send sent nothing: the box still holds the text"));
+    await T(p, "chat-my-message").filter({ hasText: "Sent with a tap." }).first().waitFor();
+    assert.equal(await p.evaluate(() => document.activeElement?.getAttribute("data-testid")), "chat-input", "where the focus is after the tap on Send");
+  });
+}
+
 const browser = await engines[ENGINE].launch(ENGINE === "chromium" ? chromeLaunchOptions({ args: ["--no-sandbox"] }) : {});
 try {
   for (const item of cases) {
