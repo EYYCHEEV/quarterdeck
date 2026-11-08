@@ -14,7 +14,7 @@ A bad release is never edited or replaced. The fix is the next version.
 | `quarterdeck-omp-wake-X.Y.Z.tar.gz` | The wake extension for OMP: its source, tests and install guide. Never configuration, cursors, locks or keys |
 | `SHA256SUMS` | One line for each file above |
 
-The wheel and the wake extension share one version number. How to install an exact version and check it is in the [README](../../README.md).
+The wheel and the wake extension share one version number. How to install an exact version and check it is in the [bot tools guide](../bot-tools.md#install-an-exact-version).
 
 ### Before a release can start
 
@@ -63,7 +63,7 @@ An immutable release cannot be changed. If something is wrong, the next version 
 
 ### Installing
 
-Install an exact version, never "latest", and check each file against `SHA256SUMS` before you install. The steps are in the [README](../../README.md).
+Install an exact version, never "latest", and check each file against `SHA256SUMS` before you install. The steps are in the [bot tools guide](../bot-tools.md#install-an-exact-version).
 
 ## Server and app releases
 

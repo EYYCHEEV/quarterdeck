@@ -75,15 +75,15 @@ test("a signed-out list is SignInRequired, and a 503, a 500 or a 400 is a plain 
   assert.throws(() => readBotsList(200, "[]"), unreadable, "a list that is an array");
 });
 
-test("each action body holds exactly its fields, and the code goes back without its space", async () => {
-  const { refuseBody, inviteBody, cancelBody } = await load();
-  assert.deepEqual(JSON.parse(refuseBody("K7P4 2Q9M", "t1")), { code: "K7P42Q9M", csrf: "t1" });
-  assert.deepEqual(Object.keys(JSON.parse(refuseBody("K7P42Q9M", "t1"))), ["code", "csrf"]);
+test("each action body holds exactly its fields, and the code goes back without its space, the same for Approve and Refuse", async () => {
+  const { codeBody, inviteBody, cancelBody } = await load();
+  assert.deepEqual(JSON.parse(codeBody("K7P4 2Q9M", "t1")), { code: "K7P42Q9M", csrf: "t1" });
+  assert.deepEqual(Object.keys(JSON.parse(codeBody("K7P42Q9M", "t1"))), ["code", "csrf"]);
   assert.deepEqual(JSON.parse(inviteBody("tarn", "t2")), { forName: "tarn", csrf: "t2" });
   assert.deepEqual(JSON.parse(inviteBody(null, "t2")), { forName: null, csrf: "t2" });
   assert.deepEqual(Object.keys(JSON.parse(inviteBody(null, "t2"))), ["forName", "csrf"]);
   assert.deepEqual(JSON.parse(cancelBody("inv-12charsxx", "t3")), { id: "inv-12charsxx", csrf: "t3" });
-  for (const csrf of ["", null, undefined]) assert.throws(() => refuseBody("K7P42Q9M", csrf), named("Refused"), String(csrf));
+  for (const csrf of ["", null, undefined]) assert.throws(() => codeBody("K7P42Q9M", csrf), named("Refused"), String(csrf));
 });
 
 test("a typed name is checked against Backchannel's rule before anything is sent, and an empty name means any bot", async () => {
@@ -100,19 +100,20 @@ test("each action answer gives its words: 303 a fresh sign-in, 401 and 403 signe
   const { readAction, BOTS_WORDS } = await load();
   const refused = (words) => (error) => error?.name === "Refused" && error.message === words;
   assert.throws(() => readAction("refuse", 303, ""), named("FreshSignInRequired"));
-  for (const status of [401, 403]) for (const path of ["refuse", "invite", "cancel"]) assert.throws(() => readAction(path, status, '{"error":"session"}'), named("SignInRequired"), path + " " + status);
+  for (const status of [401, 403]) for (const path of ["approve", "refuse", "invite", "cancel"]) assert.throws(() => readAction(path, status, '{"error":"session"}'), named("SignInRequired"), path + " " + status);
+  assert.throws(() => readAction("approve", 404, '{"error":"gone"}'), refused(BOTS_WORDS.gone));
   assert.throws(() => readAction("refuse", 404, '{"error":"gone"}'), refused(BOTS_WORDS.gone));
   assert.throws(() => readAction("cancel", 404, '{"error":"gone"}'), refused(BOTS_WORDS.inviteGone));
   assert.throws(() => readAction("invite", 422, '{"error":"name"}'), refused(BOTS_WORDS.name));
-  for (const path of ["refuse", "invite", "cancel"]) assert.throws(() => readAction(path, 429, '{"error":"rate"}'), refused(BOTS_WORDS.rate), path);
-  for (const [path, status, body] of [["refuse", 400, '{"error":"request refused"}'], ["invite", 503, '{"error":"request unavailable"}'], ["refuse", 404, '{"error":"not found"}'], ["cancel", 500, ""], ["invite", 200, "not json"], ["refuse", 200, '{"csrf":""}'], ["invite", 200, text("action-200.json")]]) {
+  for (const path of ["approve", "refuse", "invite", "cancel"]) assert.throws(() => readAction(path, 429, '{"error":"rate"}'), refused(BOTS_WORDS.rate), path);
+  for (const [path, status, body] of [["approve", 400, '{"error":"request refused"}'], ["approve", 503, '{"error":"request unavailable"}'], ["approve", 200, "not json"], ["refuse", 400, '{"error":"request refused"}'], ["invite", 503, '{"error":"request unavailable"}'], ["refuse", 404, '{"error":"not found"}'], ["cancel", 500, ""], ["invite", 200, "not json"], ["refuse", 200, '{"csrf":""}'], ["invite", 200, text("action-200.json")]]) {
     assert.throws(() => readAction(path, status, body), named("NotConfirmed"), path + " " + status + " " + body);
   }
 });
 
 test("a done action gives the new token and fresh sign-in time, and a done invite also gives the invite, its code and its prompt", async () => {
   const { readAction } = await load();
-  assert.deepEqual(readAction("refuse", 200, text("action-200.json")), { csrf: "csrf-placeholder", freshUntil: 0 });
+  for (const path of ["approve", "refuse"]) assert.deepEqual(readAction(path, 200, text("action-200.json")), { csrf: "csrf-placeholder", freshUntil: 0 }, path);
   assert.deepEqual(readAction("cancel", 200, JSON.stringify({ ...sample("action-200.json"), more: 1 })), { csrf: "csrf-placeholder", freshUntil: 0 });
   assert.deepEqual(readAction("invite", 200, text("invite-200.json")), sample("invite-200.json"));
   for (const change of [{ code: "" }, { prompt: "" }, { invite: { id: "inv-newtarn01", forName: "Tarn", ends: "2026-11-06T07:00:00-05:00" } }, { invite: null }]) {
