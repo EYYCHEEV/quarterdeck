@@ -5041,6 +5041,7 @@ for (const [name, size] of [["a phone", PHONE], ["an iPad upright", IPAD_UPRIGHT
     await p.keyboard.type("c");
     await p.keyboard.press("Control+Enter");
     await boxEmpty(p);
+    await T(p, "chat-input").click();
     await p.keyboard.type("d");
     await p.keyboard.press("Meta+Enter");
     await boxEmpty(p);
