@@ -1,0 +1,31 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/captain/cards/repo-lead-3/comments",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "text": "Can this wait until the review lane opens?",
+      "requestId": "req-0001",
+      "csrf": "csrf-placeholder"
+    }
+  },
+  "signIn": "real",
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Content-Security-Policy": "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+    "Referrer-Policy": "strict-origin",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Content-Length": "58"
+  },
+  "body": {
+    "status": "sent",
+    "csrf": "csrf-placeholder",
+    "freshUntil": 0
+  },
+  "outbound": []
+}

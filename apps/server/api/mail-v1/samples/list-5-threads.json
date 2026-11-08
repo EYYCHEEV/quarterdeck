@@ -1,0 +1,102 @@
+{
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Content-Security-Policy": "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+    "Referrer-Policy": "strict-origin",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "ETag": "\"9831ca503ba9c4fa33db5a50a89f163b7d31377551bef9ca861dce631987f8b5\"",
+    "Content-Length": "1042"
+  },
+  "body": {
+    "threads": [
+      {
+        "ref": "MT-5",
+        "subject": "Backlog digest",
+        "project": null,
+        "lane": null,
+        "card": null,
+        "bots": [
+          "bot-b",
+          "account-user"
+        ],
+        "lastAt": "2026-11-04T15:00:00-05:00",
+        "count": 60,
+        "days": [
+          "2026-11-04"
+        ]
+      },
+      {
+        "ref": "MT-4",
+        "subject": "Daily status",
+        "project": null,
+        "lane": null,
+        "card": null,
+        "bots": [
+          "bot-a",
+          "account-user"
+        ],
+        "lastAt": "2026-11-04T08:30:00-05:00",
+        "count": 1,
+        "days": [
+          "2026-11-04"
+        ]
+      },
+      {
+        "ref": "MT-3",
+        "subject": "Release window",
+        "project": null,
+        "lane": null,
+        "card": null,
+        "bots": [
+          "bot-b",
+          "account-user"
+        ],
+        "lastAt": "2026-11-04T07:00:00-05:00",
+        "count": 3,
+        "days": [
+          "2026-11-04",
+          "2026-11-03"
+        ]
+      },
+      {
+        "ref": "MT-2",
+        "subject": "Weekly build summary",
+        "project": null,
+        "lane": null,
+        "card": null,
+        "bots": [
+          "bot-b",
+          "account-user"
+        ],
+        "lastAt": "2026-11-03T08:00:00-05:00",
+        "count": 1,
+        "days": [
+          "2026-11-03"
+        ]
+      },
+      {
+        "ref": "MT-1",
+        "subject": "Search group limit: how many rows per group?",
+        "project": null,
+        "lane": null,
+        "card": null,
+        "bots": [
+          "repo-lead",
+          "account-user",
+          "bot-a"
+        ],
+        "lastAt": "2026-11-02T11:40:00-05:00",
+        "count": 4,
+        "days": [
+          "2026-11-02"
+        ]
+      }
+    ],
+    "truncated": false,
+    "csrf": "csrf-placeholder",
+    "freshUntil": 0
+  }
+}

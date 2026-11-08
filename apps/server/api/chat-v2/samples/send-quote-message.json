@@ -1,0 +1,10 @@
+{
+  "bot": "bot-a",
+  "text": "Yes, that one.",
+  "clientId": "k3",
+  "csrf": "CSRF",
+  "quote": {
+    "id": "Mb0a2",
+    "text": "It matches."
+  }
+}

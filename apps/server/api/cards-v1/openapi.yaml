@@ -1,0 +1,627 @@
+openapi: 3.1.0
+info:
+  title: Quarterdeck Captain cards API
+  version: "1"
+  description: "Read-only cards list for the Captain's Queue screen, served by the chat app. Same origin only, GET only, the Captain's session cookie (HttpOnly). Every JSON 200 also carries 'csrf' (a one-use token for a later POST) and 'freshUntil' (when his fresh sign-in ends); ignore both when only reading. Errors are JSON with one 'error' text; tell them apart by status code. On a GET, treat 401 and 403 alike: ask him to sign in again and keep local data (seen marks, drafts). 401 comes from the simpler in-process sign-in check and 403 from the real server's sign-in connection; a 403 can also mean that connection failed, which is no reason to throw away his drafts. Local data is cleared only when the server says so: sign-out sends Clear-Site-Data 'storage'. The client never clears on its own, on a 401, a 403 or anything else. The paths are not at the front door yet."
+servers:
+  - url: "https://quarterdeck.invalid"
+    description: "Stand-in origin. The real origin is the Captain's own site."
+security:
+  - sessionCookie: []
+paths:
+  /captain/cards:
+    get:
+      operationId: listCards
+      summary: "The cards list, grouped by project and lane."
+      description: "At most 200 cards and 20 plain-mail records; 'truncated' says when more exist. Projects and lanes are sorted by name and cards by id. A card is listed under its latest lane: an UPDATE that changes the lane moves the card, and the summary's 'lane' is that current lane. The ETag is strong and is the sha256 of the list content (without csrf and freshUntil). Send back exactly the value you got in If-None-Match: one value, no W/ prefix, no lists. An unchanged list answers an empty 304 with the same ETag."
+      parameters:
+        - name: If-None-Match
+          in: header
+          required: false
+          description: "The ETag of the list you already have, exactly as received."
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "The list."
+          headers:
+            ETag:
+              description: "Strong ETag of the list content."
+              required: true
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CardList"
+        "304":
+          description: "Unchanged since the ETag sent in If-None-Match. Empty body."
+          headers:
+            ETag:
+              description: "The same ETag."
+              required: true
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/Refused"
+        "401":
+          $ref: "#/components/responses/SignInRequired"
+        "403":
+          $ref: "#/components/responses/SessionRefused"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "429":
+          $ref: "#/components/responses/Refused"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /captain/cards/{id}:
+    get:
+      operationId: getCard
+      summary: "One card with its whole thread."
+      description: "The card document at its latest revision, its revision number and state, and every mail in its thread in mailbox order. 'state' is 'open', 'done' (answered) or 'withdrawn'; a withdrawn card stays withdrawn even if an answer arrives after. A well-formed id that names no card answers 400 'request refused', not 404; 404 is for an id that is not shaped like a card id. The card document has 'qd' and 'card' only until its first UPDATE."
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: "The card id, like repo-lead-7."
+          schema:
+            type: string
+            pattern: "^[A-Za-z0-9][A-Za-z0-9-]{0,63}$"
+      responses:
+        "200":
+          description: "The card and its thread."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CardDetail"
+        "400":
+          $ref: "#/components/responses/Refused"
+        "401":
+          $ref: "#/components/responses/SignInRequired"
+        "403":
+          $ref: "#/components/responses/SessionRefused"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "429":
+          $ref: "#/components/responses/Refused"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /captain/events:
+    get:
+      operationId: cardEvents
+      summary: "Server-sent events: refetch the list when one arrives."
+      description: "A text/event-stream. Each event is 'id: <number>', 'event: refresh' and 'data: {\"cards\":true,\"chats\":true}'. Resume with Last-Event-ID. On an event, refetch the list with If-None-Match."
+      parameters:
+        - name: Last-Event-ID
+          in: header
+          required: false
+          description: "The id of the last event seen; digits only."
+          schema:
+            type: string
+            pattern: "^[0-9]+$"
+      responses:
+        "200":
+          description: "The event stream, kept open."
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/Refused"
+        "401":
+          $ref: "#/components/responses/SignInRequired"
+        "403":
+          $ref: "#/components/responses/SessionRefused"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "429":
+          $ref: "#/components/responses/Refused"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: "__Host-qd-approval"
+  responses:
+    Refused:
+      description: "400 and 429 answer the same text as 403: the request was refused. 400 also covers an unknown card id and a bad Last-Event-ID or query."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorRefused"
+    SessionRefused:
+      description: "Sign in again: session missing, expired or refused. The real server checks the session through the approval app's sign-in connection, and answers this 403, with the same body text as 400 and 429, when the session cookie is missing or the connection refuses the session. It is also the answer when the sign-in connection fails (it cannot be reached or gives an invalid reply), which is no reason to throw away his drafts. Ask him to sign in again and keep local data. Treat 401 and 403 alike on a GET."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorRefused"
+    SignInRequired:
+      description: "Sign in again: no valid session, as answered by the simpler in-process sign-in check the samples use. The real server answers 403 for the same case, so on a GET treat 401 and 403 alike: ask him to sign in again and keep local data."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorSignInRequired"
+    NotFound:
+      description: "The id is not shaped like a card id, or the path is unknown."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorNotFound"
+    MethodNotAllowed:
+      description: "The application answers this for a method other than GET or POST. The private server only wires GET and POST, so another method gets the Python HTTP server's own 501 before the application runs."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorMethodNotAllowed"
+    Unavailable:
+      description: "The service failed for this request. Try again later."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorUnavailable"
+  schemas:
+    ErrorRefused:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+          const: "request refused"
+    ErrorSignInRequired:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+          const: "sign in required"
+    ErrorNotFound:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+          const: "not found"
+    ErrorMethodNotAllowed:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+          const: "method not allowed"
+    ErrorUnavailable:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+          const: "request unavailable"
+    CardList:
+      type: object
+      additionalProperties: false
+      required: [projects, plainMail, truncated, csrf, freshUntil]
+      properties:
+        projects:
+          type: array
+          items:
+            $ref: "#/components/schemas/Project"
+        plainMail:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/PlainMail"
+        truncated:
+          type: boolean
+        csrf:
+          type: string
+        freshUntil:
+          type: number
+    Project:
+      type: object
+      additionalProperties: false
+      required: [name, lanes]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        lanes:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/Lane"
+    Lane:
+      type: object
+      additionalProperties: false
+      required: [name, cards]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        cards:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/CardSummary"
+    CardSummary:
+      type: object
+      additionalProperties: false
+      required: [id, title, project, lane, due, state, changed-at, from, rev, answer, waitsOn]
+      properties:
+        id:
+          type: string
+          minLength: 1
+        title:
+          type: string
+          minLength: 1
+        project:
+          type: string
+          minLength: 1
+        lane:
+          type: string
+          minLength: 1
+          description: "The card's current lane, the one in its latest revision."
+        due:
+          type: [string, "null"]
+          format: date-time
+        state:
+          type: string
+          enum: [open, done, withdrawn]
+        changed-at:
+          type: string
+          format: date-time
+          description: "When the latest mail about this card was sent."
+        from:
+          type: string
+          minLength: 1
+          description: "The account name of the bot that posted the card. It does not change when someone else updates the card."
+        rev:
+          type: integer
+          minimum: 1
+          description: "The latest revision number. Each UPDATE adds one."
+        answer:
+          description: "The latest valid answer, or null when the card has none. A withdrawn card keeps the answer it had."
+          oneOf:
+            - $ref: "#/components/schemas/CardAnswer"
+            - type: "null"
+        waitsOn:
+          type: [string, "null"]
+          description: "The poster's name when state is done, otherwise null."
+    CardAnswer:
+      type: object
+      additionalProperties: false
+      required: [pick, at]
+      properties:
+        pick:
+          type: string
+          enum: [A, B, C, D, cant-decide, none]
+        at:
+          type: string
+          format: date-time
+    PlainMail:
+      type: object
+      additionalProperties: false
+      required: [id, sender, subject, sent, buttons, errors]
+      properties:
+        id:
+          type: string
+        sender:
+          type: string
+        subject:
+          type: string
+        sent:
+          type: string
+          format: date-time
+        buttons:
+          type: boolean
+          const: false
+        errors:
+          type: array
+          items:
+            type: string
+    CardDetail:
+      type: object
+      additionalProperties: false
+      required: [card, rev, state, thread, csrf, freshUntil]
+      properties:
+        card:
+          $ref: "#/components/schemas/CardDocument"
+        rev:
+          type: integer
+          minimum: 1
+        state:
+          type: string
+          enum: [open, done, withdrawn]
+        thread:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/ThreadEvent"
+        csrf:
+          type: string
+        freshUntil:
+          type: number
+    ThreadEvent:
+      type: object
+      additionalProperties: false
+      required: [id, kind, sender, sent, document]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [card, update, comment, answer, withdraw]
+        sender:
+          type: string
+        sent:
+          type: string
+          format: date-time
+        document:
+          oneOf:
+            - $ref: "#/components/schemas/CardDocument"
+            - $ref: "#/components/schemas/UpdateDocument"
+            - $ref: "#/components/schemas/CommentDocument"
+            - $ref: "#/components/schemas/AnswerDocument"
+            - $ref: "#/components/schemas/WithdrawDocument"
+    CardDocument:
+      type: object
+      additionalProperties: false
+      required: [id, project, title, about, context, category]
+      properties:
+        qd:
+          type: string
+          const: "card/1"
+        card:
+          type: string
+        id:
+          type: string
+        project:
+          type: string
+        lane:
+          type: string
+          description: "Absent when an UPDATE removed the lane. The list then keeps the last lane."
+        title:
+          type: string
+        about:
+          type: string
+        context:
+          type: string
+        ascii:
+          type: string
+        options:
+          type: array
+          minItems: 2
+          maxItems: 4
+          items:
+            $ref: "#/components/schemas/CardOption"
+        pick_why:
+          type: string
+        you_do:
+          type: string
+        skip:
+          type: string
+        due:
+          type: string
+          format: date-time
+        door:
+          type: string
+          enum: [one-way, two-way]
+        category:
+          type: array
+          minItems: 1
+          maxItems: 2
+          items:
+            type: string
+            enum: [design, strategy, high-risk, try-it, your-hands]
+        kind:
+          type: string
+          enum: [decision, action, fyi]
+        words:
+          type: array
+          items:
+            type: array
+            minItems: 2
+            maxItems: 2
+            items:
+              type: string
+        learn:
+          type: array
+          items:
+            $ref: "#/components/schemas/Link"
+        commands:
+          type: array
+          items:
+            $ref: "#/components/schemas/Command"
+        principles:
+          $ref: "#/components/schemas/Principles"
+        note:
+          type: string
+    CardOption:
+      type: object
+      additionalProperties: false
+      required: [label]
+      properties:
+        label:
+          type: string
+        pick:
+          type: boolean
+        does:
+          type: string
+        cost:
+          type: string
+        risk:
+          type: string
+        undo:
+          type: string
+        pros:
+          type: array
+          items:
+            type: string
+        cons:
+          type: array
+          items:
+            type: string
+        tradeoff:
+          type: string
+        why:
+          type: string
+    Link:
+      type: object
+      additionalProperties: false
+      required: [label, url]
+      properties:
+        label:
+          type: string
+        url:
+          type: string
+    Command:
+      type: object
+      additionalProperties: false
+      required: [where, run]
+      properties:
+        where:
+          type: string
+        run:
+          type: string
+    Principles:
+      type: object
+      additionalProperties: false
+      required: [follows, departs]
+      properties:
+        follows:
+          type: string
+        departs:
+          type: string
+    UpdateDocument:
+      type: object
+      additionalProperties: false
+      required: [qd, card, rev]
+      description: "An UPDATE mail. A field set to null removes that field from the card. id and project cannot change."
+      properties:
+        qd:
+          type: string
+          const: "update/1"
+        card:
+          type: string
+        rev:
+          type: integer
+          minimum: 2
+        lane:
+          type: [string, "null"]
+        title:
+          type: [string, "null"]
+        about:
+          type: [string, "null"]
+        context:
+          type: [string, "null"]
+        ascii:
+          type: [string, "null"]
+        options:
+          type: [array, "null"]
+          items:
+            $ref: "#/components/schemas/CardOption"
+        pick_why:
+          type: [string, "null"]
+        you_do:
+          type: [string, "null"]
+        skip:
+          type: [string, "null"]
+        due:
+          type: [string, "null"]
+          format: date-time
+        door:
+          type: [string, "null"]
+          enum: [one-way, two-way, null]
+        category:
+          type: [array, "null"]
+          items:
+            type: string
+            enum: [design, strategy, high-risk, try-it, your-hands]
+        kind:
+          type: [string, "null"]
+          enum: [decision, action, fyi, null]
+        words:
+          type: [array, "null"]
+          items:
+            type: array
+            items:
+              type: string
+        learn:
+          type: [array, "null"]
+          items:
+            $ref: "#/components/schemas/Link"
+        commands:
+          type: [array, "null"]
+          items:
+            $ref: "#/components/schemas/Command"
+        principles:
+          type: [object, "null"]
+          properties:
+            follows:
+              type: string
+            departs:
+              type: string
+        note:
+          type: [string, "null"]
+    CommentDocument:
+      type: object
+      additionalProperties: false
+      required: [qd, card, text]
+      properties:
+        qd:
+          type: string
+          const: "comment/1"
+        card:
+          type: string
+        id:
+          type: string
+        text:
+          type: string
+        options:
+          type: array
+          items:
+            $ref: "#/components/schemas/CardOption"
+        pick_why:
+          type: string
+    AnswerDocument:
+      type: object
+      additionalProperties: false
+      required: [qd, card, rev, pick, at]
+      properties:
+        qd:
+          type: string
+          const: "answer/1"
+        card:
+          type: string
+        comment:
+          type: string
+        rev:
+          type: integer
+          minimum: 1
+        pick:
+          type: string
+          enum: [A, B, C, D, cant-decide, none]
+        note:
+          type: string
+        at:
+          type: string
+          format: date-time
+    WithdrawDocument:
+      type: object
+      additionalProperties: false
+      required: [qd, card, why]
+      properties:
+        qd:
+          type: string
+          const: "withdraw/1"
+        card:
+          type: string
+        why:
+          type: string

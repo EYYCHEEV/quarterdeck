@@ -18,7 +18,7 @@ PINS = {
     "golive/connect/qd_connect.py": "8c149eb3f5f70d33d71e0db7cb8042446b1c7bbd315163b9a2d1fbfd8470e2ce",
     "golive/connect/qd_mcp.py": "0c3fc170530b8c0f378237c6ce6d93d2af08d74ad0e4a1b551f925d73c0e3f8a",
     "mail/qd_jmap.py": "dae5a8b1a3e0d8bfb67736ccd99b005af29d216641da5e0a674954ecccc4f6be",
-    "signup/signup_flow.py": "39075e208e70f39f7d460e40677f0c2af7b6caced30490adc80a94e149a882ec",
+    "signup/signup_flow.py": "286ca5d749e98a82bd8a73545393ffe506b265887ff923f272905e6cd87a6bab",
     "signup/helper_contract.py": "15b688cbcfde84bbbd0418fc5ac8606ab3a92acb651fa9bec0d9716cf8a55c1f",
     "signup/adapter_registry.py": "26dd59aebc5f1ee1e35e934e87bfccd4c4b5e2cf3397a38d050f1ef5839a4265",
     "signup/file_v1_adapter.py": "a6ea5a3c979c7477cea4f109f58b18809117b310065eca8ce8fb01ee46f845f6",

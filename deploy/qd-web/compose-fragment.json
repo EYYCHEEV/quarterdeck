@@ -1,0 +1,48 @@
+{
+  "format": 1,
+  "service": {
+    "name": "qd-web",
+    "imageFromService": "approval",
+    "definition": {
+      "user": "2700:2700",
+      "group_add": ["2711"],
+      "working_dir": "/opt/quarterdeck/qd-web",
+      "command": ["python3", "/opt/quarterdeck/qd-web/server.py", "--config", "/etc/quarterdeck-qd-web/runtime.json"],
+      "environment": {
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONUNBUFFERED": "1",
+        "PYTHONPATH": "/opt/quarterdeck/qd-web"
+      },
+      "read_only": true,
+      "cap_drop": ["ALL"],
+      "security_opt": ["no-new-privileges:true"],
+      "init": true,
+      "restart": "unless-stopped",
+      "stop_grace_period": "30s",
+      "pids_limit": 96,
+      "mem_limit": "384m",
+      "memswap_limit": "384m",
+      "cpus": "0.75",
+      "ulimits": {"nofile": {"soft": 1024, "hard": 1024}},
+      "tmpfs": ["/tmp:rw,nosuid,nodev,noexec,size=32m", "/run:rw,nosuid,nodev,noexec,size=8m"],
+      "networks": {"service": {}},
+      "volumes": [
+        "${QD_PACKAGE}/qd-web:/opt/quarterdeck/qd-web:ro",
+        "${QD_ROOT}/qd-web-config:/etc/quarterdeck-qd-web:ro",
+        "${QD_ROOT}/secrets/captain-mail-key:/run/quarterdeck-captain-mail:ro",
+        "${QD_ROOT}/volumes/captain-state:/var/lib/quarterdeck-captain:ro",
+        "${QD_ROOT}/volumes/qd-web-state:/var/lib/quarterdeck-qd-web:rw",
+        "${QD_ROOT}/volumes/qd-auth:/run/quarterdeck-qd-auth:ro"
+      ],
+      "logging": {"driver": "json-file", "options": {"max-size": "5m", "max-file": "3"}}
+    }
+  },
+  "exceptions": [
+    {
+      "service": "qd-web",
+      "sharesUserWith": "captain-app",
+      "user": "2700:2700",
+      "reason": "the mailbox key reader accepts only a key owned by the running user"
+    }
+  ]
+}

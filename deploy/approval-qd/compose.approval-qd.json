@@ -1,0 +1,38 @@
+{
+  "services": {
+    "approval-qd": {
+      "image": "docker.io/library/python@sha256:0aecac02dc3d4c5dbb024b753af084cafe41f5416e02193f1ce345d671ec966e",
+      "user": "2500:2500",
+      "group_add": ["2711"],
+      "read_only": true,
+      "cap_drop": ["ALL"],
+      "security_opt": ["no-new-privileges:true"],
+      "working_dir": "/opt/quarterdeck/approval",
+      "command": ["python3", "-B", "/opt/quarterdeck/approval/server.py", "--config", "/etc/quarterdeck/approval-qd/runtime.json"],
+      "environment": {
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONPATH": "/opt/quarterdeck/captain-app:/opt/quarterdeck/signup:/opt/quarterdeck/shared",
+        "TMPDIR": "/run/quarterdeck-tmp"
+      },
+      "networks": {"service": {}, "egress": {}},
+      "volumes": [
+        {"type": "bind", "source": "${QD_PACKAGE}/golive/approval", "target": "/opt/quarterdeck/approval", "read_only": true, "bind": {"create_host_path": false}},
+        {"type": "bind", "source": "${QD_PACKAGE}/captain-app", "target": "/opt/quarterdeck/captain-app", "read_only": true, "bind": {"create_host_path": false}},
+        {"type": "bind", "source": "${QD_PACKAGE}/signup", "target": "/opt/quarterdeck/signup", "read_only": true, "bind": {"create_host_path": false}},
+        {"type": "bind", "source": "${QD_PACKAGE}/golive/shared", "target": "/opt/quarterdeck/shared", "read_only": true, "bind": {"create_host_path": false}},
+        {"type": "bind", "source": "${QD_ROOT}/config/approval-qd/runtime.json", "target": "/etc/quarterdeck/approval-qd/runtime.json", "read_only": true, "bind": {"create_host_path": false}},
+        {"type": "bind", "source": "${QD_ROOT}/volumes/qd-approval-state", "target": "/var/lib/quarterdeck-approval-qd", "read_only": false, "bind": {"create_host_path": false}},
+        {"type": "bind", "source": "${QD_ROOT}/secrets/approval-secrets/oidc.json", "target": "/var/lib/quarterdeck-approval-qd/oidc.json", "read_only": true, "bind": {"create_host_path": false}},
+        {"type": "bind", "source": "${QD_ROOT}/volumes/qd-auth", "target": "/run/quarterdeck-qd-auth", "read_only": false, "bind": {"create_host_path": false}}
+      ],
+      "tmpfs": ["/run/quarterdeck-tmp:rw,noexec,nosuid,nodev,size=16m,mode=0700,uid=2500,gid=2500"],
+      "pids_limit": 64,
+      "mem_limit": "256m",
+      "memswap_limit": "256m",
+      "cpus": "0.50",
+      "ulimits": {"nofile": {"soft": 1024, "hard": 1024}},
+      "logging": {"driver": "json-file", "options": {"max-size": "1m", "max-file": "3"}},
+      "restart": "unless-stopped"
+    }
+  }
+}

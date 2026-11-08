@@ -1,0 +1,27 @@
+{
+  "format": 1,
+  "bind": {
+    "address": "${deployment:join-address}",
+    "port": "${deployment:join-port}"
+  },
+  "paths": {
+    "database": "/var/lib/quarterdeck-join/state.sqlite",
+    "rates": "/var/lib/quarterdeck-join/rates.sqlite",
+    "helperSocket": "/run/quarterdeck-control/helper.sock",
+    "approvalSocket": "/run/quarterdeck-approval/approve.sock",
+    "inviteKey": "/var/lib/quarterdeck-join/invite-hmac.key"
+  },
+  "trustedProxy": "${deployment:caddy-address}",
+  "publicOrigin": "${deployment:public-origin}",
+  "sessionUrl": "${deployment:jmap-session-url}",
+  "approverUid": 2500,
+  "approvalSocketAccess": {
+    "mode": "0660",
+    "gid": 2501
+  },
+  "release": {
+    "artifactUrl": null,
+    "version": null,
+    "sha256": null
+  }
+}

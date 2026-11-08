@@ -1,0 +1,151 @@
+{
+  "name": "quarterdeck",
+  "services": {
+    "write-oidc": {
+      "image": "${image:python-source}",
+      "user": "2500:2500",
+      "working_dir": "/opt/quarterdeck/approval",
+      "entrypoint": ["python3", "/opt/quarterdeck/approval/write_oidc.py"],
+      "environment": {
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONUNBUFFERED": "1"
+      },
+      "network_mode": "none",
+      "read_only": true,
+      "cap_drop": ["ALL"],
+      "security_opt": ["no-new-privileges:true"],
+      "init": true,
+      "restart": "no",
+      "stop_grace_period": "30s",
+      "pids_limit": 32,
+      "mem_limit": "128m",
+      "memswap_limit": "128m",
+      "cpus": "0.25",
+      "ulimits": {"nofile": {"soft": 256, "hard": 256}},
+      "tmpfs": ["/tmp:rw,nosuid,nodev,noexec,size=8m"],
+      "volumes": [
+        "${QD_PACKAGE}/golive/approval:/opt/quarterdeck/approval:ro",
+        "${QD_ROOT}/secrets/approval-secrets:/var/lib/quarterdeck-approval:rw"
+      ],
+      "logging": {"driver": "none"}
+    },
+    "place-google-secret": {
+      "image": "${image:python-source}",
+      "user": "2500:2500",
+      "working_dir": "/opt/quarterdeck/approval",
+      "entrypoint": ["python3", "/opt/quarterdeck/approval/place_google_secret.py"],
+      "environment": {
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONUNBUFFERED": "1"
+      },
+      "network_mode": "none",
+      "read_only": true,
+      "cap_drop": ["ALL"],
+      "security_opt": ["no-new-privileges:true"],
+      "init": true,
+      "restart": "no",
+      "stop_grace_period": "30s",
+      "pids_limit": 32,
+      "mem_limit": "128m",
+      "memswap_limit": "128m",
+      "cpus": "0.25",
+      "ulimits": {"nofile": {"soft": 256, "hard": 256}},
+      "tmpfs": ["/tmp:rw,nosuid,nodev,noexec,size=8m"],
+      "volumes": [
+        "${QD_PACKAGE}/golive/approval:/opt/quarterdeck/approval:ro",
+        "${QD_ROOT}/secrets/approval-secrets:/var/lib/quarterdeck-approval:rw"
+      ],
+      "logging": {"driver": "none"}
+    },
+    "write-registry": {
+      "image": "${image:python-source}",
+      "user": "2700:2700",
+      "working_dir": "/opt/quarterdeck/helper",
+      "entrypoint": ["python3", "/opt/quarterdeck/helper/write_registry.py"],
+      "environment": {
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONUNBUFFERED": "1"
+      },
+      "network_mode": "none",
+      "read_only": true,
+      "cap_drop": ["ALL"],
+      "security_opt": ["no-new-privileges:true"],
+      "init": true,
+      "restart": "no",
+      "stop_grace_period": "30s",
+      "pids_limit": 32,
+      "mem_limit": "128m",
+      "memswap_limit": "128m",
+      "cpus": "0.25",
+      "ulimits": {"nofile": {"soft": 256, "hard": 256}},
+      "tmpfs": ["/tmp:rw,nosuid,nodev,noexec,size=8m"],
+      "volumes": [
+        "${QD_PACKAGE}/golive/helper:/opt/quarterdeck/helper:ro",
+        "${QD_ROOT}/volumes/captain-state:/var/lib/quarterdeck-captain:rw"
+      ],
+      "logging": {"driver": "none"}
+    },
+    "captain-account": {
+      "image": "${image:python-source}",
+      "user": "2700:2700",
+      "working_dir": "/opt/quarterdeck/helper",
+      "entrypoint": ["python3", "/opt/quarterdeck/helper/captain_account.py"],
+      "environment": {
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONUNBUFFERED": "1",
+        "PYTHONPATH": "/opt/quarterdeck/captain-app:/opt/quarterdeck/door"
+      },
+      "network_mode": "none",
+      "read_only": true,
+      "cap_drop": ["ALL"],
+      "security_opt": ["no-new-privileges:true"],
+      "init": true,
+      "restart": "no",
+      "stop_grace_period": "30s",
+      "pids_limit": 32,
+      "mem_limit": "128m",
+      "memswap_limit": "128m",
+      "cpus": "0.25",
+      "ulimits": {"nofile": {"soft": 256, "hard": 256}},
+      "tmpfs": ["/tmp:rw,nosuid,nodev,noexec,size=8m"],
+      "volumes": [
+        "${QD_PACKAGE}/golive/helper:/opt/quarterdeck/helper:ro",
+        "${QD_PACKAGE}/captain-app:/opt/quarterdeck/captain-app:ro",
+        "${QD_PACKAGE}/golive/door:/opt/quarterdeck/door:ro",
+        "${QD_ROOT}/secrets/captain-mail-key:/run/quarterdeck-captain-mail:rw",
+        "${QD_ROOT}/volumes/captain-state:/var/lib/quarterdeck-captain:rw"
+      ],
+      "logging": {"driver": "none"}
+    },
+    "captain-account-admin": {
+      "image": "${image:python-source}",
+      "user": "2200:2200",
+      "working_dir": "/opt/quarterdeck/helper",
+      "entrypoint": ["python3", "/opt/quarterdeck/helper/captain_account.py"],
+      "environment": {
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONUNBUFFERED": "1"
+      },
+      "network_mode": "service:stalwart",
+      "depends_on": {"stalwart": {"condition": "service_started"}},
+      "read_only": true,
+      "cap_drop": ["ALL"],
+      "security_opt": ["no-new-privileges:true"],
+      "init": true,
+      "restart": "no",
+      "stop_grace_period": "30s",
+      "pids_limit": 32,
+      "mem_limit": "128m",
+      "memswap_limit": "128m",
+      "cpus": "0.25",
+      "ulimits": {"nofile": {"soft": 256, "hard": 256}},
+      "tmpfs": ["/tmp:rw,nosuid,nodev,noexec,size=8m"],
+      "volumes": [
+        "${QD_PACKAGE}/golive/helper:/opt/quarterdeck/helper:ro",
+        "${QD_ROOT}/volumes/helper-state:/var/lib/quarterdeck-helper:ro",
+        "${QD_ROOT}/secrets/helper-admin:/run/quarterdeck-admin:ro"
+      ],
+      "logging": {"driver": "none"}
+    }
+  }
+}

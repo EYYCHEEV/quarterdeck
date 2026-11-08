@@ -1,0 +1,99 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/captain/cards/repo-lead-2"
+  },
+  "signIn": "real",
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Content-Security-Policy": "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+    "Referrer-Policy": "strict-origin",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Content-Length": "1438"
+  },
+  "body": {
+    "card": {
+      "qd": "card/1",
+      "card": "repo-lead-2",
+      "id": "repo-lead-2",
+      "project": "Repo",
+      "lane": "Ship",
+      "title": "Pick the review depth",
+      "about": "Repo work that needs a call.",
+      "context": "It is ready for a decision.\nNothing else is waiting on it.",
+      "options": [
+        {
+          "label": "A. Go with the plan",
+          "pick": true
+        },
+        {
+          "label": "B. Hold for now"
+        }
+      ],
+      "pick_why": "A keeps the schedule.",
+      "you_do": "Pick one option.",
+      "skip": "If no answer by due: the plan goes ahead.",
+      "category": [
+        "strategy"
+      ],
+      "door": "two-way",
+      "kind": "decision"
+    },
+    "rev": 1,
+    "state": "done",
+    "thread": [
+      {
+        "id": "msg-002",
+        "kind": "card",
+        "sender": "repo-lead",
+        "sent": "2026-11-05T08:02:00-05:00",
+        "document": {
+          "qd": "card/1",
+          "card": "repo-lead-2",
+          "id": "repo-lead-2",
+          "project": "Repo",
+          "lane": "Ship",
+          "title": "Pick the review depth",
+          "about": "Repo work that needs a call.",
+          "context": "It is ready for a decision.\nNothing else is waiting on it.",
+          "options": [
+            {
+              "label": "A. Go with the plan",
+              "pick": true
+            },
+            {
+              "label": "B. Hold for now"
+            }
+          ],
+          "pick_why": "A keeps the schedule.",
+          "you_do": "Pick one option.",
+          "skip": "If no answer by due: the plan goes ahead.",
+          "category": [
+            "strategy"
+          ],
+          "door": "two-way",
+          "kind": "decision"
+        }
+      },
+      {
+        "id": "qd.788cd7e267fe934e3a405842f8e2ad88.account-user@quarterdeck.invalid",
+        "kind": "answer",
+        "sender": "account-user",
+        "sent": "2026-11-05T10:00:20-05:00",
+        "document": {
+          "at": "2026-11-05T10:00:20-05:00",
+          "card": "repo-lead-2",
+          "note": "Hold until Monday.",
+          "pick": "B",
+          "qd": "answer/1",
+          "rev": 1
+        }
+      }
+    ],
+    "csrf": "csrf-placeholder",
+    "freshUntil": 0
+  }
+}

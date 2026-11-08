@@ -1,0 +1,43 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/captain/cards/repo-lead-1/answer",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "rev": 1,
+      "pick": "A",
+      "note": "Going with A.",
+      "csrf": "csrf-placeholder"
+    }
+  },
+  "signIn": "real",
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Content-Security-Policy": "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+    "Referrer-Policy": "strict-origin",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Content-Length": "112"
+  },
+  "body": {
+    "message": "Got it: repo-lead-1 A at 10:01 AM ET",
+    "stale": true,
+    "rev": 1,
+    "csrf": "csrf-placeholder",
+    "freshUntil": 0
+  },
+  "outbound": [
+    {
+      "to": "repo-lead",
+      "subject": "ANSWER: repo-lead-1 A"
+    },
+    {
+      "to": "bot-a",
+      "subject": "ANSWER: repo-lead-1 A"
+    }
+  ]
+}
