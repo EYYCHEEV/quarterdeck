@@ -4664,17 +4664,19 @@ it("Server Bots: with the fresh sign-in long past, Approve and Refuse each post 
   equal([asked.posts.map(([path]) => path), stepUps, new URL(p.url()).pathname], [["approve", "refuse"], 0, "/settings/bots"], "POSTs, fresh sign-in pages and the screen");
 });
 
-for (const [where, size] of [["a phone", PHONE], ["the Mac", MAC]])
-  it("Server Bots on " + where + " with approving here: each request shows Approve next to Refuse with no password field, the Joins group still says Joins history is in Backchannel for now., and no password control shows", size, async (p) => {
-    await serverBuild(p, "list-fixed-only.json");
-    await serverBots(p, { lists: [botsList("t-list-1", approvingHere)] });
-    await installSessionClock(p);
-    await open(p, "/settings/bots");
-    const join = T(p, "pending-join").filter({ hasText: "tarn wants to join" });
-    await join.getByRole("button", { name: "Approve", exact: true }).waitFor();
-    equal([await join.getByRole("button", { name: "Refuse", exact: true }).count(), await join.locator("input").count(), await join.getByText("Approve in Backchannel for now.", { exact: true }).count()], [1, 0, 0], "Refuse, a password field and the Backchannel words in the request");
-    equal([await p.getByText("Joins history is in Backchannel for now.", { exact: true }).count(), await p.getByText("Password to approve a bot").count(), await T(p, "history-toggle").count()], [1, 0, 0], "the Joins line, a password control and history rows");
-  });
+for (const [where, shot, size] of [["a phone", "phone-390", PHONE], ["iPad upright", "ipad-744x1133", IPAD_UPRIGHT], ["iPad sideways", "ipad-1133x744", TOUCH_SIDEWAYS], ["the Mac", "mac-1512", MAC]])
+  for (const look of ["dark", "light"])
+    it("Server Bots on " + where + " in the " + look + " look with approving here: each request shows Approve next to Refuse with no password field, the Joins group still says Joins history is in Backchannel for now., and no password control shows", { ...size, colorScheme: look }, async (p) => {
+      await serverBuild(p, "list-fixed-only.json");
+      await serverBots(p, { lists: [botsList("t-list-1", approvingHere)] });
+      await installSessionClock(p);
+      await open(p, "/settings/bots");
+      const join = T(p, "pending-join").filter({ hasText: "tarn wants to join" });
+      await join.getByRole("button", { name: "Approve", exact: true }).waitFor();
+      equal([await join.getByRole("button", { name: "Refuse", exact: true }).count(), await join.locator("input").count(), await join.getByText("Approve in Backchannel for now.", { exact: true }).count()], [1, 0, 0], "Refuse, a password field and the Backchannel words in the request");
+      equal([await p.getByText("Joins history is in Backchannel for now.", { exact: true }).count(), await p.getByText("Password to approve a bot").count(), await T(p, "history-toggle").count()], [1, 0, 0], "the Joins line, a password control and history rows");
+      if (process.env.QD_BOTS_SHOTS) await p.screenshot({ path: process.env.QD_BOTS_SHOTS + "/bots-approve-" + shot + (look === "light" ? "-light" : "") + ".png", fullPage: true });
+    });
 
 for (const [how, change] of [["is not here", (raw) => raw], ["is here", approvingHere]])
   it("Server Settings: when approving " + how + ", the overview keeps Joins history and shows no Password to approve a bot row", PHONE, async (p) => {
@@ -4715,7 +4717,7 @@ it("Server Bots: an Approve that the other app already handled says That request
 }, /404 \(Not Found\)/);
 
 for (const [how, change, line] of [["is here", approvingHere, "Invite copied. When it asks, approve it under Pending joins."], ["is not here", (raw) => raw, "Approve it in Backchannel when it asks."]])
-  it("Server Bots: when approving " + how + ", Add bot waits for the bot with the line " + line, MAC, async (p) => {
+  it("Server Bots: when approving " + how + ", Add bot waits for the bot with the line " + line, PHONE, async (p) => {
     await p.context().grantPermissions(["clipboard-read", "clipboard-write"]);
     await serverBuild(p, "list-fixed-only.json");
     const made = botsSample("invite-200.json");
@@ -4727,6 +4729,7 @@ for (const [how, change, line] of [["is here", approvingHere, "Invite copied. Wh
     await p.locator('[data-pop="add-bot"]').getByRole("button", { name: "Create invite" }).click();
     await T(p, "invite-copy").click();
     await T(p, "bot-waiting").getByText(line, { exact: true }).waitFor();
+    if (process.env.QD_BOTS_SHOTS && how === "is here") await p.screenshot({ path: process.env.QD_BOTS_SHOTS + "/add-waiting-approve-phone-390.png" });
   });
 
 it("Server Bots: Add bot on the Bots screen checks the name before sending, then shows the prompt and its invite code once with Copy, and closing drops them", PHONE, async (p) => {
