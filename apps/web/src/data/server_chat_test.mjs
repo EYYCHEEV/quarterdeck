@@ -1062,23 +1062,25 @@ test("with cursor listed and the chat open, a refresh that names chats makes the
   assert.equal(h.calls[from + 1].at - refreshedAt, 5_000);
 });
 
-test("with cursor listed and the chat open, the read after a refresh puts the new bot message in its row of the held chat list in the same update, with no list read before it and the dot off, and the list read that follows with the same newest message changes nothing", async () => {
+test("with cursor listed and the chat open, the read after a refresh puts the new bot message in its row of the held chat list in the same update, with no list read before it and the dot off, and the list read that follows with the same newest message and order changes nothing", async () => {
   const { h } = await cursorThread();
   await h.source.chat.listChats();
   const rows = await h.watchRows();
-  await h.time.advance(1_000);
+  const first = h.add("steward", "bot", "first");
+  await h.refresh();
+  await pass(h, 6_000);
   const from = h.calls.length;
   const heard = rows.heard.length;
   const reply = h.add("steward", "bot", "a reply");
   await h.refresh();
   await pass(h, 100);
-  assert.deepEqual(h.chatRequests(from), [AFTER("steward", "m3")]);
+  assert.deepEqual(h.chatRequests(from), [AFTER("steward", first.id)]);
   assert.equal(rows.heard.length, heard + 1);
   const row = (await h.source.chat.listChats()).find((one) => one.bot.id === "steward");
   assert.deepEqual([row.preview, row.at, row.unread], ["a reply", reply.at, false]);
-  assert.deepEqual(h.chatRequests(from), [AFTER("steward", "m3")]);
+  assert.deepEqual(h.chatRequests(from), [AFTER("steward", first.id)]);
   await pass(h, 5_000);
-  assert.deepEqual(h.chatRequests(from), [AFTER("steward", "m3"), LIST]);
+  assert.deepEqual(h.chatRequests(from), [AFTER("steward", first.id), LIST]);
   assert.equal(rows.heard.length, heard + 1);
   const later = (await h.source.chat.listChats()).find((one) => one.bot.id === "steward");
   assert.deepEqual([later.preview, later.at, later.unread], ["a reply", reply.at, false]);
@@ -1098,6 +1100,25 @@ test("with cursor listed and the chat open, a list read that lands after the rea
   await pass(h, 5_000);
   assert.equal(h.chatRequests(from)[1], LIST);
   assert.equal(rows.heard.length, heard + 1);
+  const row = (await h.source.chat.listChats()).find((one) => one.bot.id === "steward");
+  assert.deepEqual([row.preview, row.at], ["newer", newer.at]);
+});
+
+test("with cursor listed and the chat open, a read after the newest held message that answers after a list read showed a newer message leaves the row as that list read made it", async () => {
+  const { s, h } = await cursorThread();
+  await h.source.chat.listChats();
+  await h.time.advance(1_000);
+  const gate = Promise.withResolvers();
+  s.gate = gate;
+  h.add("steward", "bot", "a reply");
+  await h.refresh();
+  await pass(h, 100);
+  const newer = h.add("steward", "bot", "newer");
+  await h.time.advance(5_000);
+  const listed = (await h.source.chat.listChats()).find((one) => one.bot.id === "steward");
+  assert.deepEqual([listed.preview, listed.at], ["newer", newer.at]);
+  gate.resolve();
+  await pass(h, 100);
   const row = (await h.source.chat.listChats()).find((one) => one.bot.id === "steward");
   assert.deepEqual([row.preview, row.at], ["newer", newer.at]);
 });
