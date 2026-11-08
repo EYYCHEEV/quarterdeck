@@ -462,5 +462,311 @@ class WorkflowRefusalTest(unittest.TestCase):
         self.assertEqual(self.run_refusal(), 0)
 
 
+class WorkflowContextsTest(unittest.TestCase):
+    def check(self, text):
+        with TempRepo() as repo:
+            repo.add(".github/workflows/sample.yml", text)
+            return subprocess.run(
+                [sys.executable, "-B", str(HERE / "workflow-contexts"), str(repo.root)],
+                capture_output=True, text=True, timeout=10,
+            )
+
+    def workflow(self, job="", step="        run: echo ok\n"):
+        return "on: push\njobs:\n  check:\n    runs-on: ubuntu-latest\n" + job + "    steps:\n      - name: Check\n" + step
+
+    def test_runner_in_a_job_env_fails(self):
+        result = self.check(self.workflow("    env:\n      BROWSER: ${{ runner.temp }}\n"))
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertEqual(result.stdout, ".github/workflows/sample.yml:6: context runner not allowed in jobs.*.env\n")
+
+    def test_runner_in_a_step_env_passes(self):
+        result = self.check(self.workflow(step="        env:\n          BROWSER: ${{ runner.temp }}\n        run: echo ok\n"))
+        self.assertEqual((result.returncode, result.stdout, result.stderr), (0, "", ""))
+
+    def test_env_in_a_job_if_fails(self):
+        result = self.check(self.workflow("    if: env.ENABLED == 'yes'\n"))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("context env not allowed in jobs.*.if", result.stdout)
+
+    def test_secrets_in_a_step_if_fails(self):
+        result = self.check(self.workflow(step="        if: ${{ secrets.TEST_ONLY != '' }}\n        run: echo ok\n"))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("context secrets not allowed in jobs.*.steps.*.if", result.stdout)
+        self.assertNotIn("TEST_ONLY", result.stdout)
+
+    def test_hashfiles_in_a_job_env_fails(self):
+        result = self.check(self.workflow("    env:\n      DIGEST: ${{ hashFiles('*.txt') }}\n"))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("function hashFiles not allowed in jobs.*.env", result.stdout)
+
+    def test_status_functions_outside_if_fail(self):
+        for function in ("always", "success", "failure", "cancelled"):
+            with self.subTest(function=function):
+                result = self.check(self.workflow(step="        env:\n          FLAG: ${{ " + function + "() }}\n        run: echo ok\n"))
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("function " + function + " not allowed in jobs.*.steps.*.env", result.stdout)
+
+    def test_status_functions_in_if_and_hashfiles_in_a_step_pass(self):
+        result = self.check(self.workflow(
+            "    if: always() && !cancelled()\n",
+            "        if: success() || failure()\n        env:\n          DIGEST: ${{ hashFiles('*.txt') }}\n        run: echo ok\n",
+        ))
+        self.assertEqual((result.returncode, result.stdout), (0, ""))
+
+    def test_unknown_job_key_fails(self):
+        result = self.check(self.workflow("    typo: true\n"))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("unknown job key typo", result.stdout)
+
+    def test_unknown_workflow_and_step_keys_fail(self):
+        result = self.check("typo: true\n" + self.workflow(step="        typo: true\n        run: echo ok\n"))
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(len(result.stdout.splitlines()), 2)
+        self.assertIn("unknown workflow key typo", result.stdout)
+        self.assertIn("unknown step key typo", result.stdout)
+
+    def test_flow_style_mappings_are_refused(self):
+        for job in (
+            "    env: {BROWSER: '${{ runner.temp }}'}\n",
+            "    env: {BROWSER: safe}\n",
+            "    env: &settings {BROWSER: safe}\n",
+            "    runs-on: [{group: test}]\n",
+        ):
+            with self.subTest(job=job):
+                result = self.check(self.workflow(job))
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("unsupported flow-style mapping", result.stdout)
+
+    def test_empty_mappings_flow_lists_and_shell_braces_pass(self):
+        result = self.check("permissions: {}\n" + self.workflow(
+            "    needs: [build, test]\n",
+            "        run: echo ${HOME} '{}'\n",
+        ))
+        self.assertEqual((result.returncode, result.stdout), (0, ""))
+
+    def test_quoted_and_block_if_expressions_are_checked(self):
+        for condition in ("'env.ENABLED'", '"env.ENABLED"', ">\n      env.ENABLED"):
+            with self.subTest(condition=condition):
+                result = self.check(self.workflow("    if: " + condition + "\n"))
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("context env not allowed in jobs.*.if", result.stdout)
+
+    def test_all_expressions_and_bare_contexts_are_checked(self):
+        result = self.check(self.workflow("    env:\n      A: ${{ runner.temp }} ${{ env.OTHER }}\n      B: ${{ runner['temp'] }}\n      C: ${{ toJSON(runner) }}\n"))
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(len(result.stdout.splitlines()), 4)
+        self.assertEqual(result.stdout.count("context runner"), 3)
+        self.assertEqual(result.stdout.count("context env"), 1)
+
+    def test_quoted_expression_words_and_property_names_are_not_contexts(self):
+        result = self.check(self.workflow(
+            "    env:\n      A: ${{ format('runner }} env '' failure() hashFiles()', github.runner) }}\n",
+            "        run: |\n          echo 'env: ${{ runner.temp }}'\n          echo '${{ github.env }}'\n",
+        ))
+        self.assertEqual((result.returncode, result.stdout), (0, ""))
+        quoted = self.check(self.workflow("    env:\n      A: '${{ format(''runner }} env failure()'', github.ref) }}'\n"))
+        self.assertEqual((quoted.returncode, quoted.stdout), (0, ""))
+
+    def test_multiline_expressions_are_checked(self):
+        result = self.check(self.workflow("    env:\n      A: >-\n        ${{\n          runner.temp\n        }}\n"))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("context runner not allowed in jobs.*.env", result.stdout)
+
+    def test_context_table_workflow_and_job_boundaries(self):
+        cases = (
+            ("run-name: ${{ inputs.label }}\n", "", 0),
+            ("run-name: ${{ runner.name }}\n", "", 1),
+            ("concurrency:\n  group: ${{ vars.group }}\n", "", 0),
+            ("concurrency:\n  group: ${{ needs.build.result }}\n", "", 1),
+            ("env:\n  A: ${{ secrets.TEST_ONLY }}\n", "", 0),
+            ("env:\n  A: ${{ env.OTHER }}\n", "", 1),
+            ("", "    name: ${{ matrix.name }}\n", 0),
+            ("", "    runs-on: ${{ runner.os }}\n", 1),
+            ("", "    strategy:\n      matrix:\n        value: ${{ needs.build.outputs.value }}\n", 0),
+            ("", "    strategy:\n      matrix:\n        value: ${{ matrix.value }}\n", 1),
+            ("", "    timeout-minutes: ${{ vars.timeout }}\n", 0),
+            ("", "    concurrency:\n      group: ${{ env.GROUP }}\n", 1),
+            ("", "    continue-on-error: ${{ matrix.experimental }}\n", 0),
+            ("", "    defaults:\n      run:\n        working-directory: ${{ env.WORK }}\n", 0),
+            ("", "    defaults:\n      run:\n        shell: ${{ runner.os }}\n", 1),
+            ("", "    environment:\n      url: ${{ steps.deploy.outputs.url }}\n", 0),
+            ("", "    environment:\n      name: ${{ steps.deploy.outputs.name }}\n", 1),
+            ("", "    outputs:\n      A: ${{ steps.build.outputs.value }}\n", 0),
+            ("", "    container:\n      env:\n        A: ${{ runner.os }}\n", 0),
+            ("", "    container:\n      credentials:\n        password: ${{ secrets.TEST_ONLY }}\n", 0),
+            ("", "    container:\n      image: ${{ env.IMAGE }}\n", 1),
+            ("", "    services:\n      db:\n        env:\n          A: ${{ runner.os }}\n", 0),
+            ("", "    services:\n      db:\n        credentials:\n          password: ${{ runner.os }}\n", 1),
+            ("", "    with:\n      A: ${{ inputs.label }}\n", 0),
+            ("", "    with:\n      A: ${{ secrets.TEST_ONLY }}\n", 1),
+        )
+        for prefix, job, code in cases:
+            with self.subTest(prefix=prefix, job=job):
+                result = self.check(prefix + self.workflow(job))
+                self.assertEqual(result.returncode, code, result.stdout + result.stderr)
+
+    def test_context_table_step_boundaries(self):
+        for key in ("env", "with", "run", "name", "working-directory", "timeout-minutes", "continue-on-error"):
+            value = "\n          A: ${{ runner.os }}" if key in {"env", "with"} else " ${{ runner.os }}"
+            with self.subTest(key=key):
+                result = self.check(self.workflow(step="        " + key + ":" + value + "\n"))
+                self.assertEqual((result.returncode, result.stdout), (0, ""))
+
+    def test_the_original_ci_has_exactly_the_three_reported_findings(self):
+        original = WORKFLOW.read_text(encoding="utf-8")
+        original = ci_with_selftest_env(original)
+        point = (
+            '      - name: Point QD_CHROME at the pinned browser\n'
+            '        run: echo "QD_CHROME=$RUNNER_TEMP/pinned/chrome-headless-shell-linux64/chrome-headless-shell" >> "$GITHUB_ENV"\n\n'
+        )
+        original = original.replace(point, "")
+        browser = "      QD_CHROME: ${{ runner.temp }}/pinned/chrome-headless-shell-linux64/chrome-headless-shell\n"
+        for job in ("web-browser", "web-design", "web-design-selftest"):
+            start = original.index("  " + job + ":\n")
+            env = original.index("    env:\n", start) + len("    env:\n")
+            if not original.startswith(browser, env):
+                original = original[:env] + browser + original[env:]
+        self.assertEqual(hashlib.sha256(original.encode()).hexdigest(), "e87d3d473b475f7f36541b87d086b7b9e6dd3ad8a9f1b24b00cae2b09530012b")
+        result = self.check(original)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout.splitlines(), [
+            ".github/workflows/sample.yml:" + str(line) + ": context runner not allowed in jobs.*.env"
+            for line in (258, 301, 362)
+        ])
+
+    def test_the_real_workflows_pass_the_cli(self):
+        result = subprocess.run(
+            [sys.executable, "-B", str(HERE / "workflow-contexts"), str(HERE.parent.parent)],
+            capture_output=True, text=True, timeout=10,
+        )
+        self.assertEqual((result.returncode, result.stdout, result.stderr), (0, "", ""))
+
+    def test_release_workflow_passes(self):
+        result = self.check(WORKFLOW.with_name("release.yml").read_text(encoding="utf-8"))
+        self.assertEqual((result.returncode, result.stdout), (0, ""))
+
+
+def ci_with_selftest_env(source):
+    start = source.index("  web-design-selftest:\n")
+    steps = source.index("    steps:\n", start)
+    if "    env:\n" not in source[start:steps]:
+        source = source[:steps] + "    env:\n" + source[steps:]
+    return source
+
+
+class WorkflowNullValuesTest(unittest.TestCase):
+    check = WorkflowContextsTest.check
+    workflow = WorkflowContextsTest.workflow
+
+    def test_an_empty_job_env_fails(self):
+        result = self.check(self.workflow("    env:\n"))
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, ".github/workflows/sample.yml:5: null value not allowed in jobs.*.env\n")
+
+    def test_an_empty_step_with_fails(self):
+        result = self.check(self.workflow(step="        with:\n        run: echo ok\n"))
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, ".github/workflows/sample.yml:7: null value not allowed in jobs.*.steps.*.with\n")
+
+    def test_an_event_without_a_value_passes(self):
+        result = self.check(self.workflow().replace("on: push\n", "on:\n  pull_request:\n"))
+        self.assertEqual((result.returncode, result.stdout, result.stderr), (0, "", ""))
+
+    def test_the_r1_workflow_has_exactly_one_null_finding(self):
+        original = ci_with_selftest_env(WORKFLOW.read_text(encoding="utf-8"))
+        point = (
+            '      - name: Point QD_CHROME at the pinned browser\n'
+            '        run: echo "QD_CHROME=$RUNNER_TEMP/pinned/chrome-headless-shell-linux64/chrome-headless-shell" >> "$GITHUB_ENV"\n\n'
+        )
+        fetch = "      - name: Fetch the pinned Node and browser\n        run: python3 tools/ci/fetch-pinned node chrome-headless-shell\n\n"
+        browser = "      QD_CHROME: ${{ runner.temp }}/pinned/chrome-headless-shell-linux64/chrome-headless-shell\n"
+        original = original.replace(point, "")
+        for job in ("web-browser", "web-design", "web-design-selftest"):
+            start = original.index("  " + job + ":\n")
+            env = original.index("    env:\n", start) + len("    env:\n")
+            if not original.startswith(browser, env):
+                original = original[:env] + browser + original[env:]
+        self.assertEqual(hashlib.sha256(original.encode()).hexdigest(), "e87d3d473b475f7f36541b87d086b7b9e6dd3ad8a9f1b24b00cae2b09530012b")
+        r1 = original.replace(browser, "").replace(fetch, fetch + point)
+        self.assertEqual(hashlib.sha256(r1.encode()).hexdigest(), "b958268cffb696c6efbaa8413414bfca1593f54a0053874b2a47ba38e3bcf6b5")
+        result = self.check(r1)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, ".github/workflows/sample.yml:365: null value not allowed in jobs.*.env\n")
+
+    def test_null_values_are_rejected_at_each_required_container_key(self):
+        workflow_keys = ("env", "defaults", "jobs", "permissions")
+        job_keys = ("env", "defaults", "outputs", "strategy", "services", "container", "permissions", "steps", "with", "secrets", "needs")
+        for key in workflow_keys:
+            with self.subTest(level="workflow", key=key):
+                result = self.check("on: push\n" + key + ":\n")
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("null value not allowed in " + key, result.stdout)
+        for key in job_keys:
+            with self.subTest(level="job", key=key):
+                result = self.check("on: push\njobs:\n  check:\n    runs-on: ubuntu-latest\n    " + key + ":\n")
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("null value not allowed in jobs.*." + key, result.stdout)
+        for key in ("env", "with"):
+            with self.subTest(level="step", key=key):
+                result = self.check(self.workflow(step="        " + key + ":\n        run: echo ok\n"))
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("null value not allowed in jobs.*.steps.*." + key, result.stdout)
+
+    def test_explicit_null_values_fail_and_present_values_pass(self):
+        for value in ("null", "Null", "NULL", "~"):
+            with self.subTest(value=value):
+                result = self.check(self.workflow("    env: " + value + "\n"))
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("null value not allowed in jobs.*.env", result.stdout)
+        for job in ("    env: {}\n", "    env:\n\n      VALUE: safe\n", "    needs: build\n", "    needs:\n      - build\n"):
+            with self.subTest(job=job):
+                result = self.check(self.workflow(job))
+                self.assertEqual((result.returncode, result.stdout), (0, ""))
+
+
+class WorkflowYamlFilesTest(unittest.TestCase):
+    workflow = WorkflowContextsTest.workflow
+    BAD_JOB = "    env:\n      BROWSER: ${{ runner.temp }}\n"
+
+    def check(self, files):
+        with TempRepo() as repo:
+            for name, content in files.items():
+                repo.add(".github/workflows/" + name, content)
+            return subprocess.run(
+                [sys.executable, "-B", str(HERE / "workflow-contexts"), str(repo.root)],
+                capture_output=True, text=True, timeout=10,
+            )
+
+    def test_a_yaml_workflow_with_an_invalid_context_fails(self):
+        result = self.check({"sample.yaml": self.workflow(self.BAD_JOB)})
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, ".github/workflows/sample.yaml:6: context runner not allowed in jobs.*.env\n")
+        self.assertEqual(result.stderr, "")
+
+    def test_yml_and_yaml_findings_share_one_sorted_path_order(self):
+        bad = self.workflow(self.BAD_JOB)
+        result = self.check({"z.yml": bad, "a.yaml": bad})
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, (
+            ".github/workflows/a.yaml:6: context runner not allowed in jobs.*.env\n"
+            ".github/workflows/z.yml:6: context runner not allowed in jobs.*.env\n"
+        ))
+        self.assertEqual(result.stderr, "")
+
+    def test_a_clean_yaml_workflow_passes(self):
+        clean = self.workflow(step="        env:\n          BROWSER: ${{ runner.temp }}\n        run: echo ok\n")
+        result = self.check({"sample.yaml": clean})
+        self.assertEqual((result.returncode, result.stdout, result.stderr), (0, "", ""))
+
+    def test_only_regular_workflow_files_directly_in_the_folder_are_scanned(self):
+        bad = self.workflow(self.BAD_JOB)
+        result = self.check({
+            "folder.yml/nested.yml": bad,
+            "folder.yaml/nested.yaml": bad,
+            "ignored.txt": bad,
+        })
+        self.assertEqual((result.returncode, result.stdout, result.stderr), (0, "", ""))
+
+
 if __name__ == "__main__":
     unittest.main()

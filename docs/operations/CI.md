@@ -4,6 +4,8 @@ Every pull request and every push to `main` runs `.github/workflows/ci.yml` on G
 
 This page lists the lanes, the required checks, the pin rules, and the rules that keep secrets out of reach.
 
+The stdlib-only `tools/ci/workflow-contexts` checker runs through the CI tool tests on every pull request. It checks expressions against GitHub's documented [context availability table](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#context-availability), checks the placement of status functions and `hashFiles()`, and rejects unknown workflow, job and step keys or flow-style mappings it cannot place. It supports this repository's block-style YAML; it is not GitHub's own parser.
+
 ## Lanes
 
 | Lane | What it runs | Pinned by | Timeout |

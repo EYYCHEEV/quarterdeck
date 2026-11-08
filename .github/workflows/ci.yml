@@ -255,7 +255,6 @@ jobs:
     permissions:
       contents: read
     env:
-      QD_CHROME: ${{ runner.temp }}/pinned/chrome-headless-shell-linux64/chrome-headless-shell
       QD_APP_WORKERS: "4"
     steps:
       - name: Checkout
@@ -265,6 +264,9 @@ jobs:
 
       - name: Fetch the pinned Node and browser
         run: python3 tools/ci/fetch-pinned node chrome-headless-shell
+
+      - name: Point QD_CHROME at the pinned browser
+        run: echo "QD_CHROME=$RUNNER_TEMP/pinned/chrome-headless-shell-linux64/chrome-headless-shell" >> "$GITHUB_ENV"
 
       - name: Put the pinned Node first on the path
         run: echo "$RUNNER_TEMP/pinned/node-v22.21.0-linux-x64/bin" >> "$GITHUB_PATH"
@@ -298,7 +300,6 @@ jobs:
           - ipad-1133x744
           - mac-1512
     env:
-      QD_CHROME: ${{ runner.temp }}/pinned/chrome-headless-shell-linux64/chrome-headless-shell
       DESIGN_SIZE: ${{ matrix.size }}
     steps:
       - name: Checkout
@@ -308,6 +309,9 @@ jobs:
 
       - name: Fetch the pinned Node and browser
         run: python3 tools/ci/fetch-pinned node chrome-headless-shell
+
+      - name: Point QD_CHROME at the pinned browser
+        run: echo "QD_CHROME=$RUNNER_TEMP/pinned/chrome-headless-shell-linux64/chrome-headless-shell" >> "$GITHUB_ENV"
 
       - name: Put the pinned Node first on the path
         run: echo "$RUNNER_TEMP/pinned/node-v22.21.0-linux-x64/bin" >> "$GITHUB_PATH"
@@ -358,8 +362,6 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
-    env:
-      QD_CHROME: ${{ runner.temp }}/pinned/chrome-headless-shell-linux64/chrome-headless-shell
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -368,6 +370,9 @@ jobs:
 
       - name: Fetch the pinned Node and browser
         run: python3 tools/ci/fetch-pinned node chrome-headless-shell
+
+      - name: Point QD_CHROME at the pinned browser
+        run: echo "QD_CHROME=$RUNNER_TEMP/pinned/chrome-headless-shell-linux64/chrome-headless-shell" >> "$GITHUB_ENV"
 
       - name: Put the pinned Node first on the path
         run: echo "$RUNNER_TEMP/pinned/node-v22.21.0-linux-x64/bin" >> "$GITHUB_PATH"

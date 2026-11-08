@@ -1,0 +1,257 @@
+#!/usr/bin/env python3
+
+import json
+import pathlib
+import re
+import sys
+
+WORKFLOW_CONTEXTS = frozenset("github inputs vars".split())
+JOB_CONTEXTS = WORKFLOW_CONTEXTS | {"needs", "strategy", "matrix"}
+STEP_CONTEXTS = JOB_CONTEXTS | {"job", "runner", "env", "secrets", "steps"}
+WORKFLOW_KEYS = frozenset("name run-name on permissions env defaults concurrency jobs".split())
+JOB_KEYS = frozenset("name permissions needs if runs-on environment concurrency outputs env defaults steps timeout-minutes strategy continue-on-error container services uses with secrets".split())
+STEP_KEYS = frozenset("id if name uses run working-directory shell with env continue-on-error timeout-minutes".split())
+STEP_EXPRESSION_KEYS = STEP_KEYS - {"id", "uses", "shell"}
+STATUS_FUNCTIONS = frozenset("always success failure cancelled".split())
+WORKFLOW_CONTAINER_KEYS = frozenset("env defaults jobs permissions".split())
+JOB_CONTAINER_KEYS = frozenset("env defaults outputs strategy services container permissions steps with secrets needs".split())
+STEP_CONTAINER_KEYS = frozenset("env with".split())
+QUOTED = re.compile(r"'(?:[^']|'')*'|\"(?:\\.|[^\"\\])*\"")
+KEY = re.compile(r"([^\s:]+|'[^']*'|\"[^\"]*\"):\s*(.*)$")
+TOKEN = re.compile(r"'(?:[^']|'')*'|\"(?:\\.|[^\"\\])*\"|[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?|[A-Za-z_][A-Za-z0-9_-]*|\S")
+IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_-]*\Z")
+BLOCK = re.compile(r"[|>][1-9+-]*\Z")
+
+
+def context_policy(path):
+    if path[0] in {"run-name", "concurrency"}:
+        return WORKFLOW_CONTEXTS, path[0]
+    if path[0] == "env":
+        return WORKFLOW_CONTEXTS | {"secrets"}, "env"
+    if path[:2] == ("on", "workflow_call"):
+        if len(path) > 2 and path[2] == "outputs":
+            return WORKFLOW_CONTEXTS | {"jobs"}, "on.workflow_call.outputs"
+        return WORKFLOW_CONTEXTS, "on.workflow_call"
+    if len(path) < 3 or path[0] != "jobs":
+        return frozenset(), ".".join(path)
+    key = path[2]
+    place = "jobs.*." + key
+    if key == "steps" and len(path) >= 5:
+        key = path[4]
+        allowed = STEP_CONTEXTS if key in STEP_EXPRESSION_KEYS else frozenset()
+        if key == "if":
+            allowed = allowed - {"secrets"}
+        return allowed, "jobs.*.steps.*." + key
+    if key in {"if", "strategy"}:
+        return WORKFLOW_CONTEXTS | {"needs"}, place
+    if key == "env":
+        return JOB_CONTEXTS | {"secrets"}, place
+    if key == "outputs":
+        return STEP_CONTEXTS, place
+    if key == "defaults":
+        return JOB_CONTEXTS | {"env"}, place
+    if key == "environment" and path[3:] == ("url",):
+        return STEP_CONTEXTS - {"secrets"}, place + ".url"
+    if key in {"container", "services"}:
+        setting = path[4] if key == "services" and len(path) > 4 else path[3] if len(path) > 3 else ""
+        if setting == "credentials":
+            return JOB_CONTEXTS | {"env", "secrets"}, place + ".credentials"
+        if setting == "env":
+            return STEP_CONTEXTS - {"steps"}, place + ".env"
+        return JOB_CONTEXTS, place
+    if key == "secrets":
+        return JOB_CONTEXTS | {"secrets"}, place
+    if key in {"name", "runs-on", "timeout-minutes", "concurrency", "continue-on-error", "environment", "with"}:
+        return JOB_CONTEXTS, place
+    return frozenset(), place
+
+
+def expressions(value):
+    start = 0
+    while True:
+        opening = value.find("${{", start)
+        if opening < 0:
+            return
+        cursor = opening + 3
+        quoted = False
+        while cursor < len(value):
+            if value[cursor] == "'":
+                if quoted and value[cursor:cursor + 2] == "''":
+                    cursor += 2
+                    continue
+                quoted = not quoted
+            if not quoted and value[cursor:cursor + 2] == "}}":
+                yield opening, value[opening + 3:cursor]
+                start = cursor + 2
+                break
+            cursor += 1
+        else:
+            yield opening, None
+            return
+
+
+def expression_findings(path, value, number):
+    allowed, place = context_policy(path)
+    embedded = list(expressions(value))
+    is_if = place in {"jobs.*.if", "jobs.*.steps.*.if"}
+    if is_if and not embedded:
+        embedded = [(0, value)]
+    found = []
+    for offset, expression in embedded:
+        line = number + value.count("\n", 0, offset)
+        if expression is None:
+            found.append((line, "unterminated expression in " + place))
+            continue
+        tokens = TOKEN.findall(expression)
+        seen = set()
+        for index, token in enumerate(tokens):
+            if not IDENTIFIER.fullmatch(token) or (index and tokens[index - 1] == "."):
+                continue
+            name = token.lower()
+            if index + 1 < len(tokens) and tokens[index + 1] == "(":
+                if (name in STATUS_FUNCTIONS and not is_if) or (name == "hashfiles" and not place.startswith("jobs.*.steps.*.")):
+                    display = "hashFiles" if name == "hashfiles" else name
+                    found.append((line, "function " + display + " not allowed in " + place))
+                continue
+            if name in {"true", "false", "null"} or name in allowed or name in seen:
+                continue
+            seen.add(name)
+            found.append((line, "context " + name + " not allowed in " + place))
+    return found
+
+
+def unknown_key(path):
+    if len(path) == 1:
+        level, allowed = "workflow", WORKFLOW_KEYS
+    elif len(path) == 3 and path[0] == "jobs":
+        level, allowed = "job", JOB_KEYS
+    elif len(path) == 5 and path[0] == "jobs" and path[2:4] == ("steps", "*"):
+        level, allowed = "step", STEP_KEYS
+    else:
+        return None
+    return "unknown " + level + " key " + path[-1] if path[-1] not in allowed else None
+
+
+def flow_mapping(value):
+    plain = QUOTED.sub("", value)
+    plain = re.sub(r"\$\{\{.*?\}\}", "", plain, flags=re.DOTALL).strip()
+    plain = re.sub(r"^(?:&[A-Za-z0-9_-]+\s+|![^\s]+\s+)+", "", plain)
+    return (plain.startswith("{") and not re.fullmatch(r"\{\s*\}", plain)) or (plain.startswith("[") and "{" in plain)
+
+
+def scalar_value(value):
+    stripped = value.strip()
+    if len(stripped) >= 2 and stripped[0] == stripped[-1] == "'":
+        return stripped[1:-1].replace("''", "'")
+    if len(stripped) >= 2 and stripped[0] == stripped[-1] == '"':
+        return json.loads(stripped)
+    return value
+
+
+def null_container(path, value, lines, index, indent):
+    if len(path) == 1 and path[0] in WORKFLOW_CONTAINER_KEYS:
+        place = path[0]
+    elif len(path) == 3 and path[0] == "jobs" and path[2] in JOB_CONTAINER_KEYS:
+        place = "jobs.*." + path[2]
+    elif len(path) == 5 and path[0] == "jobs" and path[2:4] == ("steps", "*") and path[4] in STEP_CONTAINER_KEYS:
+        place = "jobs.*.steps.*." + path[4]
+    else:
+        return None
+    literal = value.split(chr(35), 1)[0].strip()
+    if literal in {"null", "Null", "NULL", "~"}:
+        return place
+    if literal:
+        return None
+    for cursor in range(index, len(lines)):
+        follow = lines[cursor]
+        if not follow.strip() or follow.lstrip().startswith(chr(35)):
+            continue
+        if len(follow) - len(follow.lstrip(" ")) > indent:
+            return None
+        break
+    return place
+
+
+def workflow_findings(source):
+    lines = source.splitlines()
+    stack = [(-1, ())]
+    found = []
+    index = 0
+    while index < len(lines):
+        raw = lines[index]
+        number = index + 1
+        index += 1
+        if not raw.strip() or raw.lstrip().startswith(chr(35)) or raw.strip() in {"---", "..."}:
+            continue
+        indent = len(raw) - len(raw.lstrip(" "))
+        content = raw[indent:]
+        while stack[-1][0] >= indent:
+            stack.pop()
+        path = stack[-1][1]
+        if content.startswith("- "):
+            path += ("*",)
+            stack.append((indent, path))
+            indent += 2
+            content = content[2:]
+        match = KEY.fullmatch(content)
+        if match:
+            key, value = match.groups()
+            path += (key.strip("\"'"),)
+            stack.append((indent, path))
+            problem = unknown_key(path)
+            if problem:
+                found.append((number, problem))
+            null_place = null_container(path, value, lines, index, indent)
+            if null_place:
+                found.append((number, "null value not allowed in " + null_place))
+        else:
+            value = content
+        if not value:
+            continue
+        if flow_mapping(value):
+            found.append((number, "unsupported flow-style mapping"))
+            continue
+        block = BLOCK.fullmatch(value.strip())
+        if block:
+            value = ""
+        while index < len(lines):
+            follow = lines[index]
+            if follow.strip() and len(follow) - len(follow.lstrip(" ")) <= indent:
+                break
+            value += "\n" + follow
+            index += 1
+        if not block:
+            try:
+                value = scalar_value(value)
+            except ValueError:
+                found.append((number, "unsupported quoted scalar"))
+                continue
+        if path:
+            found.extend(expression_findings(path, value, number))
+    return found
+
+
+def main(argv):
+    if len(argv) > 2:
+        print("usage: workflow-contexts [ROOT]", file=sys.stderr)
+        return 2
+    root = pathlib.Path(argv[1] if len(argv) == 2 else ".")
+    found = []
+    paths = (
+        path for path in (root / ".github/workflows").glob("*")
+        if path.name.endswith((".yml", ".yaml")) and path.is_file() and not path.is_symlink()
+    )
+    for path in sorted(paths):
+        try:
+            findings = workflow_findings(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError):
+            findings = [(1, "unreadable workflow")]
+        name = path.relative_to(root).as_posix()
+        found.extend((name, line, message) for line, message in findings)
+    for name, line, message in found:
+        print(f"{name}:{line}: {message}")
+    return 1 if found else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
