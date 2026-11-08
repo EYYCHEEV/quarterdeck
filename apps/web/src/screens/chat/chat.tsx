@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type DragEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type RefObject } from "react";
 import { useThread } from "../../data/chat-hooks";
 import type { Attachment, ChatMessage } from "../../data/chat-types";
 import { useQd, useWorld } from "../../data/hooks";
@@ -32,13 +32,13 @@ const refusal = (error: unknown): Pick<PendingSend, "reason" | "retry"> => {
 let olderPlace: { botId: string; oldest: string | undefined; fromEnd: number } | null = null;
 let olderMoved = false;
 
-function OlderRow({ botId, oldest }: { botId: string; oldest: string | undefined }) {
+function OlderRow({ botId, oldest, pane }: { botId: string; oldest: string | undefined; pane: RefObject<HTMLDivElement | null> }) {
   const { chat } = useQd();
   const [held, setHeld] = useState<{ botId: string; state: "idle" | "loading" | "failed" }>({ botId, state: "idle" });
   const state = held.botId === botId ? held.state : "idle";
   const load = () => {
     if (chat.uploadBoundary !== "server" || state === "loading") return;
-    olderPlace = { botId, oldest, fromEnd: document.documentElement.scrollHeight - window.scrollY };
+    olderPlace = { botId, oldest, fromEnd: pane.current ? pane.current.scrollHeight - pane.current.scrollTop : 0 };
     setHeld({ botId, state: "loading" });
     chat.older(botId).then(
       () => setHeld((now) => (now.botId === botId ? { botId, state: "idle" } : now)),
@@ -69,7 +69,8 @@ export function ChatScreen({ botId }: { botId: string }) {
   const [draft, setDraft] = useChatDraft(botId);
   const pending = usePendingSends(botId);
   const setPending = (change: (list: PendingSend[]) => PendingSend[]) => updatePendingSends(botId, change);
-  const end = useRef<HTMLDivElement>(null);
+  const pane = useRef<HTMLDivElement>(null);
+  const list = useRef<HTMLOListElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const root = useRef<HTMLDivElement>(null);
   const cards = useRef<HTMLDivElement>(null);
@@ -121,31 +122,39 @@ export function ChatScreen({ botId }: { botId: string }) {
   }, [focusNext]);
 
   useLayoutEffect(() => {
+    const box = pane.current;
+    if (!box) return;
     if (__QD_SOURCE__ === "server" && __QD_CHAT__ === "on" && olderPlace?.botId === botId && olderPlace.oldest !== messages[0]?.id) {
-      window.scrollTo({ top: document.documentElement.scrollHeight - olderPlace.fromEnd, behavior: "instant" });
+      box.scrollTo({ top: box.scrollHeight - olderPlace.fromEnd, behavior: "instant" });
       olderPlace = null;
       olderMoved = true;
       return;
     }
-    end.current?.scrollIntoView({ block: "end" });
+    box.scrollTop = box.scrollHeight;
   }, [messages.length, waiting.length, working === null]);
 
   useEffect(() => {
+    const box = pane.current;
+    const thread = list.current;
+    if (!box || !thread) return;
     let known = 0;
+    let seen = 0;
     const onScroll = () => {
-      const height = __QD_SOURCE__ === "server" && __QD_CHAT__ === "on" && olderMoved ? document.documentElement.scrollHeight : Math.min(known, document.documentElement.scrollHeight);
+      const height = __QD_SOURCE__ === "server" && __QD_CHAT__ === "on" && olderMoved ? box.scrollHeight : Math.min(known, box.scrollHeight);
       if (__QD_SOURCE__ === "server" && __QD_CHAT__ === "on") olderMoved = false;
-      stuck.current = height - window.innerHeight - window.scrollY <= 48;
+      stuck.current = height - Math.max(seen, box.clientHeight) - box.scrollTop <= 48;
     };
     const watcher = new ResizeObserver(() => {
-      if (stuck.current) end.current?.scrollIntoView({ block: "end" });
-      known = document.documentElement.scrollHeight;
+      if (stuck.current) box.scrollTop = box.scrollHeight;
+      known = box.scrollHeight;
+      seen = box.clientHeight;
     });
-    if (root.current) watcher.observe(root.current);
-    window.addEventListener("scroll", onScroll, { passive: true });
+    watcher.observe(box);
+    watcher.observe(thread);
+    box.addEventListener("scroll", onScroll, { passive: true });
     return () => {
       watcher.disconnect();
-      window.removeEventListener("scroll", onScroll);
+      box.removeEventListener("scroll", onScroll);
     };
   }, [world !== null && bot !== null]);
 
@@ -156,7 +165,7 @@ export function ChatScreen({ botId }: { botId: string }) {
     let last = size();
     const watcher = new ResizeObserver(() => {
       const next = size();
-      if (!stuck.current && next !== last) window.scrollBy(0, next - last);
+      if (!stuck.current && next !== last) pane.current?.scrollBy(0, next - last);
       last = next;
     });
     watcher.observe(box);
@@ -330,7 +339,7 @@ export function ChatScreen({ botId }: { botId: string }) {
   return (
     <div
       ref={root}
-      className="chat-view flex min-h-dvh flex-col"
+      className="chat-view flex h-svh flex-col wide:h-dvh"
       data-testid="chat"
       onDragEnter={(event) => {
         if (__QD_SOURCE__ === "server" && __QD_CHAT__ === "on") return;
@@ -355,57 +364,59 @@ export function ChatScreen({ botId }: { botId: string }) {
       }}
     >
       {head}
-      <ol className="chat-timeline mx-auto flex w-full flex-1 flex-col pointer-coarse:select-none pointer-coarse:[&_input]:select-text pointer-coarse:[&_textarea]:select-text" aria-label={"Chat with " + bot.name} data-testid="chat-thread">
-        {thread.failed && !thread.value ? (
-          <li>
-            <ErrorLine onRetry={thread.retry}>Could not load this chat.</ErrorLine>
-          </li>
-        ) : !thread.value ? (
-          <li>
-            <LoadingBars rows={3} height={80} />
-          </li>
-        ) : (
-          <>
-            {__QD_SOURCE__ === "server" && __QD_CHAT__ === "on" ? (
-              <>
-                {thread.value.older && <OlderRow botId={botId} oldest={messages[0]?.id} />}
-                {!messages.length && (
-                  <li>
-                    <Empty>No messages yet.</Empty>
-                  </li>
-                )}
-                {rows}
-              </>
-            ) : (
-              rows
-            )}
-            {working && <WorkingLine botName={bot.name} working={working} />}
-            {secrets.loading && (
-              <li>
-                <LoadingBars rows={1} height={44} />
-              </li>
-            )}
-            {secrets.failed && (
-              <li>
-                <ErrorLine onRetry={secrets.retry}>Could not load this chat's secret requests.</ErrorLine>
-              </li>
-            )}
-            {boxOpen && (
-              <li>
-                <SecretCard
-                  botId={botId}
-                  botName={bot.name}
-                  ready={secretsReady}
-                  onClose={() => {
-                    setBoxOpen(false);
-                    input.current?.focus();
-                  }}
-                />
-              </li>
-            )}
-          </>
-        )}
-      </ol>
+      <div ref={pane} className="chat-scroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain" data-testid="chat-scroll">
+        <ol ref={list} className="chat-timeline mx-auto flex w-full flex-col pointer-coarse:select-none pointer-coarse:[&_input]:select-text pointer-coarse:[&_textarea]:select-text" aria-label={"Chat with " + bot.name} data-testid="chat-thread">
+          {thread.failed && !thread.value ? (
+            <li>
+              <ErrorLine onRetry={thread.retry}>Could not load this chat.</ErrorLine>
+            </li>
+          ) : !thread.value ? (
+            <li>
+              <LoadingBars rows={3} height={80} />
+            </li>
+          ) : (
+            <>
+              {__QD_SOURCE__ === "server" && __QD_CHAT__ === "on" ? (
+                <>
+                  {thread.value.older && <OlderRow botId={botId} oldest={messages[0]?.id} pane={pane} />}
+                  {!messages.length && (
+                    <li>
+                      <Empty>No messages yet.</Empty>
+                    </li>
+                  )}
+                  {rows}
+                </>
+              ) : (
+                rows
+              )}
+              {working && <WorkingLine botName={bot.name} working={working} />}
+              {secrets.loading && (
+                <li>
+                  <LoadingBars rows={1} height={44} />
+                </li>
+              )}
+              {secrets.failed && (
+                <li>
+                  <ErrorLine onRetry={secrets.retry}>Could not load this chat's secret requests.</ErrorLine>
+                </li>
+              )}
+              {boxOpen && (
+                <li>
+                  <SecretCard
+                    botId={botId}
+                    botName={bot.name}
+                    ready={secretsReady}
+                    onClose={() => {
+                      setBoxOpen(false);
+                      input.current?.focus();
+                    }}
+                  />
+                </li>
+              )}
+            </>
+          )}
+        </ol>
+      </div>
       <Composer
         botName={bot.name}
         world={world}
@@ -438,7 +449,6 @@ export function ChatScreen({ botId }: { botId: string }) {
           </div>
         }
       />
-      <div ref={end} />
       {canReply && (
         <SelectionQuote
           onQuote={(id, text) => {

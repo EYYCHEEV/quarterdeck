@@ -859,6 +859,11 @@ const open = async (p, route) => {
 };
 const mine = (p, text) => T(p, "chat-my-message").filter({ hasText: text });
 const draftQuote = (p) => T(p, "chat-quote");
+const atChatEnd = (p) =>
+  p.waitForFunction(() => {
+    const pane = document.querySelector('[data-testid="chat-scroll"]');
+    return pane.scrollHeight - pane.clientHeight - pane.scrollTop <= 2;
+  });
 const bytes = (size) => Buffer.alloc(size, "a");
 const PICTURE = { name: "screenshot.png", mimeType: "image/png", buffer: PNG };
 const LOG = { name: "build.log", mimeType: "text/plain", buffer: Buffer.concat([Buffer.from("build: passed\n"), bytes(14 * 1024 - 14)]) };
@@ -1274,7 +1279,7 @@ it("Chat: tapping a sent quote of a message brings that message into view and gi
   const source = p.locator('[data-message-id="iris-m2"]');
   const quote = mine(p, "What are those two cards?").locator('[data-testid="chat-sent-quote"]');
   await quote.waitFor();
-  await p.waitForFunction(() => window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2);
+  await atChatEnd(p);
   const seen = () =>
     source.evaluate((el) => {
       const box = el.getBoundingClientRect();
@@ -1732,7 +1737,7 @@ it("Chat: when files are attached while he is at the bottom, even in two steps t
     await T(p, "pick-photos").setInputFiles([PICTURE, { ...PICTURE, name: "second.png" }]);
     await T(p, "pick-files").setInputFiles(LOG);
     await tiles.nth(2).waitFor();
-    await p.waitForFunction(() => window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2);
+    await atChatEnd(p);
     const top = (await tiles.first().boundingBox()).y;
     assert.equal(await T(p, "chat-working-quiet").evaluate((el, limit) => el.getBoundingClientRect().bottom <= limit, top), true, "round " + round);
     for (let n = 0; n < 3; n++) await tiles.first().getByRole("button", { name: /^Remove / }).click();
@@ -1742,11 +1747,36 @@ it("Chat: when files are attached while he is at the bottom, even in two steps t
 it("Chat: attaching while reading older messages does not pull him to the bottom", PHONE, async (p) => {
   await open(p, "/chat/iris");
   await T(p, "chat-working-quiet").getByText("No word for 10 minutes.", { exact: true }).waitFor();
-  await p.evaluate(() => window.scrollTo(0, 0));
-  await p.waitForFunction(() => window.scrollY === 0);
+  await p.evaluate(() => (document.querySelector('[data-testid="chat-scroll"]').scrollTop = 0));
+  await p.waitForFunction(() => document.querySelector('[data-testid="chat-scroll"]').scrollTop === 0);
   await T(p, "pick-files").setInputFiles(LOG);
   await T(p, "draft-file").waitFor();
-  assert.equal(await p.evaluate(() => window.scrollY), 0);
+  assert.deepEqual(await p.evaluate(() => [document.querySelector('[data-testid="chat-scroll"]').scrollTop, window.scrollY]), [0, 0]);
+});
+
+it("Chat: with files attached, scrolling up 120 px lets go of the end, and typing two lines then leaves his place alone", PHONE, async (p) => {
+  await open(p, "/chat/iris");
+  await T(p, "chat-working-quiet").getByText("No word for 10 minutes.", { exact: true }).waitFor();
+  await T(p, "pick-photos").setInputFiles([PICTURE, { ...PICTURE, name: "second.png" }]);
+  await T(p, "pick-files").setInputFiles(LOG);
+  await T(p, "draft-file").nth(2).waitFor();
+  await atChatEnd(p);
+  await p.evaluate(() => document.querySelector('[data-testid="chat-scroll"]').scrollBy(0, -120));
+  await p.waitForFunction(() => {
+    const pane = document.querySelector('[data-testid="chat-scroll"]');
+    return pane.scrollHeight - pane.clientHeight - pane.scrollTop >= 119;
+  });
+  const place = () => p.evaluate(() => [Math.round(document.querySelector('[data-testid="chat-scroll"]').scrollTop), Math.round(window.scrollY)]);
+  const before = await place();
+  const input = T(p, "chat-input");
+  const one = await input.evaluate((el) => el.getBoundingClientRect().height);
+  await input.tap();
+  await input.pressSequentially("Check the retry rule first.");
+  await input.press("Enter");
+  await input.pressSequentially("Then run the build once more.");
+  await p.waitForFunction((height) => document.querySelector('[data-testid="chat-input"]').getBoundingClientRect().height > height + 10, one);
+  await p.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(done)))));
+  assert.deepEqual(await place(), before, "the list's scroll position and the page's scroll after two typed lines");
 });
 
 it("Chat: the chat he has open shows no unread mark in the sidebar, and the chats he has not opened keep theirs", MAC, async (p) => {
@@ -2445,8 +2475,11 @@ it("Chat on a phone: Menu, the bot's name and role, and More float over the page
   await label.getByText("Ops", { exact: true }).waitFor();
   const more = p.locator('[data-float="capsule"]').getByRole("button", { name: "More", exact: true });
   await more.waitFor();
-  await p.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight / 2));
-  await p.waitForFunction(() => window.scrollY > 0);
+  await p.evaluate(() => {
+    const pane = document.querySelector('[data-testid="chat-scroll"]');
+    pane.scrollTop = pane.scrollHeight / 2;
+  });
+  await p.waitForFunction(() => document.querySelector('[data-testid="chat-scroll"]').scrollTop > 0);
   const tops = await Promise.all([T(p, "menu-btn"), label, more].map((part) => part.evaluate((el) => el.getBoundingClientRect().top)));
   assert.deepEqual(tops, [8, 8, 8]);
 });
@@ -2481,8 +2514,11 @@ it("Chat on a phone: a quote added while he reads keeps the secret card's title 
   await title.waitFor();
   const formTop = () => T(p, "chat-input").locator("xpath=ancestor::form[1]").evaluate((el) => el.getBoundingClientRect().top);
   const gap = await title.evaluate((el, top) => top - 16 - el.getBoundingClientRect().bottom, await formTop());
-  await p.evaluate((by) => window.scrollBy(0, -by), gap);
-  await p.waitForFunction(() => document.documentElement.scrollHeight - window.innerHeight - window.scrollY > 200);
+  await p.evaluate((by) => document.querySelector('[data-testid="chat-scroll"]').scrollBy(0, -by), gap);
+  await p.waitForFunction(() => {
+    const pane = document.querySelector('[data-testid="chat-scroll"]');
+    return pane.scrollHeight - pane.clientHeight - pane.scrollTop > 200;
+  });
   await p.clock.pauseAt(await p.evaluate(() => Date.now() + 1000));
   const sheet = await holdMessage(p, T(p, "chat-bot-message").first());
   await sheet.getByRole("button", { name: "Reply" }).tap();
