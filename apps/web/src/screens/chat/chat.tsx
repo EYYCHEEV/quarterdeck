@@ -340,7 +340,7 @@ export function ChatScreen({ botId }: { botId: string }) {
   return (
     <div
       ref={root}
-      className="chat-view flex h-svh flex-col wide:h-dvh"
+      className="chat-view flex h-svh flex-col md:h-dvh"
       data-testid="chat"
       onDragEnter={(event) => {
         if (__QD_SOURCE__ === "server" && __QD_CHAT__ === "on") return;
