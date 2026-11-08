@@ -76,6 +76,7 @@ export function createServerChat(host: ChatHost): ChatPart {
   let staleAt: number | null = null;
   let busy = false;
   const marked = new Map<string, string>();
+  const poked = new Set<string>();
   let reading: Promise<void> | null = null;
   let sending = 0;
   const unshown = new Map<string, Map<string, ChatMessage>>();
@@ -343,8 +344,15 @@ export function createServerChat(host: ChatHost): ChatPart {
     for (const heard of [...rowWatchers]) heard();
   }
 
+  function pokedBot(): string | null {
+    for (const bot of poked) if ((threadWatchers.get(bot)?.size ?? 0) > 0 && threads.get(bot)?.features.includes("cursor")) return bot;
+    return null;
+  }
+
   function due(): ChatDue | null {
     if (busy || !host.live()) return null;
+    const poke = pokedBot();
+    if (poke !== null) return { kind: "thread", bot: poke };
     if (wanted && onScreen()) return { kind: "list" };
     if (listed !== null) {
       for (const [bot, set] of threadWatchers) {
@@ -374,6 +382,7 @@ export function createServerChat(host: ChatHost): ChatPart {
           if (reading === flight) reading = null;
         }
       } else {
+        poked.delete(job.bot);
         const row = listed?.find((one) => one.bot.id === job.bot);
         if (row) tried.set(job.bot, stamp(row));
         await readThread(job.bot, true);
@@ -387,8 +396,10 @@ export function createServerChat(host: ChatHost): ChatPart {
   }
 
   function event(): void {
-    if (onScreen()) wanted = true;
-    else staleAt = host.clock();
+    if (onScreen()) {
+      wanted = true;
+      if (host.live()) for (const [bot, set] of threadWatchers) if (set.size > 0 && threads.get(bot)?.features.includes("cursor")) poked.add(bot);
+    } else staleAt = host.clock();
     host.arm();
   }
 
@@ -407,6 +418,7 @@ export function createServerChat(host: ChatHost): ChatPart {
     olderFlights.clear();
     listFlight = null;
     wanted = false;
+    poked.clear();
     staleAt = null;
   }
 
@@ -427,7 +439,10 @@ export function createServerChat(host: ChatHost): ChatPart {
       return () => {
         const set = threadWatchers.get(bot);
         set?.delete(onChange);
-        if (set?.size === 0) marked.delete(bot);
+        if (set?.size === 0) {
+          marked.delete(bot);
+          poked.delete(bot);
+        }
         host.arm();
       };
     },
