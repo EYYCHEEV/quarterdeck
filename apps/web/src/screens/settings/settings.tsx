@@ -110,7 +110,7 @@ function useBots() {
 }
 
 function NoBots() {
-  return <p className="text-body text-ink-2">Approve new bots in the approval app for now.</p>;
+  return <p className="text-body text-ink-2">Approve new bots in Backchannel for now.</p>;
 }
 
 function useNow(ticking: boolean): number {
