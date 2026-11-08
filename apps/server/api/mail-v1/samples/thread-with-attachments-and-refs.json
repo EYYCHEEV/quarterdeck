@@ -1,0 +1,99 @@
+{
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Content-Security-Policy": "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+    "Referrer-Policy": "strict-origin",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Content-Length": "1273"
+  },
+  "body": {
+    "thread": {
+      "ref": "MT-1",
+      "subject": "Search group limit: how many rows per group?",
+      "project": null,
+      "lane": null,
+      "card": null,
+      "bots": [
+        "repo-lead",
+        "account-user",
+        "bot-a"
+      ],
+      "lastAt": "2026-11-02T11:40:00-05:00",
+      "count": 4,
+      "omitted": 0,
+      "mails": [
+        {
+          "ref": "MT-1.1",
+          "from": "repo-lead",
+          "to": [
+            "account-user"
+          ],
+          "cc": [],
+          "at": "2026-11-02T09:05:00-05:00",
+          "text": "How many rows should a search group show before 'more'?\nI need a number to finish the Search lane.",
+          "cut": false,
+          "refs": [],
+          "attachments": []
+        },
+        {
+          "ref": "MT-1.2",
+          "from": "bot-a",
+          "to": [
+            "repo-lead"
+          ],
+          "cc": [],
+          "at": "2026-11-02T09:30:00-05:00",
+          "text": "I wrote the Search notes down as AR-4 and the layout as PG-2.\nWe still need a rows-per-group number.",
+          "cut": false,
+          "refs": [
+            "AR-4",
+            "PG-2"
+          ],
+          "attachments": [
+            {
+              "name": "search-notes.pdf",
+              "size": 48213
+            },
+            {
+              "name": "layout.png",
+              "size": 20480
+            }
+          ]
+        },
+        {
+          "ref": "MT-1.3",
+          "from": "account-user",
+          "to": [
+            "repo-lead"
+          ],
+          "cc": [],
+          "at": "2026-11-02T10:12:00-05:00",
+          "text": "Five rows, then a 'show more' link.\nPlease read AR-4 again before you start.",
+          "cut": false,
+          "refs": [
+            "AR-4"
+          ],
+          "attachments": []
+        },
+        {
+          "ref": "MT-1.4",
+          "from": "repo-lead",
+          "to": [
+            "account-user"
+          ],
+          "cc": [],
+          "at": "2026-11-02T11:40:00-05:00",
+          "text": "Thanks. Five rows it is. Closing this out.",
+          "cut": false,
+          "refs": [],
+          "attachments": []
+        }
+      ]
+    },
+    "csrf": "csrf-placeholder",
+    "freshUntil": 0
+  }
+}

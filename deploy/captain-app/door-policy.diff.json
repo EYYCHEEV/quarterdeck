@@ -1,0 +1,47 @@
+{
+  "format": 1,
+  "baseSha256": "68268d758de155bcdab2800a3bee179e645dd98426604d2916d5010ee1aaeb1b",
+  "upstream": "captain-app:8080",
+  "routes": [
+    {
+      "matcher": "captain_chat_page",
+      "methods": [
+        "GET"
+      ],
+      "paths": [
+        "/captain/chat",
+        "/captain/assets/chat.css",
+        "/captain/assets/chat.js"
+      ]
+    },
+    {
+      "matcher": "captain_chat_list",
+      "methods": [
+        "GET"
+      ],
+      "paths": [
+        "/captain/api/chats"
+      ]
+    },
+    {
+      "matcher": "captain_chat_thread",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "paths": [
+        "/captain/api/chat"
+      ],
+      "maxBody": "16KB"
+    },
+    {
+      "matcher": "captain_chat_events",
+      "methods": [
+        "GET"
+      ],
+      "paths": [
+        "/captain/events"
+      ]
+    }
+  ]
+}

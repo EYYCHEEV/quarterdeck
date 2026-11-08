@@ -1,0 +1,353 @@
+openapi: 3.1.0
+info:
+  title: Quarterdeck Captain mail API
+  version: "1"
+  description: "Read-only mail for the Captain's Mail screen, served by qd-web. Same origin only, GET only, the Captain's session cookie (HttpOnly). It shows the mail in his own inbox and sent folder, grouped into threads, except card mail (subjects starting CARD: , UPDATE: , ANSWER: , COMMENT: and WITHDRAW: ) and chat mail (CHAT: ). Nothing here writes to the mailbox. Every JSON 200 also carries 'csrf' and 'freshUntil'; ignore both when only reading. Mail text is sent with LF line ends only: the server turns CRLF and any lone CR into LF before it caps or scans the text, so no CR is ever sent. Errors are JSON with one 'error' text; tell them apart by status code. On a GET, treat 401 and 403 alike: sign in again and keep local data (seen marks, drafts). 401 comes from the simpler in-process sign-in check and 403 from the real server's sign-in connection; a 403 can also mean that connection failed, which is no reason to throw away his drafts. Local data is cleared only when the server says so: sign-out sends Clear-Site-Data 'storage', and the client never clears on its own. Every mail GET spends one session check, a 304 included, so read the list at most once every 5 seconds. The refresh event of GET /captain/events carries the fixed data {\"cards\":true,\"chats\":true,\"mail\":true} on every event; on any event, refetch the mail list."
+servers:
+  - url: "https://quarterdeck.invalid"
+    description: "Stand-in origin. The real origin is the Captain's own site."
+security:
+  - sessionCookie: []
+paths:
+  /captain/mail:
+    get:
+      operationId: listMailThreads
+      summary: "His newest 200 mail threads, newest first."
+      description: "No query parameters: any query string answers 400. Threads are sorted by lastAt, newest first; a tie puts the higher thread number first. 'truncated' is true when more than 200 threads exist. A message joins an existing thread when its In-Reply-To or References header names a message already in a thread; otherwise its thread is the one with the same subject once leading Re:, Fwd: and Fw: are stripped, white space is collapsed and case is ignored. Thread numbers (MT-n) are kept by the server, never change, and number threads by first appearance, oldest received first. project, lane and card are null in v1. The ETag is strong and is the sha256 of the list content (threads and truncated, without csrf and freshUntil). Send back exactly the value you got in If-None-Match: one value, no W/ prefix, no lists. An unchanged list answers an empty 304 with the same ETag."
+      parameters:
+        - name: If-None-Match
+          in: header
+          required: false
+          description: "The ETag of the list you already have, exactly as received."
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "The list."
+          headers:
+            ETag:
+              description: "Strong ETag of the list content."
+              required: true
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MailList"
+        "304":
+          description: "Unchanged since the ETag sent in If-None-Match. Empty body."
+          headers:
+            ETag:
+              description: "The same ETag."
+              required: true
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/Refused"
+        "401":
+          $ref: "#/components/responses/SignInRequired"
+        "403":
+          $ref: "#/components/responses/SessionRefused"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "429":
+          $ref: "#/components/responses/Refused"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /captain/mail/{ref}:
+    get:
+      operationId: getMailThread
+      summary: "One thread with its newest 50 mails, oldest first."
+      description: "ref is a thread code, MT- and 1 to 9 digits without a leading zero. A mail code like MT-4.13 is not a path: cut the .13, read the thread and scroll to that mail. A malformed ref answers 400 and a well-formed ref that names no thread answers 404. 'mails' holds at most the newest 50 mails, oldest first, and 'omitted' is count minus the number returned; a mail code keeps its true place, so the first mail returned can be MT-4.13. The whole answer is at most 1 MiB; if the newest 50 mails would be larger, the oldest of them are left out and counted in 'omitted'. Each mail's text is plain text with LF line ends, at most 16384 bytes of UTF-8 cut on a character boundary; 'cut' is true when it was cut. A message that has only an HTML body is shown as plain text, with the tags removed. 'refs' holds the AR-n codes then the PG-n codes found in the returned text, each in order of first appearance, no repeats. 'cc' is always empty in v1. 'attachments' lists names and sizes only; the files cannot be fetched."
+      parameters:
+        - name: ref
+          in: path
+          required: true
+          description: "The thread code, like MT-4."
+          schema:
+            type: string
+            pattern: "^MT-[1-9][0-9]{0,8}$"
+      responses:
+        "200":
+          description: "The thread and its mails."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MailThreadAnswer"
+        "400":
+          $ref: "#/components/responses/Refused"
+        "401":
+          $ref: "#/components/responses/SignInRequired"
+        "403":
+          $ref: "#/components/responses/SessionRefused"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "429":
+          $ref: "#/components/responses/Refused"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: "__Host-qd-approval"
+  responses:
+    Refused:
+      description: "400 and 429 answer the same text as 403: the request was refused. 400 also covers a malformed thread ref and any query string."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorRefused"
+    SessionRefused:
+      description: "Sign in again: session missing, expired or refused. The real server checks the session through the approval app's sign-in connection, and answers this 403, with the same body text as 400 and 429, when the session cookie is missing or the connection refuses the session. It is also the answer when the sign-in connection fails (it cannot be reached or gives an invalid reply), which is no reason to throw away his drafts. Ask him to sign in again and keep local data. Treat 401 and 403 alike on a GET."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorRefused"
+    SignInRequired:
+      description: "Sign in again: no valid session, as answered by the simpler in-process sign-in check the samples use. The real server answers 403 for the same case, so on a GET treat 401 and 403 alike: sign in again and keep local data."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorSignInRequired"
+    NotFound:
+      description: "A well-formed thread ref that names no thread, or an unknown path."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorNotFound"
+    MethodNotAllowed:
+      description: "Any method other than GET. The Allow header names GET."
+      headers:
+        Allow:
+          description: "GET"
+          required: true
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorMethodNotAllowed"
+    Unavailable:
+      description: "The service or the mail server failed for this request. Try again later."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorUnavailable"
+  schemas:
+    ErrorRefused:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+          const: "request refused"
+    ErrorSignInRequired:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+          const: "sign in required"
+    ErrorNotFound:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+          const: "not found"
+    ErrorMethodNotAllowed:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+          const: "method not allowed"
+    ErrorUnavailable:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+          const: "request unavailable"
+    MailList:
+      type: object
+      additionalProperties: false
+      required: [threads, truncated, csrf, freshUntil]
+      properties:
+        threads:
+          type: array
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/ThreadSummary"
+        truncated:
+          type: boolean
+        csrf:
+          type: string
+        freshUntil:
+          type: number
+    ThreadSummary:
+      type: object
+      additionalProperties: false
+      required: [ref, subject, project, lane, card, bots, lastAt, count, days]
+      properties:
+        ref:
+          type: string
+          pattern: "^MT-[1-9][0-9]{0,8}$"
+          description: "The thread code. It never changes for the life of the thread."
+        subject:
+          type: string
+          pattern: "^[^\n]{1,200}$"
+          description: "One line, 1 to 200 characters, as the first message wrote it."
+        project:
+          type: [string, "null"]
+          description: "Always null in v1."
+        lane:
+          type: [string, "null"]
+          description: "Always null in v1."
+        card:
+          type: [string, "null"]
+          description: "Always null in v1."
+        bots:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: string
+            pattern: "^[^\n]{1,255}$"
+          description: "Account names in first-appearance order: reading the mails oldest first, each as From, then To. No repeats. Each name is one line of 1 to 255 characters. At most 50 names; later ones are left out."
+        lastAt:
+          type: string
+          format: date-time
+          description: "When the newest mail in the thread was received, in New York time."
+        count:
+          type: integer
+          minimum: 1
+          description: "How many mails the thread has now."
+        days:
+          type: array
+          minItems: 1
+          maxItems: 31
+          items:
+            type: string
+            pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          description: "New York days that have at least one mail, newest first, at most 31."
+    MailThreadAnswer:
+      type: object
+      additionalProperties: false
+      required: [thread, csrf, freshUntil]
+      properties:
+        thread:
+          $ref: "#/components/schemas/MailThread"
+        csrf:
+          type: string
+        freshUntil:
+          type: number
+    MailThread:
+      type: object
+      additionalProperties: false
+      required: [ref, subject, project, lane, card, bots, lastAt, count, omitted, mails]
+      properties:
+        ref:
+          type: string
+          pattern: "^MT-[1-9][0-9]{0,8}$"
+        subject:
+          type: string
+          pattern: "^[^\n]{1,200}$"
+        project:
+          type: [string, "null"]
+        lane:
+          type: [string, "null"]
+        card:
+          type: [string, "null"]
+        bots:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: string
+            pattern: "^[^\n]{1,255}$"
+        lastAt:
+          type: string
+          format: date-time
+        count:
+          type: integer
+          minimum: 1
+        omitted:
+          type: integer
+          minimum: 0
+          description: "count minus the number of mails returned."
+        mails:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/Mail"
+    Mail:
+      type: object
+      additionalProperties: false
+      required: [ref, from, to, cc, at, text, cut, refs, attachments]
+      properties:
+        ref:
+          type: string
+          pattern: "^MT-[1-9][0-9]{0,8}\\.[1-9][0-9]{0,8}$"
+          description: "MT-n.k: the thread and the arrival number k within it."
+        from:
+          type: string
+          pattern: "^[^\n]{1,255}$"
+          description: "One account name: one line, 1 to 255 characters."
+        to:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            type: string
+            pattern: "^[^\n]{1,255}$"
+        cc:
+          type: array
+          items:
+            type: string
+            pattern: "^[^\n]{1,255}$"
+          description: "Always empty in v1."
+        at:
+          type: string
+          format: date-time
+          description: "When the mail was received, in New York time."
+        text:
+          type: string
+          pattern: "^[^\\r]*$"
+          description: "Plain text, LF line ends, at most 16384 bytes of UTF-8, cut on a character boundary."
+        cut:
+          type: boolean
+          description: "True when the text was cut."
+        refs:
+          type: array
+          items:
+            type: string
+            pattern: "^(AR|PG)-[1-9][0-9]{0,8}$"
+          description: "AR-n codes then PG-n codes found in the returned text, each in order of first appearance, no repeats."
+        attachments:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/Attachment"
+    Attachment:
+      type: object
+      additionalProperties: false
+      required: [name, size]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: "One line, at most 255 characters. A file with no name is called attachment."
+        size:
+          type: integer
+          minimum: 0
+          description: "Bytes."

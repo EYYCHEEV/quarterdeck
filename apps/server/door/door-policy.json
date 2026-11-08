@@ -1,0 +1,381 @@
+{
+  "version": 3,
+  "hostname": "mail.qd.example.invalid",
+  "publicUrl": "https://mail.qd.example.invalid",
+  "mailDomain": "qd.example.invalid",
+  "deployment": {
+    "serviceNetwork": "198.51.100.0/24",
+    "endpoints": {
+      "caddy": {"address": "198.51.100.10", "port": 8443},
+      "stalwart": {"address": "198.51.100.20", "port": 8080},
+      "join": {"address": "198.51.100.30", "port": 8090},
+      "approval": {"address": "198.51.100.40", "port": 8091},
+      "admin": {"address": "127.0.0.1", "port": 8081}
+    }
+  },
+  "bootstrap": {
+    "requestTlsCertificate": false,
+    "certificateHolder": "caddy",
+    "generateDkimKeys": false
+  },
+  "frontProxy": {
+    "image": "docker.io/library/caddy:2.11.7-alpine",
+    "publishedPorts": [443],
+    "port80": false,
+    "certificate": {
+      "holder": "caddy",
+      "challenge": "tls-alpn-01",
+      "disableHttpChallenge": true,
+      "automaticRedirects": false,
+      "renewalFailureAlert": true
+    },
+    "stalwartProxy": {
+      "protocol": "proxy-v2"
+    },
+    "applicationForwarding": {
+      "header": "X-Forwarded-For",
+      "source": "remote-host",
+      "rejectUntrustedForwarding": true
+    },
+    "routes": [
+      {
+        "matcher": "jmap_discovery",
+        "methods": ["GET"],
+        "path": "/.well-known/jmap",
+        "upstream": "stalwart",
+        "reason": "JMAP discovery redirects to the authenticated session resource"
+      },
+      {
+        "matcher": "jmap_session",
+        "methods": ["GET"],
+        "path": "/jmap/session",
+        "upstream": "stalwart",
+        "reason": "The bot client reads its authenticated JMAP session and same-origin API URL"
+      },
+      {
+        "matcher": "jmap_api",
+        "methods": ["POST"],
+        "path": "/jmap/",
+        "upstream": "stalwart",
+        "reason": "The bot client sends all mailbox and submission method calls here"
+      },
+      {
+        "matcher": "join_request",
+        "methods": ["POST"],
+        "path": "/qd/join/request",
+        "upstream": "join",
+        "maxBody": "4KB",
+        "reason": "A bot creates one bounded public join request"
+      },
+      {
+        "matcher": "join_collect",
+        "methods": ["POST"],
+        "path": "/qd/join/collect",
+        "upstream": "join",
+        "maxBody": "4KB",
+        "reason": "An approved bot collects its one-use join result"
+      },
+      {
+        "matcher": "bot_invite",
+        "methods": ["POST"],
+        "path": "/qd/invite",
+        "upstream": "join",
+        "maxBody": "4KB",
+        "reason": "An active bot creates one rate-limited invite with its own mail key"
+      },
+      {
+        "matcher": "captain_step_up",
+        "methods": ["GET"],
+        "path": "/captain/step-up",
+        "upstream": "approval",
+        "maxBody": "8KB",
+        "reason": "The Captain starts a fresh browser-bound Google sign-in"
+      },
+      {
+        "matcher": "captain_devices",
+        "methods": ["GET"],
+        "path": "/captain/settings/devices",
+        "upstream": "approval",
+        "maxBody": "8KB",
+        "reason": "The Captain reads coarse signed-in device details"
+      },
+      {
+        "matcher": "captain_device_signout",
+        "methods": ["POST"],
+        "path": "/captain/settings/devices/sign-out",
+        "upstream": "approval",
+        "maxBody": "8KB",
+        "reason": "The Captain signs out one device with session-owned CSRF"
+      },
+      {
+        "matcher": "captain_everywhere_signout",
+        "methods": ["POST"],
+        "path": "/captain/settings/devices/sign-out-everywhere",
+        "upstream": "approval",
+        "maxBody": "8KB",
+        "reason": "The freshly signed-in Captain ends every browser session"
+      },
+      {
+        "matcher": "captain_signed_out",
+        "methods": ["GET"],
+        "path": "/captain/signed-out",
+        "upstream": "approval",
+        "maxBody": "8KB",
+        "reason": "The signed-out page offers an explicit Sign in button"
+      },
+      {
+        "matcher": "captain_login",
+        "methods": ["GET"],
+        "path": "/captain/login",
+        "upstream": "approval",
+        "maxBody": "8KB",
+        "reason": "The Captain starts browser-bound Google sign-in"
+      },
+      {
+        "matcher": "captain_oidc_callback",
+        "methods": ["GET"],
+        "path": "/captain/oidc/callback",
+        "upstream": "approval",
+        "maxBody": "8KB",
+        "reason": "Google returns the one-use authorization code to its bound browser"
+      },
+      {
+        "matcher": "captain_pending",
+        "methods": ["GET"],
+        "path": "/captain/pending",
+        "upstream": "approval",
+        "maxBody": "8KB",
+        "reason": "The Captain lists pending joins after Google sign-in"
+      },
+      {
+        "matcher": "captain_invite_create",
+        "methods": ["POST"],
+        "path": "/captain/invites/create",
+        "upstream": "approval",
+        "maxBody": "8KB",
+        "reason": "The Captain creates one bot invite after Google sign-in"
+      },
+      {
+        "matcher": "captain_invite_cancel",
+        "methods": ["POST"],
+        "path": "/captain/invites/cancel",
+        "upstream": "approval",
+        "maxBody": "8KB",
+        "reason": "The Captain cancels one unused bot invite"
+      },
+      {
+        "matcher": "captain_approve",
+        "methods": ["POST"],
+        "path": "/captain/approve",
+        "upstream": "approval",
+        "maxBody": "8KB",
+        "reason": "The Captain approves one pending join"
+      },
+      {
+        "matcher": "captain_refuse",
+        "methods": ["POST"],
+        "path": "/captain/refuse",
+        "upstream": "approval",
+        "maxBody": "8KB",
+        "reason": "The Captain refuses one pending join"
+      },
+      {
+        "matcher": "captain_approval_password",
+        "methods": ["POST"],
+        "path": "/captain/settings/approval-password",
+        "upstream": "approval",
+        "maxBody": "8KB",
+        "reason": "The Captain changes the optional per-approval password setting"
+      },
+      {
+        "matcher": "captain_logout",
+        "methods": ["POST"],
+        "path": "/captain/logout",
+        "upstream": "approval",
+        "maxBody": "8KB",
+        "reason": "The Captain destroys the current browser session"
+      }
+    ]
+  },
+  "listeners": [
+    {
+      "name": "jmap-private",
+      "scope": "private-caddy",
+      "endpoint": "stalwart",
+      "protocol": "http",
+      "useTls": false,
+      "implicitTls": false,
+      "maxConnections": 128
+    },
+    {
+      "name": "admin-loopback",
+      "scope": "loopback",
+      "endpoint": "admin",
+      "protocol": "http",
+      "useTls": false,
+      "implicitTls": false,
+      "maxConnections": 8
+    }
+  ],
+  "singletons": {
+    "Http": {
+      "rateLimitAuthenticated": {"count": 120, "period": 60000},
+      "rateLimitAnonymous": {"count": 20, "period": 60000},
+      "allowedEndpoints": {
+        "match": {
+          "0": {
+            "if": "listener == 'jmap-private' && ((method == 'GET' && (path == '/.well-known/jmap' || path == '/jmap/session')) || (method == 'POST' && path == '/jmap/'))",
+            "then": "200"
+          },
+          "1": {"if": "listener == 'admin-loopback'", "then": "200"}
+        },
+        "else": "404"
+      },
+      "enableHsts": false,
+      "usePermissiveCors": false
+    },
+    "Security": {
+      "authBanRate": {"count": 5, "period": 900000},
+      "authBanPeriod": 900000,
+      "abuseBanRate": {"count": 10, "period": 3600000},
+      "abuseBanPeriod": 900000,
+      "loiterBanRate": {"count": 10, "period": 3600000},
+      "loiterBanPeriod": 900000,
+      "scanBanRate": {"count": 5, "period": 3600000},
+      "scanBanPeriod": 3600000
+    },
+    "Email": {
+      "maxAttachmentSize": 1,
+      "maxMessageSize": 262144,
+      "maxMessages": 10000,
+      "maxMailboxes": 8,
+      "maxIdentities": 1,
+      "maxSubmissions": 1000,
+      "maxPublicKeys": 1
+    },
+    "Jmap": {
+      "maxConcurrentRequests": 2,
+      "maxConcurrentUploads": 1,
+      "maxRequestSize": 1048576,
+      "maxUploadSize": 1048576,
+      "maxUploadCount": 1,
+      "uploadQuota": 1,
+      "maxMethodCalls": 8,
+      "maxSetObjects": 16,
+      "maxGetResults": 256,
+      "maxQueryResults": 256,
+      "maxChangesResults": 256,
+      "maxSnippetResults": 1
+    },
+    "Asn": {
+      "@type": "Resource",
+      "asnUrls": {},
+      "geoUrls": {}
+    },
+    "SpamSettings": {
+      "enable": false,
+      "spamFilterRulesUrl": "file:///msd-absent/spam-filter-rules.json.gz"
+    },
+    "MtaStageRcpt": {
+      "allowRelaying": {"match": {}, "else": "false"},
+      "maxRecipients": {"match": {}, "else": "1"},
+      "maxFailures": {"match": {}, "else": "3"},
+      "waitOnFail": {"match": {}, "else": "1s"}
+    },
+    "MtaStageAuth": {
+      "mustMatchSender": {"match": {}, "else": "true"}
+    },
+    "MtaStageData": {
+      "script": {"match": {}, "else": "'quarterdeck-from-match-v1'"}
+    }
+  },
+  "webUi": {
+    "resourceUrl": "file:///msd-absent/webui.zip",
+    "autoUpdateInterval": 86400000,
+    "unpackDirectory": "/tmp/msd-webui",
+    "enable": false
+  },
+  "senderPolicy": {
+    "systemScript": {
+      "name": "quarterdeck-from-match-v1",
+      "description": "Require one From address matching the verified envelope sender",
+      "isActive": true,
+      "contents": "require [\"variables\", \"envelope\", \"reject\", \"relational\", \"comparator-i;ascii-numeric\"];\n\nif not address :count \"eq\" :comparator \"i;ascii-numeric\" \"from\" \"1\" {\n    reject \"550 5.7.1 Exactly one From address is required.\";\n}\n\nif not address :all :comparator \"i;unicode-casemap\" :is \"from\" \"${envelope.from}\" {\n    reject \"550 5.7.1 The From address must match the authenticated sender.\";\n}"
+    }
+  },
+  "localDomainPolicy": {
+    "allowRelaying": false,
+    "catchAllAddress": null,
+    "subAddressing": {"@type": "Disabled"}
+  },
+  "eventLevels": [
+    {"event": "auth.failed", "level": "info"}
+  ],
+  "botApiKey": {
+    "permissionsType": "Replace",
+    "permissions": [
+      "authenticate",
+      "emailReceive",
+      "emailSend",
+      "jmapEmailCreate",
+      "jmapEmailGet",
+      "jmapEmailQuery",
+      "jmapEmailSubmissionCreate",
+      "jmapEmailUpdate",
+      "jmapIdentityGet",
+      "jmapMailboxGet"
+    ],
+    "forbidden": [
+      "admin",
+      "administrator",
+      "fetchAnyBlob",
+      "impersonate",
+      "unlimitedRequests",
+      "unlimitedUploads"
+    ],
+    "forbiddenPrefixes": ["sys"]
+  },
+  "accountQuotas": {
+    "maxDiskQuota": 268435456,
+    "maxEmails": 10000,
+    "maxMailboxes": 8,
+    "maxEmailIdentities": 1,
+    "maxEmailSubmissions": 1000,
+    "maxApiKeys": 2,
+    "maxAppPasswords": 0,
+    "maxPublicKeys": 0
+  },
+  "serviceLimits": {
+    "joinRequest": {
+      "perCaller": {"count": 6, "period": 600000},
+      "perBot": {"count": 2, "period": 3600000},
+      "global": {"count": 60, "period": 3600000},
+      "outstandingPerBot": 1,
+      "outstandingGlobal": 100,
+      "expiresAfter": 600000
+    },
+    "joinCollect": {
+      "perCaller": {"count": 30, "period": 60000},
+      "perBot": {"count": 30, "period": 60000},
+      "global": {"count": 300, "period": 60000}
+    },
+    "botInvite": {
+      "authenticationPerCaller": {
+        "count": 30,
+        "period": 60000,
+        "ban": 3600000
+      },
+      "activeBot": {"count": 5, "period": 3600000},
+      "globalAuthentication": {"count": 300, "period": 60000}
+    },
+    "approval": {
+      "failedLoginPerCaller": {"count": 5, "period": 900000, "ban": 3600000},
+      "failedLoginGlobal": {"count": 20, "period": 900000, "close": 900000},
+      "authenticatedPerSession": {"count": 30, "period": 60000},
+      "authenticatedGlobal": {"count": 120, "period": 60000},
+      "idleSession": 900000,
+      "absoluteSession": 3600000
+    }
+  },
+  "dns": {"publishMx": false}
+}

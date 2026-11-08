@@ -1,0 +1,113 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/captain/cards/bot-a-2"
+  },
+  "signIn": "real",
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Content-Security-Policy": "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+    "Referrer-Policy": "strict-origin",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Content-Length": "1681"
+  },
+  "body": {
+    "card": {
+      "qd": "card/1",
+      "card": "bot-a-2",
+      "id": "bot-a-2",
+      "project": "Fleet",
+      "lane": "Ops",
+      "title": "Choose the alert channel",
+      "about": "Fleet work that needs a call.",
+      "context": "It is ready for a decision.\nNothing else is waiting on it.",
+      "options": [
+        {
+          "label": "A. Go with the plan",
+          "pick": true
+        },
+        {
+          "label": "B. Hold for now"
+        }
+      ],
+      "pick_why": "A keeps the schedule.",
+      "you_do": "Pick one option.",
+      "skip": "If no answer by due: the plan goes ahead.",
+      "category": [
+        "strategy"
+      ],
+      "door": "two-way",
+      "kind": "decision"
+    },
+    "rev": 1,
+    "state": "done",
+    "thread": [
+      {
+        "id": "msg-005",
+        "kind": "card",
+        "sender": "bot-a",
+        "sent": "2026-11-05T08:05:00-05:00",
+        "document": {
+          "qd": "card/1",
+          "card": "bot-a-2",
+          "id": "bot-a-2",
+          "project": "Fleet",
+          "lane": "Ops",
+          "title": "Choose the alert channel",
+          "about": "Fleet work that needs a call.",
+          "context": "It is ready for a decision.\nNothing else is waiting on it.",
+          "options": [
+            {
+              "label": "A. Go with the plan",
+              "pick": true
+            },
+            {
+              "label": "B. Hold for now"
+            }
+          ],
+          "pick_why": "A keeps the schedule.",
+          "you_do": "Pick one option.",
+          "skip": "If no answer by due: the plan goes ahead.",
+          "category": [
+            "strategy"
+          ],
+          "door": "two-way",
+          "kind": "decision"
+        }
+      },
+      {
+        "id": "qd.4100d6ee1f25d33fbd35d42af880fa92.account-user@quarterdeck.invalid",
+        "kind": "answer",
+        "sender": "account-user",
+        "sent": "2026-11-05T10:02:00-05:00",
+        "document": {
+          "at": "2026-11-05T10:02:00-05:00",
+          "card": "bot-a-2",
+          "note": "",
+          "pick": "A",
+          "qd": "answer/1",
+          "rev": 1
+        }
+      },
+      {
+        "id": "qd.3e4572024a1314eeff72be88e21d161b.account-user@quarterdeck.invalid",
+        "kind": "answer",
+        "sender": "account-user",
+        "sent": "2026-11-05T10:02:20-05:00",
+        "document": {
+          "at": "2026-11-05T10:02:20-05:00",
+          "card": "bot-a-2",
+          "note": "Changed my mind.",
+          "pick": "B",
+          "qd": "answer/1",
+          "rev": 1
+        }
+      }
+    ],
+    "csrf": "csrf-placeholder",
+    "freshUntil": 0
+  }
+}

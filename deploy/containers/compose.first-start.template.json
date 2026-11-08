@@ -1,0 +1,104 @@
+{
+  "name": "quarterdeck-first-start",
+  "services": {
+    "stalwart-bootstrap": {
+      "image": "${image:stalwart-runtime}",
+      "user": "2000:2000",
+      "entrypoint": ["python3", "/opt/quarterdeck/bootstrap_launcher.py"],
+      "command": [
+        "/run/quarterdeck-bootstrap/bootstrap-request.json",
+        "${helper:admin-secret}",
+        "${helper:management-username}",
+        "18080",
+        "--",
+        "/usr/local/bin/stalwart",
+        "--config",
+        "/etc/stalwart/config.json"
+      ],
+      "network_mode": "none",
+      "read_only": true,
+      "cap_drop": ["ALL"],
+      "security_opt": ["no-new-privileges:true"],
+      "init": true,
+      "restart": "no",
+      "stop_grace_period": "30s",
+      "pids_limit": 256,
+      "mem_limit": "2g",
+      "memswap_limit": "2g",
+      "cpus": "2.0",
+      "ulimits": {"nofile": {"soft": 4096, "hard": 4096}},
+      "tmpfs": ["/tmp:rw,nosuid,nodev,noexec,size=64m"],
+      "volumes": [
+        "${QD_ROOT}/config/stalwart/bootstrap-request.json:/run/quarterdeck-bootstrap/bootstrap-request.json:ro",
+        "${QD_ROOT}/config/stalwart:/etc/stalwart:rw",
+        "${QD_ROOT}/volumes/stalwart-data:/var/lib/stalwart:rw",
+        "${QD_ROOT}/volumes/stalwart-logs:/var/log/stalwart:rw",
+        "${QD_ROOT}/secrets/helper-admin:/run/quarterdeck-admin:rw"
+      ],
+      "logging": {"driver": "none"}
+    },
+    "stalwart-recovery": {
+      "image": "${image:stalwart-runtime}",
+      "user": "2000:2000",
+      "entrypoint": ["python3", "/opt/quarterdeck/recovery_launcher.py"],
+      "command": [
+        "/run/quarterdeck/recovery-password",
+        "18080",
+        "--",
+        "/usr/local/bin/stalwart",
+        "--config",
+        "/etc/stalwart/config.json"
+      ],
+      "network_mode": "none",
+      "read_only": true,
+      "cap_drop": ["ALL"],
+      "security_opt": ["no-new-privileges:true"],
+      "init": true,
+      "restart": "no",
+      "stop_grace_period": "30s",
+      "pids_limit": 256,
+      "mem_limit": "2g",
+      "memswap_limit": "2g",
+      "cpus": "2.0",
+      "ulimits": {"nofile": {"soft": 4096, "hard": 4096}},
+      "tmpfs": ["/tmp:rw,nosuid,nodev,noexec,size=64m"],
+      "volumes": [
+        "${QD_ROOT}/config/stalwart:/etc/stalwart:ro",
+        "${QD_ROOT}/volumes/stalwart-data:/var/lib/stalwart:rw",
+        "${QD_ROOT}/volumes/stalwart-logs:/var/log/stalwart:rw",
+        "${QD_ROOT}/secrets/recovery:/run/quarterdeck:ro"
+      ],
+      "logging": {"driver": "json-file", "options": {"max-size": "10m", "max-file": "2"}}
+    },
+    "first-start-configurator": {
+      "image": "${image:stalwart-runtime}",
+      "user": "2000:2000",
+      "entrypoint": ["python3", "/opt/quarterdeck/first_start.py"],
+      "command": [
+        "/opt/quarterdeck/door-policy.json",
+        "/run/quarterdeck/recovery-password",
+        "/run/quarterdeck/retired/recovery-password.used",
+        "/var/lib/quarterdeck/first-start.json",
+        "18080"
+      ],
+      "network_mode": "service:stalwart-recovery",
+      "depends_on": {"stalwart-recovery": {"condition": "service_started"}},
+      "read_only": true,
+      "cap_drop": ["ALL"],
+      "security_opt": ["no-new-privileges:true"],
+      "init": true,
+      "restart": "no",
+      "pids_limit": 32,
+      "mem_limit": "128m",
+      "memswap_limit": "128m",
+      "cpus": "0.25",
+      "ulimits": {"nofile": {"soft": 256, "hard": 256}},
+      "tmpfs": ["/tmp:rw,nosuid,nodev,noexec,size=8m"],
+      "volumes": [
+        "${QD_ROOT}/secrets/recovery:/run/quarterdeck:rw",
+        "${QD_ROOT}/state/first-start:/var/lib/quarterdeck:rw"
+      ],
+      "logging": {"driver": "json-file", "options": {"max-size": "1m", "max-file": "2"}}
+    }
+  }
+}

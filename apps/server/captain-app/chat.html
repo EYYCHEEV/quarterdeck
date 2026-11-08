@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Quarterdeck chat</title>
+  <link rel="stylesheet" href="/captain/assets/chat.css">
+  <script src="/captain/assets/chat.js" defer></script>
+</head>
+<body>
+  <main>
+    <header>
+      <label for="bot">Chat with</label>
+      <select id="bot" aria-label="Select a bot">
+        <option value="">Select a bot</option>
+      </select>
+      <button id="reload" type="button">Reload</button>
+    </header>
+    <p id="links"><a href="/captain/pending">Pending joins</a><button id="sound" type="button" aria-pressed="true">Sound on</button></p>
+    <p id="status" role="status" aria-live="polite">Loading chats…</p>
+    <button id="alert" type="button" hidden></button>
+    <p id="note" hidden></p>
+    <div id="pane">
+      <section id="thread" aria-label="Chat messages" aria-live="polite"></section>
+      <button id="newer" type="button" hidden>New messages</button>
+    </div>
+    <p id="typing" hidden>Writing…</p>
+    <p id="freshness"><a href="/captain/step-up?next=%2Fcaptain%2Fchat">Sign in again</a></p>
+    <form id="composer">
+      <label for="message">Message</label>
+      <textarea id="message" maxlength="4000" rows="2" required></textarea>
+      <button id="send" type="submit">Send</button>
+    </form>
+  </main>
+</body>
+</html>

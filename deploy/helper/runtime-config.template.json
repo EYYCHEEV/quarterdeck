@@ -1,0 +1,20 @@
+{
+  "format": 1,
+  "socket": {
+    "path": "/run/quarterdeck-control/helper.sock",
+    "group": 2400
+  },
+  "joinUid": 2100,
+  "paths": {
+    "ledger": "/var/lib/quarterdeck-helper/prepared.sqlite",
+    "keys": "/var/lib/quarterdeck-helper/keys",
+    "adminSecret": "/run/quarterdeck-admin/credential"
+  },
+  "management": {
+    "username": "${deployment:admin-username}",
+    "address": "${deployment:admin-address}",
+    "port": "${deployment:admin-port}"
+  },
+  "mailDomain": "${deployment:mail-domain}",
+  "sessionUrl": "${deployment:jmap-session-url}"
+}

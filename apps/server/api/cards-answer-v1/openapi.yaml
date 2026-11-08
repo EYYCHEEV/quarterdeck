@@ -1,0 +1,234 @@
+openapi: 3.1.0
+info:
+  title: Quarterdeck Captain cards answer API
+  version: "1"
+  description: "Answering a card and commenting on it, for the Captain's Queue screen, served by the chat app. Same origin only, POST only, JSON in and out, the Captain's session cookie (HttpOnly). Reading the cards is the cards API v1 (GET /captain/cards and /captain/cards/{id}); the follow-up samples next to this file use its shapes. Every JSON 200 carries 'csrf' (a one-use token for the next POST) and 'freshUntil' (when his fresh sign-in ends). The csrf goes in the request body, never in a header. Errors are JSON with one 'error' text; tell them apart by status code. On these routes treat 401 and 403 alike: ask him to sign in again and keep local data (seen marks, drafts). 401 comes only from the simpler in-process sign-in check, and 403 from the real server's sign-in connection. A 403 to a POST can also mean that connection failed, that the token was used or wrong, or that the session was rate limited, which is no reason to throw away his drafts. Local data is cleared only when the server says so: sign-out sends Clear-Site-Data 'storage'. The client never clears on its own, on a 401, a 403 or anything else. The paths are not at the front door yet."
+servers:
+  - url: "https://quarterdeck.invalid"
+    description: "Stand-in origin. The real origin is the Captain's own site."
+security:
+  - sessionCookie: []
+paths:
+  /captain/cards/{id}/answer:
+    post:
+      operationId: answerCard
+      summary: "Answer a card: send the Captain's pick, in his name, as mail."
+      description: "Sends his answer as mail to the card's poster and to the steward bot (one mail when the steward posted the card). The body is Content-Type exactly application/json (a charset suffix or capital letters are refused), at most 16 KiB, with exactly rev, pick, note and csrf. Any revision that exists is accepted. pick is the letter of an option on that revision, or 'cant-decide', or 'none'. note is up to 4000 characters and may be empty; there is no text-only answer, a reply without a pick is a comment. Answering needs a fresh sign-in (freshUntil later than now): if his sign-in is not fresh the server answers 303 to the step-up page with an empty body. The 200 is a receipt, not the card. The card and the list change to 'done' only when the answer mail is read back, so refetch on the events refresh instead of patching locally. The card's state is not checked: a done card still takes an answer and the latest valid answer shows in the list, and a withdrawn card stays withdrawn, with the answer kept. A second answer goes out when its revision or its pick differs from every earlier answer to that card. A second answer with the same revision and the same pick answers 503 and never succeeds, because the mail's resend key repeats while its words (a time, and the note) change. It answers 200 with no new mail only when it repeats the earlier one word for word in the same second."
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: "The card id."
+          schema:
+            type: string
+            pattern: "^[A-Za-z0-9][A-Za-z0-9-]{0,63}$"
+      requestBody:
+        required: true
+        description: "Exactly these four fields."
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnswerRequest"
+      responses:
+        "200":
+          description: "The answer was sent. This is a receipt, not the card. 'message' is text to show him: the pick is shown as its letter, as Can't decide or as None of these, with the time in ET. 'stale' is true when the revision answered is older than the card's latest; the answer is still accepted and sent. 'rev' is the revision answered. 'csrf' is the next one-use token."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnswerReceipt"
+        "303":
+          description: "His sign-in is not fresh. The reply has an empty body: follow the Location header to the step-up page, which today returns him to the chat page, not to your screen. The token you sent is spent and the reply carries no new one; after the fresh sign-in fetch a new one with any GET. Check freshUntil before you show the send button."
+          headers:
+            Location:
+              description: "The step-up page, with the return path percent-encoded."
+              required: true
+              schema:
+                type: string
+        "400":
+          description: "Refused, with the same text as 403 and 429. Not spent (the token stays usable): a body the server cannot use, meaning a content type other than exactly application/json, a missing or extra field, a body over 16 KiB, or a csrf that is not text. Spent (the token is used up and no new one is returned, so fetch one with a GET): an unknown card, a revision that does not exist, a pick not on that revision, a note over 4000 characters, a rev or pick of a type the server cannot use (a list or an object answers 503 today), or an answer mail the outbound check refuses (read from the code; no input found that triggers it). A POST to a path that is not a card route also answers 400, not 404."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorRefused"
+        "401":
+          description: "Sign in again: no valid session, as answered only by the simpler in-process sign-in check. The real server never answers 401 on these routes; it answers 403 for the same case, so treat 401 and 403 alike: ask him to sign in again and keep local data."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorSignInRequired"
+        "403":
+          description: "Sign in again: session missing, expired or refused. The real server answers this 403 from its sign-in connection when the session cookie is missing, the session is expired or refused, or the connection fails (it cannot be reached or gives an invalid reply). The same 403 also means a used or wrong csrf (each token works once, and a 303, a 400 from the service or a 503 spends it) and a rate limit (more than 30 session checks in 60 seconds, where a POST counts as two). Ask him to sign in again and keep local data. To tell the cases apart after a POST, do a GET: with a good session it answers 200 and gives a new token."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorRefused"
+        "429":
+          description: "Too many requests from this session. Only the simpler in-process sign-in check answers this; the real server never answers 429 on these routes, because its sign-in connection reports a rate limit as 403. Wait a minute."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorRefused"
+        "503":
+          description: "The service failed for this request. Try again later, with a new token from a GET: this reply spent the token. One case never clears: an answer with the same revision and the same pick as an earlier answer to the card gets this 503 at any later time, so retrying cannot work; answer with a different pick or revision instead."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorUnavailable"
+  /captain/cards/{id}/comments:
+    post:
+      operationId: commentOnCard
+      summary: "Comment on a card: send the Captain's words, in his name, as mail."
+      description: "Sends his comment as mail to the card's poster and to the steward bot (one mail when the steward posted the card). It needs no fresh sign-in. The body is Content-Type exactly application/json with exactly text (1 to 4000 characters), requestId (1 to 80 of A-Z, a-z, 0-9, underscore or hyphen) and csrf. requestId is checked for shape only: the mail's resend key comes from the card and the text, not requestId. So the same text sent again to the same card is sent once: the repeat answers 200 and no second mail goes out, whatever its requestId and however long after. New text goes out again. A card that has been answered or withdrawn still takes comments. Sending the same text again is harmless but adds nothing, and a 503 spent the token, so do not retry a comment automatically: fetch a new token with a GET and let him choose to send it again."
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: "The card id."
+          schema:
+            type: string
+            pattern: "^[A-Za-z0-9][A-Za-z0-9-]{0,63}$"
+      requestBody:
+        required: true
+        description: "Exactly these three fields."
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentRequest"
+      responses:
+        "200":
+          description: "The comment was sent, or the same text had already been sent to this card: the reply is the same and no new mail goes out. 'csrf' is the next one-use token."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommentReceipt"
+        "400":
+          description: "Refused, with the same text as 403 and 429. Not spent (the token stays usable): a content type other than exactly application/json, a missing or extra field, a body over 16 KiB, or a csrf that is not text. Spent (the token is used up and no new one is returned, so fetch one with a GET): an unknown card, empty text, text over 4000 characters, or a requestId that is not 1 to 80 of A-Z, a-z, 0-9, underscore or hyphen."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorRefused"
+        "401":
+          description: "Sign in again: no valid session, as answered only by the simpler in-process sign-in check. The real server never answers 401 on these routes; it answers 403 for the same case, so treat 401 and 403 alike: ask him to sign in again and keep local data."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorSignInRequired"
+        "403":
+          description: "Sign in again: session missing, expired or refused. The real server answers this 403 from its sign-in connection when the session cookie is missing, the session is expired or refused, or the connection fails (it cannot be reached or gives an invalid reply). The same 403 also means a used or wrong csrf (each token works once) and a rate limit (more than 30 session checks in 60 seconds, where a POST counts as two). Ask him to sign in again and keep local data. To tell the cases apart after a POST, do a GET: with a good session it answers 200 and gives a new token."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorRefused"
+        "429":
+          description: "Too many requests from this session. Only the simpler in-process sign-in check answers this; the real server never answers 429 on these routes, because its sign-in connection reports a rate limit as 403. Wait a minute."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorRefused"
+        "503":
+          description: "The service failed for this request. Try again later, with a new token from a GET: this reply spent the token."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorUnavailable"
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: "__Host-qd-approval"
+  schemas:
+    AnswerRequest:
+      type: object
+      additionalProperties: false
+      required: [rev, pick, note, csrf]
+      properties:
+        rev:
+          type: integer
+          minimum: 1
+          description: "The revision he is answering. Any revision that exists is accepted."
+        pick:
+          type: string
+          minLength: 1
+          description: "The letter of an option on that revision (the first character of its label), or 'cant-decide', or 'none'."
+        note:
+          type: string
+          maxLength: 4000
+          description: "Free text, up to 4000 characters, which may be empty."
+        csrf:
+          type: string
+          minLength: 1
+          description: "The one-use token from the newest 200 you received, GET or POST. It goes in the body."
+    AnswerReceipt:
+      type: object
+      additionalProperties: false
+      required: [message, stale, rev, csrf, freshUntil]
+      properties:
+        message:
+          type: string
+          pattern: "^Got it: [A-Za-z0-9-]+ .+ at [0-9]{1,2}:[0-9]{2} (AM|PM) ET$"
+        stale:
+          type: boolean
+        rev:
+          type: integer
+          minimum: 1
+        csrf:
+          type: string
+          minLength: 1
+        freshUntil:
+          type: number
+          minimum: 0
+    CommentRequest:
+      type: object
+      additionalProperties: false
+      required: [text, requestId, csrf]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        requestId:
+          type: string
+          pattern: "^[A-Za-z0-9_-]{1,80}$"
+          description: "Checked for shape only; it does not decide whether a second mail goes out."
+        csrf:
+          type: string
+          minLength: 1
+    CommentReceipt:
+      type: object
+      additionalProperties: false
+      required: [status, csrf, freshUntil]
+      properties:
+        status:
+          type: string
+          const: "sent"
+        csrf:
+          type: string
+          minLength: 1
+        freshUntil:
+          type: number
+          minimum: 0
+    ErrorRefused:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+          const: "request refused"
+    ErrorSignInRequired:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+          const: "sign in required"
+    ErrorUnavailable:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+          const: "request unavailable"

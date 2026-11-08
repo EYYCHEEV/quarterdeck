@@ -1,0 +1,25 @@
+{
+  "format": 1,
+  "bind": {
+    "address": "${deployment:approval-address}",
+    "port": "${deployment:approval-port}"
+  },
+  "paths": {
+    "oidc": "/var/lib/quarterdeck-approval/oidc.json",
+    "state": "/var/lib/quarterdeck-approval/state.sqlite",
+    "socket": "/run/quarterdeck-approval/approve.sock",
+    "captainAuthSocket": "/run/quarterdeck-captain-auth/auth.sock"
+  },
+  "captainAuth": {
+    "peerUid": 2700,
+    "socketMode": "0660",
+    "socketGid": 2701
+  },
+  "trustedProxy": "${deployment:caddy-address}",
+  "publicOrigin": "${deployment:public-origin}",
+  "release": {
+    "artifactUrl": null,
+    "version": null,
+    "sha256": null
+  }
+}

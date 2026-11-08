@@ -1,0 +1,28 @@
+{
+  "format": 1,
+  "bases": {
+    "compose": "be691bfa8a494db59d68a9b061e54c5a1ac344c3cf3d072e8d3c310a8ef7d781",
+    "doorPolicy": "68268d758de155bcdab2800a3bee179e645dd98426604d2916d5010ee1aaeb1b"
+  },
+  "files": {
+    "README.md": "16320187aa9dbff2ec9a108aae2f6fe0f80c409b6b27d90fabe6e4445dd9314a",
+    "THIRD_PARTY_NOTICES.md": "b7e63f3006af64dbb8b6f02a45e2a84523ace112105b6a5c16fe6003321ad328",
+    "application.py": "308ee88aa27070f5efa8439a8fc27d71fd36db93fb8882b3f159a62fc2288177",
+    "auth_bridge.py": "8db17a4d92e7f33cabfa3b5e3c814e9e54abc3669e9c24e6bfeb90eee6893550",
+    "captain_auth.py": "6ec59f88bef20206072ee9e324f62714bacd337c696b01cf8fd0e7eea849e5e8",
+    "cards.py": "6b7c76854c760e1aee48e57af241b140f168b22e56ae944b99bbb2c21726c917",
+    "chat.css": "122c376dbd0154853162e146283983a90ffa09391d35ac3df5d0ed4087350931",
+    "chat.html": "1f6f353b5bf1e1a62366c441451990d5608e180a7ec1e278b1478aa8d8b2ded7",
+    "chat.js": "c69d2db93c329ba5cddc8d2ecfedfa7fd6afd43f10dfda194e4561534634384e",
+    "chat_bot_list.py": "6ac5aebc87844ed5e6daa6a6315484921f8e5dae52d2121958d6e371efa8f2b1",
+    "checker_adapter.py": "cdfe31b63c432e631a0d51d8b4620b2fb11af4c913ad1a9a375b92700e92ec25",
+    "compose-diff.json": "be7c8947ad275105d0f1c0f68498bdea14980c0d573bc4934eb16a6a3438db3b",
+    "door-policy.diff.json": "e5f5d67215db88e290b63f8f23a3d81d4c59dde88a6656bdeab361de8d036ab8",
+    "live.py": "274f011343ea6dc43ef4e35abc614394d32a4258e7e777d62c9d1a72913a1047",
+    "mail_gateway.py": "8e87fe1f7e4efcb7872dd7492b1b6cdbc88a546ee4a1ca97b8cd51ffd3300096",
+    "packaging_plan.py": "dc46493391bd1ae1b56c2469484d422323e5ee9aad2204e8c8413818129793ad",
+    "runtime-config.template.json": "3cd9520453f8131e839494b39c472d9f22ca354227638df9c238f4782ad9eb6e",
+    "security.py": "c9cd25407bef7b449456f6834339b099209ea2f0df57a474476cb670cef6542a",
+    "server.py": "9b9b852bdc8c39555b097816f7d0f9a14ca6e576eb2598e1d41a1a7732866917"
+  }
+}
