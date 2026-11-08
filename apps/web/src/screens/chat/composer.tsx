@@ -322,7 +322,7 @@ export function Composer({
             <button
               type="submit"
               disabled={!ready}
-              onPointerDown={(event) => event.preventDefault()}
+              onPointerDown={(event) => event.pointerType === "mouse" && event.preventDefault()}
               onMouseDown={(event) => event.preventDefault()}
               aria-label="Send"
               title="Send"
