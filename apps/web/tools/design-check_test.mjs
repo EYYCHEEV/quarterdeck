@@ -5,6 +5,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { spawn, spawnSync } from "node:child_process";
 import { test } from "node:test";
+import { standInKeyboard } from "./stand-in-keyboard.mjs";
 
 const source = fs.readFileSync(new URL("./design-check.mjs", import.meta.url), "utf8");
 
@@ -212,19 +213,19 @@ function chatPage(enter = "new line") {
     inputValue: async () => state.text,
     evaluate: async () => true,
   };
-  return { page: { locator: (selector) => (selector === '[data-testid="chat-input"]' ? input : rows()) }, state };
+  return { page: { locator: (selector) => (selector === '[data-testid="chat-input"]' ? input : rows()), evaluate: async () => {} }, state };
 }
 
 test("chat history that arrives while the Return step types is not taken for a send, and the step types only once the history is in", async () => {
   const { page, state } = chatPage();
-  await checker()("returnNewline")({}, page);
+  await checker({ standInKeyboard })("returnNewline")({}, page);
   assert.equal(state.typedBeforeHistory, false);
 });
 
 test("a Return that sends and empties the box still fails the step", async () => {
-  await assert.rejects(() => checker()("returnNewline")({}, chatPage("sends").page), /Return did not start a new line/);
+  await assert.rejects(() => checker({ standInKeyboard })("returnNewline")({}, chatPage("sends").page), /Return did not start a new line/);
 });
 
 test("a Return that adds the new line but also sends the words still fails the step", async () => {
-  await assert.rejects(() => checker()("returnNewline")({}, chatPage("new line and sends").page), /Return sent the message/);
+  await assert.rejects(() => checker({ standInKeyboard })("returnNewline")({}, chatPage("new line and sends").page), /Return sent the message/);
 });
