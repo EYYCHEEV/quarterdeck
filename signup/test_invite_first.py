@@ -97,7 +97,7 @@ class InviteFirstTests(unittest.TestCase):
         self.assertRegex(row[0], r"[A-Za-z0-9_-]{12}")
         self.assertEqual(len(row[1]), 32)
         self.assertNotEqual(row[1], bytes(code))
-        self.assertEqual(row[2:4], ("Owner", "named-bot"))
+        self.assertEqual(row[2:4], ("Captain", "named-bot"))
         self.assertEqual(row[4], self.clock.value + INVITE_LIFETIME)
         self.assertEqual(row[5:], (None, None))
         self.assertNotIn(bytes(code), self.database.read_bytes())
@@ -150,7 +150,7 @@ class InviteFirstTests(unittest.TestCase):
                     "botName": "right-bot",
                     "code": handle.code,
                     "requestedAt": self.clock.value,
-                    "invitedBy": "Owner",
+                    "invitedBy": "Captain",
                 }
             ],
         )
@@ -230,7 +230,7 @@ class InviteFirstTests(unittest.TestCase):
                 {
                     "inviteId": offer.invite_id,
                     "botName": "cancelled-bot",
-                    "invitedBy": "Owner",
+                    "invitedBy": "Captain",
                     "createdAt": self.clock.value,
                     "expiresAt": self.clock.value + INVITE_LIFETIME,
                 }

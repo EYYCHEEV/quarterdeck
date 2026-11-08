@@ -388,7 +388,7 @@ class JoinService:
                     bot_name TEXT NOT NULL,
                     description TEXT NOT NULL,
                     invite_id TEXT,
-                    invited_by TEXT NOT NULL DEFAULT 'Owner',
+                    invited_by TEXT NOT NULL DEFAULT 'Captain',
                     template TEXT NOT NULL,
                     pairing_hash BLOB NOT NULL CHECK (length(pairing_hash) = 32),
                     created_at REAL NOT NULL,
@@ -461,7 +461,7 @@ class JoinService:
             if "invited_by" not in columns:
                 database.execute(
                     "ALTER TABLE join_request ADD COLUMN invited_by TEXT "
-                    "NOT NULL DEFAULT 'Owner'"
+                    "NOT NULL DEFAULT 'Captain'"
                 )
 
     @staticmethod
@@ -549,7 +549,7 @@ class JoinService:
         if (
             not isinstance(inviter_name, str)
             or (
-                inviter_name != "Owner"
+                inviter_name != "Captain"
                 and BOT_NAME.fullmatch(inviter_name) is None
             )
             or (
@@ -630,7 +630,7 @@ class JoinService:
                 offer = self._insert_invite(
                     database,
                     self.clock(),
-                    "Owner",
+                    "Captain",
                     bot_name,
                 )
                 self._audit(
