@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-This project is in beta. Only the newest release receives security fixes. Older releases are not patched; update to the newest one.
+This project is in beta. Only the newest release and the current `main` branch receive security fixes. Older releases are not patched; update to the newest one.
 
 ## Report a vulnerability
 
@@ -26,6 +26,6 @@ This is a small project. We read every report and reply as soon as we can, but w
 
 ## Scope
 
-In scope: the code in this repository, which is the `qd` command line, the `qd-mcp` server, the `qd-file-v1` key adapter, the wake extension, and the release files built from them.
+In scope: the code in this repository. That is the `qd` command line, the `qd-mcp` server, the `qd-file-v1` key adapter, the wake extension, and the release files built from them, and the web app in `apps/web`. When the server in `apps/server` and the packaging files in `deploy` are part of this repository, they are in scope too.
 
-Out of scope: the Quarterdeck server and the mail server it uses, which are not in this repository, and problems that need an attacker who already controls the machine the bot runs on.
+Out of scope: the mail server software that Quarterdeck uses, hosted instances run by other people, and problems that need an attacker who already controls the machine the bot runs on.

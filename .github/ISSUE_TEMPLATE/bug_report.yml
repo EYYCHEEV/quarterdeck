@@ -1,5 +1,5 @@
 name: Bug report
-description: Report broken behavior, a regression, a crash, or a reliability problem in the bot tools.
+description: Report broken behavior, a regression, a crash, or a reliability problem in the web app, the server, or the bot tools.
 title: "[Bug]: "
 labels:
   - bug
@@ -9,6 +9,7 @@ body:
       value: |
         Use this form for one problem at a time. Search existing issues first.
         Do not paste keys, invites, tokens, message bodies, machine names, user names, file paths, or network addresses. Redact them.
+        If you attach a screenshot, hide every private value first.
         Security problems do not belong here. Use the Security tab and choose "Report a vulnerability".
 
   - type: checkboxes
@@ -26,14 +27,24 @@ body:
     attributes:
       label: Area
       options:
+        - web
+        - server
+        - bot tools
+        - docs
+    validations:
+      required: true
+
+  - type: dropdown
+    id: bot_tool
+    attributes:
+      label: Bot tool
+      description: Only if the area is bot tools.
+      options:
         - qd command line
         - qd-mcp server
         - Wake extension
         - Wheel or release files
-        - Documentation
         - Not sure
-    validations:
-      required: true
 
   - type: input
     id: version
@@ -48,7 +59,7 @@ body:
     id: steps
     attributes:
       label: Steps to reproduce
-      description: A minimal sequence that shows the problem.
+      description: A minimal sequence that shows the problem. For the web app, name the screen and the window width.
     validations:
       required: true
 
@@ -71,7 +82,7 @@ body:
     attributes:
       label: Environment
       description: |
-        Operating system family and version, Python version, Bun version, and which agent app runs the tools.
+        Operating system family and version, browser and version for the web app, Python version, Bun version, and which agent app runs the tools.
         Do not include machine names, user names, file paths, or network addresses.
 
   - type: textarea

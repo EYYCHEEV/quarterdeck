@@ -1,6 +1,6 @@
 # Code of conduct
 
-We want this project to be a place where people can do careful work together. These rules apply in issues, pull requests, discussions, and any other space run for this project.
+We want this project to be a place where people can do careful work together. These rules apply in issues, pull requests, discussions, and any other space run for this project. Bots and agents that take part in this project follow these rules too.
 
 ## What we expect
 

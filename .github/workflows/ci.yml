@@ -13,6 +13,29 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    name: Detect the web app
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    outputs:
+      web: ${{ steps.web.outputs.web }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Look for the web app
+        id: web
+        run: |
+          if [ -f apps/web/package.json ]; then
+            echo "web=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "web=false" >> "$GITHUB_OUTPUT"
+          fi
+
   python:
     name: Python tests
     runs-on: ubuntu-24.04
@@ -24,6 +47,9 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+
+      - name: CI tool tests
+        run: python3 -m unittest discover -s tools/ci -p 'test_*.py'
 
       - name: Sign-up module tests
         run: python3 -m unittest discover -s signup -p 'test_*.py'
@@ -73,41 +99,297 @@ jobs:
           persist-credentials: false
 
       - name: Fail on any comment or docstring
+        run: python3 tools/ci/no-comments
+
+      - name: Fail on a symlink, a special file or an unlisted binary
+        run: python3 tools/ci/file-kinds
+
+  leaks:
+    name: Secret scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      EVENT: ${{ github.event_name }}
+      BASE: ${{ github.event.pull_request.base.sha }}
+      HEAD: ${{ github.event.pull_request.head.sha }}
+      BEFORE: ${{ github.event.before }}
+      AFTER: ${{ github.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fetch the pinned gitleaks
+        run: python3 tools/ci/fetch-pinned gitleaks
+
+      - name: Scan the checkout and the new commits
+        run: |
+          gitleaks="$RUNNER_TEMP/pinned/gitleaks/gitleaks"
+          "$gitleaks" dir --redact --no-banner --report-format json --report-path "$RUNNER_TEMP/leaks-dir.json" --exit-code 0 .
+          if [ "$EVENT" = "pull_request" ]; then
+            range="$BASE..$HEAD"
+          elif [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            range="$AFTER"
+          else
+            range="$BEFORE..$AFTER"
+          fi
+          "$gitleaks" git --redact --no-banner --report-format json --report-path "$RUNNER_TEMP/leaks-git.json" --exit-code 0 --log-opts="$range" .
+
+      - name: Report the rule and the path only
         run: |
           python3 - <<'PY'
-          import ast
-          import io
+          import json
+          import os
           import pathlib
-          import re
           import sys
-          import tokenize
 
-          hash_sign = chr(35)
-          found = []
-          for path in sorted(pathlib.Path('.').rglob('*.py')):
-              source = path.read_text(encoding='utf-8')
-              for token in tokenize.generate_tokens(io.StringIO(source).readline):
-                  if token.type == tokenize.COMMENT:
-                      found.append(f'{path}:{token.start[0]}')
-              for node in ast.walk(ast.parse(source)):
-                  if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
-                      first = node.body[0] if node.body else None
-                      if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant) and isinstance(first.value.value, str):
-                          found.append(f'{path}:{first.lineno}')
-          comment_start = re.compile(r'^\s*(//|/\*|\*)')
-          for path in sorted(pathlib.Path('.').rglob('*.ts')):
-              for number, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
-                  if comment_start.match(line):
-                      found.append(f'{path}:{number}')
-                  if number == 1 and line.startswith(hash_sign) and path.name != 'standin-qd.ts':
-                      found.append(f'{path}:{number}')
-          for path in sorted(pathlib.Path('.github').rglob('*.yml')):
-              for number, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
-                  if line.lstrip().startswith(hash_sign):
-                      found.append(f'{path}:{number}')
-          print('\n'.join(found))
-          sys.exit(1 if found else 0)
+          rows = []
+          for name in ("leaks-dir.json", "leaks-git.json"):
+              report = pathlib.Path(os.environ["RUNNER_TEMP"]) / name
+              for item in json.loads(report.read_text(encoding="utf-8")) or []:
+                  rows.append((name, item.get("RuleID", "unknown"), item.get("File", "unknown")))
+          for name, rule, path in sorted(rows):
+              print(f"{name} {rule} {path}")
+          print(f"leaks: {len(rows)} finding(s)")
+          sys.exit(1 if rows else 0)
           PY
+
+  web-static:
+    name: Web static checks
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Fetch the pinned Node
+        run: python3 tools/ci/fetch-pinned node
+
+      - name: Put the pinned Node first on the path
+        run: echo "$RUNNER_TEMP/pinned/node-v22.21.0-linux-x64/bin" >> "$GITHUB_PATH"
+
+      - name: Install from the lock file
+        working-directory: apps/web
+        run: npm ci --ignore-scripts
+
+      - name: Verify registry signatures
+        working-directory: apps/web
+        run: npm audit signatures
+
+      - name: Lint
+        working-directory: apps/web
+        run: npm run lint
+
+      - name: Typecheck
+        working-directory: apps/web
+        run: npm run typecheck
+
+      - name: Data tests
+        working-directory: apps/web
+        run: npm run test:data
+
+      - name: Task card tests
+        working-directory: apps/web
+        run: npm run test:taskcard
+
+  web-build:
+    name: Web build
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Fetch the pinned Node
+        run: python3 tools/ci/fetch-pinned node
+
+      - name: Put the pinned Node first on the path
+        run: echo "$RUNNER_TEMP/pinned/node-v22.21.0-linux-x64/bin" >> "$GITHUB_PATH"
+
+      - name: Install from the lock file
+        working-directory: apps/web
+        run: npm ci --ignore-scripts
+
+      - name: Build the server bundle and print its hash
+        working-directory: apps/web
+        run: |
+          npm run build:app -- --server
+          out="$RUNNER_TEMP/web-bundle"
+          mkdir -p "$out"
+          tar --sort=name --mtime='1970-01-01 00:00:00 UTC' --owner=0 --group=0 --numeric-owner --mode='u=rwX,go=rX' -cf "$out/server.tar" -C dist .
+          sum=$(sha256sum "$out/server.tar" | cut -d' ' -f1)
+          printf 'web bundle built with --server for %s: sha256 %s\n' "$GITHUB_SHA" "$sum" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Build the server bundle with chat on and print its hash
+        working-directory: apps/web
+        run: |
+          npm run build:app -- --server --chat
+          out="$RUNNER_TEMP/web-bundle"
+          mkdir -p "$out"
+          tar --sort=name --mtime='1970-01-01 00:00:00 UTC' --owner=0 --group=0 --numeric-owner --mode='u=rwX,go=rX' -cf "$out/server-chat.tar" -C dist .
+          sum=$(sha256sum "$out/server-chat.tar" | cut -d' ' -f1)
+          printf 'web bundle built with --server --chat for %s: sha256 %s\n' "$GITHUB_SHA" "$sum" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  web-browser:
+    name: Web browser checks
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    env:
+      QD_APP_WORKERS: "4"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Fetch the pinned Node and browser
+        run: python3 tools/ci/fetch-pinned node chrome-headless-shell
+
+      - name: Point QD_CHROME at the pinned browser
+        run: echo "QD_CHROME=$RUNNER_TEMP/pinned/chrome-headless-shell-linux64/chrome-headless-shell" >> "$GITHUB_ENV"
+
+      - name: Put the pinned Node first on the path
+        run: echo "$RUNNER_TEMP/pinned/node-v22.21.0-linux-x64/bin" >> "$GITHUB_PATH"
+
+      - name: Install from the lock file
+        working-directory: apps/web
+        run: npm ci --ignore-scripts
+
+      - name: App tests
+        working-directory: apps/web
+        run: npm run test:app
+
+      - name: Chat tests
+        working-directory: apps/web
+        run: npm run test:chat
+
+  web-design:
+    name: Web design check ${{ matrix.size }}
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        size:
+          - phone-390
+          - ipad-744x1133
+          - ipad-1133x744
+          - mac-1512
+    env:
+      DESIGN_SIZE: ${{ matrix.size }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Fetch the pinned Node and browser
+        run: python3 tools/ci/fetch-pinned node chrome-headless-shell
+
+      - name: Point QD_CHROME at the pinned browser
+        run: echo "QD_CHROME=$RUNNER_TEMP/pinned/chrome-headless-shell-linux64/chrome-headless-shell" >> "$GITHUB_ENV"
+
+      - name: Put the pinned Node first on the path
+        run: echo "$RUNNER_TEMP/pinned/node-v22.21.0-linux-x64/bin" >> "$GITHUB_PATH"
+
+      - name: Install from the lock file
+        working-directory: apps/web
+        run: npm ci --ignore-scripts
+
+      - name: Design check at one size
+        working-directory: apps/web
+        run: node tools/design-check.mjs --sizes="$DESIGN_SIZE"
+
+      - name: Refuse any failure file that is not a picture
+        id: refuse
+        if: failure()
+        run: |
+          failed=apps/web/design-check/failed
+          if [ -L "$failed" ]; then
+            exit 1
+          fi
+          if [ ! -e "$failed" ]; then
+            exit 0
+          fi
+          [ -d "$failed" ] || exit 1
+          invalid=$(find "$failed" ! -type d \( ! -type f -o ! -name '*.png' \) -print -quit) || exit 1
+          [ -z "$invalid" ] || exit 1
+          find "$failed" -type f -exec sh -c '
+            for picture do
+              signature=$(od -An -tx1 -N8 "$picture") || exit 1
+              [ "$signature" = " 89 50 4e 47 0d 0a 1a 0a" ] || exit 1
+            done
+          ' sh {} +
+
+      - name: Keep the failure pictures for 7 days
+        if: failure() && steps.refuse.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: web-design-check-failed-${{ matrix.size }}
+          path: apps/web/design-check/failed/**/*.png
+          retention-days: 7
+          if-no-files-found: ignore
+
+  web-design-selftest:
+    name: Web design check self-test
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Fetch the pinned Node and browser
+        run: python3 tools/ci/fetch-pinned node chrome-headless-shell
+
+      - name: Point QD_CHROME at the pinned browser
+        run: echo "QD_CHROME=$RUNNER_TEMP/pinned/chrome-headless-shell-linux64/chrome-headless-shell" >> "$GITHUB_ENV"
+
+      - name: Put the pinned Node first on the path
+        run: echo "$RUNNER_TEMP/pinned/node-v22.21.0-linux-x64/bin" >> "$GITHUB_PATH"
+
+      - name: Install from the lock file
+        working-directory: apps/web
+        run: npm ci --ignore-scripts
+
+      - name: Design check must fail on a planted spill
+        working-directory: apps/web
+        run: |
+          code=0
+          node tools/design-check.mjs --mutant --sizes=phone-390 > "$RUNNER_TEMP/planted.log" 2>&1 || code=$?
+          if [ "$code" -ne 1 ] || ! grep -q '^design-check: FAIL' "$RUNNER_TEMP/planted.log"; then
+            echo "the design check did not fail on a planted spill; exit code $code"
+            exit 1
+          fi
 
   pr-title:
     name: pr-title
@@ -126,16 +408,42 @@ jobs:
     name: qd-check
     if: always()
     needs:
+      - changes
       - python
       - extension
       - no-comments
+      - leaks
+      - web-static
+      - web-build
+      - web-browser
+      - web-design
+      - web-design-selftest
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     permissions: {}
     env:
+      CHANGES_RESULT: ${{ needs.changes.result }}
+      WEB: ${{ needs.changes.outputs.web }}
       PYTHON_RESULT: ${{ needs.python.result }}
       EXTENSION_RESULT: ${{ needs.extension.result }}
       COMMENTS_RESULT: ${{ needs.no-comments.result }}
+      LEAKS_RESULT: ${{ needs.leaks.result }}
+      WEB_STATIC_RESULT: ${{ needs.web-static.result }}
+      WEB_BUILD_RESULT: ${{ needs.web-build.result }}
+      WEB_BROWSER_RESULT: ${{ needs.web-browser.result }}
+      WEB_DESIGN_RESULT: ${{ needs.web-design.result }}
+      WEB_DESIGN_SELFTEST_RESULT: ${{ needs.web-design-selftest.result }}
     steps:
-      - name: Require every check to pass
-        run: test "$PYTHON_RESULT" = success && test "$EXTENSION_RESULT" = success && test "$COMMENTS_RESULT" = success
+      - name: Require every lane to pass
+        run: |
+          for result in "$CHANGES_RESULT" "$PYTHON_RESULT" "$EXTENSION_RESULT" "$COMMENTS_RESULT" "$LEAKS_RESULT"; do
+            test "$result" = success || exit 1
+          done
+          if [ "$WEB" = "true" ]; then
+            expected=success
+          else
+            expected=skipped
+          fi
+          for result in "$WEB_STATIC_RESULT" "$WEB_BUILD_RESULT" "$WEB_BROWSER_RESULT" "$WEB_DESIGN_RESULT" "$WEB_DESIGN_SELFTEST_RESULT"; do
+            test "$result" = "$expected" || exit 1
+          done

@@ -1,5 +1,5 @@
 name: Feature proposal
-description: Propose a change to what the bot tools do. Describe the task it helps with.
+description: Propose a change to what the web app, the server, or the bot tools do. Describe the task it helps with.
 title: "[Proposal]: "
 labels:
   - proposal
@@ -22,7 +22,7 @@ body:
     id: proposal
     attributes:
       label: Proposed change
-      description: What should the tools do differently?
+      description: What should Quarterdeck do differently?
     validations:
       required: true
 
@@ -37,11 +37,21 @@ body:
     attributes:
       label: Area
       options:
+        - web
+        - server
+        - bot tools
+        - docs
+    validations:
+      required: true
+
+  - type: dropdown
+    id: bot_tool
+    attributes:
+      label: Bot tool
+      description: Only if the area is bot tools.
+      options:
         - qd command line
         - qd-mcp server
         - Wake extension
         - Wheel or release files
-        - Documentation
         - Not sure
-    validations:
-      required: true
