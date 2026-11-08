@@ -151,6 +151,10 @@ jobs:
 
       - name: Scan the checkout and the new commits
         run: |
+          if [ -e .gitleaksignore ] || [ -L .gitleaksignore ]; then
+            echo "::error file=.gitleaksignore::gitleaks always reads this file, so this repository keeps none. Remove it."
+            exit 1
+          fi
           gitleaks="$RUNNER_TEMP/pinned/gitleaks/gitleaks"
           "$gitleaks" dir --redact --no-banner --config tools/ci/gitleaks.toml --ignore-gitleaks-allow --gitleaks-ignore-path "$RUNNER_TEMP/no-gitleaksignore" --report-format json --report-path "$RUNNER_TEMP/leaks-dir.json" --exit-code 0 .
           if [ "$EVENT" = "pull_request" ]; then

@@ -420,7 +420,7 @@ class MoveB2Test(unittest.TestCase):
         for command in commands:
             self.assertEqual(command.count("--config tools/ci/gitleaks.toml"), 1)
 
-    def test_both_public_scan_commands_reject_inline_and_ignore_file_suppressions(self):
+    def test_both_public_scan_commands_reject_inline_markers_and_pass_a_missing_ignore_path(self):
         steps = workflow_steps(WORKFLOW.read_text(encoding="utf-8"))
         commands = [
             line.strip()
@@ -431,6 +431,83 @@ class MoveB2Test(unittest.TestCase):
         for command in commands:
             self.assertEqual(command.split().count("--ignore-gitleaks-allow"), 1)
             self.assertEqual(command.count('--gitleaks-ignore-path "$RUNNER_TEMP/no-gitleaksignore"'), 1)
+
+    def test_root_ignore_refusal_is_exact_and_precedes_scanning(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        steps = [step for step in workflow_steps(text) if step["job"] == "leaks"]
+        self.assertFalse(any(step_value(step, "name") == "Refuse a gitleaks ignore file" for step in steps))
+        scans = [step for step in steps if step_value(step, "name") == "Scan the checkout and the new commits"]
+        self.assertEqual(len(scans), 1)
+        scan = scans[0]
+        self.assertEqual(scan["lines"][2:6], [
+            "          if [ -e .gitleaksignore ] || [ -L .gitleaksignore ]; then",
+            '            echo "::error file=.gitleaksignore::gitleaks always reads this file, so this repository keeps none. Remove it."',
+            "            exit 1",
+            "          fi",
+        ])
+        self.assertEqual(
+            [step for step in steps if any(line.strip().startswith('"$gitleaks" ') for line in step["lines"])],
+            [scan],
+        )
+        restored = without_ignore_refusal(text)
+        with self.assertRaisesRegex(ValueError, "exactly one"):
+            without_ignore_refusal(restored)
+        with self.assertRaisesRegex(ValueError, "exactly one"):
+            without_ignore_refusal(text + "\n".join(scan["lines"][:6]) + "\n")
+
+    def test_root_ignore_refusal_handles_files_links_and_directories(self):
+        scans = [
+            step for step in workflow_steps(WORKFLOW.read_text(encoding="utf-8"))
+            if step["job"] == "leaks" and step_value(step, "name") == "Scan the checkout and the new commits"
+        ]
+        self.assertEqual(len(scans), 1)
+        run_text = "\n".join(line[10:] for line in scans[0]["lines"][2:6])
+        self.assertTrue(run_text.startswith("if [ -e .gitleaksignore ]"))
+        for kind, expected in (("absent", 0), ("file", 1), ("symlink", 1), ("dangling", 1), ("directory", 1)):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as directory:
+                root = pathlib.Path(directory)
+                ignore = root / ".gitleaksignore"
+                if kind == "file":
+                    ignore.touch()
+                elif kind == "symlink":
+                    target = root / "target"
+                    target.touch()
+                    ignore.symlink_to(target)
+                elif kind == "dangling":
+                    ignore.symlink_to(root / "missing")
+                elif kind == "directory":
+                    ignore.mkdir()
+                result = subprocess.run(["bash", "-c", run_text], cwd=root, capture_output=True, text=True, timeout=10)
+                self.assertEqual(result.returncode, expected)
+                self.assertEqual(result.stderr, "")
+
+    def test_scan_refuses_an_ignore_file_created_after_an_earlier_guard(self):
+        scans = [
+            step for step in workflow_steps(WORKFLOW.read_text(encoding="utf-8"))
+            if step["job"] == "leaks" and step_value(step, "name") == "Scan the checkout and the new commits"
+        ]
+        self.assertEqual(len(scans), 1)
+        run_text = "\n".join(line[10:] for line in scans[0]["lines"][2:]) + "\n"
+        for present in (True, False):
+            with self.subTest(ignore_present=present), tempfile.TemporaryDirectory() as directory:
+                root = pathlib.Path(directory)
+                checkout = root / "checkout"
+                checkout.mkdir()
+                runner_temp = root / "runner"
+                scanner = runner_temp / "pinned" / "gitleaks" / "gitleaks"
+                scanner.parent.mkdir(parents=True)
+                scanner.write_text(HASH + '!/bin/bash\n: > "$SCAN_MARKER"\n', encoding="utf-8")
+                scanner.chmod(0o755)
+                marker = root / "scanner-ran"
+                if present:
+                    (checkout / ".gitleaksignore").touch()
+                environment = dict(os.environ, RUNNER_TEMP=str(runner_temp), EVENT="pull_request", BASE="base", HEAD="head", SCAN_MARKER=str(marker))
+                result = subprocess.run(["bash", "-c", run_text], cwd=checkout, env=environment, capture_output=True, text=True, timeout=10)
+                if present:
+                    self.assertFalse(marker.exists())
+                    self.assertEqual(result.returncode, 1)
+                else:
+                    self.assertTrue(marker.exists())
 
 
 class HistoricalScanReconstructionTest(unittest.TestCase):
@@ -842,7 +919,7 @@ class WorkflowContextsTest(unittest.TestCase):
                 self.assertEqual((result.returncode, result.stdout), (0, ""))
 
     def test_the_original_ci_has_exactly_the_three_reported_findings(self):
-        original = without_scan_config(without_server_lane(WORKFLOW.read_text(encoding="utf-8")))
+        original = without_ignore_refusal(without_scan_config(without_server_lane(WORKFLOW.read_text(encoding="utf-8"))))
         original = original.replace(
             "      - name: Fetch main for the design comparison\n"
             "        run: git -c credential.helper= fetch --no-tags --depth=1 origin main:refs/remotes/origin/main\n\n",
@@ -886,6 +963,21 @@ def ci_with_selftest_env(source):
     if "    env:\n" not in source[start:steps]:
         source = source[:steps] + "    env:\n" + source[steps:]
     return source
+
+
+def without_ignore_refusal(text):
+    header = "      - name: Scan the checkout and the new commits\n        run: |\n"
+    guarded = (
+        header
+        + "          if [ -e .gitleaksignore ] || [ -L .gitleaksignore ]; then\n"
+        '            echo "::error file=.gitleaksignore::gitleaks always reads this file, so this repository keeps none. Remove it."\n'
+        "            exit 1\n"
+        "          fi\n"
+    )
+    count = text.count(guarded)
+    if count != 1:
+        raise ValueError(f"expected exactly one root ignore refusal step; found {count}")
+    return text.replace(guarded, header, 1)
 
 
 def without_scan_config(text):
@@ -946,7 +1038,7 @@ class WorkflowNullValuesTest(unittest.TestCase):
         self.assertEqual((result.returncode, result.stdout, result.stderr), (0, "", ""))
 
     def test_the_r1_workflow_has_exactly_one_null_finding(self):
-        original = ci_with_selftest_env(without_scan_config(without_server_lane(WORKFLOW.read_text(encoding="utf-8"))))
+        original = ci_with_selftest_env(without_ignore_refusal(without_scan_config(without_server_lane(WORKFLOW.read_text(encoding="utf-8")))))
         original = original.replace(
             "      - name: Fetch main for the design comparison\n"
             "        run: git -c credential.helper= fetch --no-tags --depth=1 origin main:refs/remotes/origin/main\n\n",
