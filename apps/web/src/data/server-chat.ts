@@ -171,15 +171,28 @@ export function createServerChat(host: ChatHost): ChatPart {
     return rowsOf(listed ?? []);
   }
 
-  function cursorOf(bot: string): string | null {
+  function newestOf(bot: string): ChatMessage | null {
     const held = threads.get(bot);
-    if (!held?.features.includes("cursor")) return null;
+    if (!held) return null;
     const mine = unshown.get(bot);
     for (let at = held.messages.length - 1; at >= 0; at -= 1) {
       const one = held.messages[at];
-      if (one.clientId === undefined || !mine?.has(one.clientId)) return one.id;
+      if (one.clientId === undefined || !mine?.has(one.clientId)) return one;
     }
     return null;
+  }
+
+  function cursorOf(bot: string): string | null {
+    return threads.get(bot)?.features.includes("cursor") ? (newestOf(bot)?.id ?? null) : null;
+  }
+
+  function showNewest(bot: string): void {
+    const newest = newestOf(bot);
+    const row = listed?.find((one) => one.bot.id === bot);
+    if (!listed || !newest || !row || row.last === newest.id) return;
+    if (row.last !== "" && !(Date.parse(newest.at) > Date.parse(row.at))) return;
+    listed = listed.map((one) => (one === row ? { ...one, preview: newest.text, at: newest.at, last: newest.id } : one));
+    for (const heard of [...rowWatchers]) heard();
   }
 
   async function readThread(bot: string, automatic: boolean): Promise<void> {
@@ -381,6 +394,7 @@ export function createServerChat(host: ChatHost): ChatPart {
         const row = listed?.find((one) => one.bot.id === job.bot);
         if (row) tried.set(job.bot, stamp(row));
         await readThread(job.bot, true);
+        showNewest(job.bot);
       }
     } catch {
       return;
