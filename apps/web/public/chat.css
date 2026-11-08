@@ -258,6 +258,12 @@
   padding: 11px 2px;
 }
 
+@media (min-width: 640px) {
+  .chat-compose-input {
+    max-height: 13rem;
+  }
+}
+
 .chat-composer-form [data-testid="cite-btn"] {
   color: var(--color-ink-2);
 }
