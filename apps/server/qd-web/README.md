@@ -24,6 +24,11 @@ Related notes: the seam to the Mail module is in `docs/internals/server-mail-sea
 
 Every other path is 404 and every other method on a known path is 405 with an `Allow` header. A path with a character outside printable ASCII is 400. The older chat page, the `?with=` chat API and the chat assets are not served here; the approval app (the compose service `captain-app`) keeps them (`docs/internals/server-captain-app.md`).
 
+## Card answers
+
+- Answering the same card, revision and pick with the same note again gives 200 with the first answer's time in its message. The mail already sent is found in the sent copy and is never sent twice. A recipient the first answer did not reach gets its mail now, with the first answer's time in it.
+- It counts as a repeat only when the sent copy has the same sender, recipient, subject and message id and the same card, revision, pick and note. Only the time may differ. Another note, another sender or no sent copy keeps the refusal, 503 `request unavailable`.
+
 ## Chat answers
 
 - A bot object is `{id, name, note?}`. `name` is the `botNames` entry for the id when there is one. Otherwise it is the id split at hyphens (empty parts dropped) with each word capitalised, and a short fixed list of product words spelled as written. It is left out when the result is empty, over 40 code points or not printable; the same check serves both (see `botNames` under Runtime config).

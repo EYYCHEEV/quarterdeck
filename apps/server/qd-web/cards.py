@@ -163,6 +163,8 @@ class MailGateway(Protocol):
         resend_key: str,
     ) -> str: ...
 
+    def send_answer(self, recipient: str, subject: str, body: str, resend_key: str) -> str | None: ...
+
     def send_chat(self, recipient: str, subject: str, body: str, resend_key: str) -> tuple[str, bool]: ...
 
     def mark_seen(self, mail_ids: list[str]) -> None: ...
@@ -646,18 +648,37 @@ class CardService:
                 "outbound answer refused: "
                 + "; ".join(errors or ("no answer mail",))
             )
+        shown = eastern
+        repeated = False
         checked: set[tuple[str, str]] = set()
-        for recipient, subject, body, resend_key in mails:
+        position = 0
+        while position < len(mails):
+            recipient, subject, body, resend_key = mails[position]
+            position += 1
             message = (subject, body)
             if message not in checked:
                 self._validate_action(entry, subject, body)
                 checked.add(message)
-            self.mail.send(
+            kept = self.mail.send_answer(
                 recipient,
                 subject,
                 body,
                 resend_key,
             )
+            if kept is None:
+                continue
+            moment = self._kept_time(kept)
+            if not repeated:
+                repeated = True
+                shown = moment
+                mails[position:] = self._rebuilt(
+                    entry,
+                    (card_id, revision, pick, note),
+                    kept,
+                    mails[position:],
+                )
+            elif moment < shown:
+                shown = moment
         display_pick = {
             "cant-decide": "Can't decide",
             "none": "None of these",
@@ -665,11 +686,37 @@ class CardService:
         return {
             "message": (
                 f"Got it: {card_id} {display_pick} at "
-                f"{eastern.strftime('%-I:%M %p')} ET"
+                f"{shown.astimezone(eastern.tzinfo).strftime('%-I:%M %p')} ET"
             ),
             "stale": revision < entry["latest_rev"],
             "rev": revision,
         }
+
+    @staticmethod
+    def _kept_time(text: str) -> datetime:
+        moment = datetime.fromisoformat(text)
+        if moment.tzinfo is None:
+            raise CardRefused("answer time is invalid")
+        return moment
+
+    def _rebuilt(
+        self,
+        entry: dict[str, Any],
+        answer: tuple[str, int, str, str],
+        at: str,
+        rest: list[tuple[str, str, str, str]],
+    ) -> list[tuple[str, str, str, str]]:
+        if not rest:
+            return rest
+        mails, _, errors = self.checker.build_answers(*answer, at, entry["poster"])
+        wanted = [mail[0] for mail in rest]
+        again = [mail for mail in mails if mail[0] in wanted]
+        if errors or [mail[0] for mail in again] != wanted:
+            raise CardRefused(
+                "outbound answer refused: "
+                + "; ".join(errors or ("answer recipients changed",))
+            )
+        return again
 
     @staticmethod
     def _request(request_id: str) -> str:
