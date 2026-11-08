@@ -2,7 +2,7 @@ import { clockTime } from "../domain/time";
 import { readText } from "../platform/read-text";
 import type { Schedule } from "../platform/timer";
 import type { SessionRequest } from "./api-client";
-import { BOTS_WORDS, cancelBody, forNameOf, inviteBody, readAction, readBotsList, refuseBody, spacedCode, type BotsAction, type BotsList, type BotsReceipt, type InviteReceipt, type ListedInvite, type ListedJoin } from "./bots-client";
+import { BOTS_WORDS, cancelBody, codeBody, forNameOf, inviteBody, readAction, readBotsList, spacedCode, type BotsAction, type BotsList, type BotsReceipt, type InviteReceipt, type ListedInvite, type ListedJoin } from "./bots-client";
 import { FreshSignInRequired, RateLimited, Refused, SignInRequired, type BotsAdmin, type BotsApi, type BotsNotice, type MadeInvite, type OpenInvite, type PendingJoin } from "./source";
 
 export type BotsHost = {
@@ -15,9 +15,8 @@ export type BotsHost = {
 export type BotsPart = { api: BotsApi; clear: () => void };
 
 const LIST_PATH = "/captain/api/bots";
-const PATHS: Record<BotsAction, string> = { refuse: LIST_PATH + "/refuse", invite: LIST_PATH + "/invites", cancel: LIST_PATH + "/invites/cancel" };
+const PATHS: Record<BotsAction, string> = { approve: LIST_PATH + "/approve", refuse: LIST_PATH + "/refuse", invite: LIST_PATH + "/invites", cancel: LIST_PATH + "/invites/cancel" };
 const STEP_UP = "/captain/step-up?next=/settings/bots";
-const FRESH_MARGIN = 30_000;
 const POST_TIMEOUT = 20_000;
 const LIST_LIMIT = 1_048_576;
 const ANSWER_LIMIT = 16_384;
@@ -36,7 +35,6 @@ export function createServerBots(host: BotsHost): BotsPart {
   let epoch = 0;
   let snapshot = EMPTY;
   let list: BotsList | null = null;
-  let fresh = 0;
   let started = 0;
   let shown = 0;
   let reading: Promise<void> | null = null;
@@ -97,7 +95,6 @@ export function createServerBots(host: BotsHost): BotsPart {
       return;
     }
     list = answer;
-    fresh = answer.freshUntil;
     view();
   }
 
@@ -137,10 +134,6 @@ export function createServerBots(host: BotsHost): BotsPart {
   async function post(action: BotsAction, body: (token: string) => string): Promise<BotsReceipt | null>;
   async function post(action: BotsAction, body: (token: string) => string): Promise<BotsReceipt | InviteReceipt | null> {
     if (acting) return null;
-    if (fresh * 1000 - host.clock() < FRESH_MARGIN) {
-      host.goTo(STEP_UP);
-      return null;
-    }
     const mine = epoch;
     acting = true;
     publish({ busy: true, notice: null });
@@ -154,9 +147,8 @@ export function createServerBots(host: BotsHost): BotsPart {
         settle(mine, null);
         return null;
       }
-      if (listed.freshUntil * 1000 - host.clock() < FRESH_MARGIN) {
+      if (action === "approve" && !listed.approveHere) {
         settle(mine, null);
-        host.goTo(STEP_UP);
         return null;
       }
       token = listed.csrf;
@@ -184,7 +176,6 @@ export function createServerBots(host: BotsHost): BotsPart {
       stop();
     }
     if (mine !== epoch) return null;
-    if (receipt) fresh = receipt.freshUntil;
     await readAfter();
     settle(mine, notice);
     return mine === epoch ? receipt : null;
@@ -224,10 +215,13 @@ export function createServerBots(host: BotsHost): BotsPart {
       const made = await post("invite", (token) => inviteBody(forName, token));
       return made ? { invite: inviteOf({ ...made.invite, by: "Captain" }), code: made.code, prompt: made.prompt } : null;
     },
-    refuseJoin: (code) => (acting ? Promise.resolve() : again(() => post("refuse", (token) => refuseBody(code, token)))),
+    refuseJoin: (code) => (acting ? Promise.resolve() : again(() => post("refuse", (token) => codeBody(code, token)))),
     cancelInvite: (id) => (acting ? Promise.resolve() : again(() => post("cancel", (token) => cancelBody(id, token)))),
     askLater: () => undefined,
-    approveJoin: () => null,
+    async approveJoin(code) {
+      if (!acting) await again(() => post("approve", (token) => codeBody(code, token)));
+      return null;
+    },
     removeBot: () => undefined,
     setPinned(botId, pinned) {
       publish({ pinned: { ...snapshot.pinned, [botId]: pinned } });
@@ -243,7 +237,6 @@ export function createServerBots(host: BotsHost): BotsPart {
     stopTimer?.();
     stopTimer = null;
     list = null;
-    fresh = 0;
     reading = null;
     acting = false;
     last = null;

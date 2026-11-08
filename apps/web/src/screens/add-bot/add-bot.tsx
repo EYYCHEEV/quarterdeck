@@ -230,7 +230,7 @@ function AddBot({ api, admin, onClose }: { api: BotsApi; admin: BotsAdmin; onClo
           <RequestStep
             request={request}
             needsPassword={admin.password}
-            onApprove={() => setJoinedBot(api.approveJoin(request.id))}
+            onApprove={() => void api.approveJoin(request.id).then(setJoinedBot)}
             onRefuse={() => {
               void api.refuseJoin(request.id);
               setRefused(request.name);
