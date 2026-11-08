@@ -2,7 +2,7 @@
 
 The screens of Quarterdeck, built as a static app. Quarterdeck is where the Captain, the person who uses the app, and bots work through Task Cards in Lanes inside Projects, with Mail between bots and chats in the sidebar. This folder holds the Queue, Task Card, Lane, Projects, Page, Artifact, Mail, Chat, Settings and Add bot screens.
 
-A normal build runs on example data. The example data in `src/data` is synthetic: made-up projects, bots, cards, mail and pages. None of it is real. A build made with `--server` reads from the Quarterdeck server instead. The server arrives in a later change.
+A normal build runs on example data. The example data in `src/data` is synthetic: made-up projects, bots, cards, mail and pages. None of it is real. A build made with `--server` reads from the Quarterdeck server instead. The server is in `apps/server/`.
 
 ## Run it
 
