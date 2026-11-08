@@ -5037,6 +5037,7 @@ for (const [name, size] of [["a phone", PHONE], ["an iPad upright", IPAD_UPRIGHT
     equal([await T(p, "chat-input").inputValue(), sentWords(asked)], ["a\nb", []], "the box and the POSTs after Return");
     await T(p, "chat-send").tap();
     await boxEmpty(p);
+    await T(p, "chat-input").click();
     await p.keyboard.type("c");
     await p.keyboard.press("Control+Enter");
     await boxEmpty(p);

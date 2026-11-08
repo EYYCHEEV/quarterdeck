@@ -352,6 +352,23 @@ for (const [label, width, height] of [
   });
 }
 
+for (const [label, width, height] of [
+  ["an iPad upright (744 x 1133)", 744, 1133],
+  ["an iPad sideways (1133 x 744)", 1133, 744],
+]) {
+  it(`Chat on ${label} with the on-screen keyboard up: after a tap on Send the box lets go of focus, so the keyboard goes down`, phone(width, height), async (p) => {
+    await p.goto(origin + "/chat/iris");
+    await T(p, "chat-bot-message").first().waitFor();
+    await T(p, "chat-input").tap();
+    await p.keyboard.type("Sent from the on-screen keyboard.");
+    await T(p, "chat-send").tap();
+    await p.waitForFunction(() => document.querySelector('[data-testid="chat-input"]').value === "");
+    await T(p, "chat-my-message").filter({ hasText: "Sent from the on-screen keyboard." }).first().waitFor();
+    await frames(p);
+    assert.notEqual(await p.evaluate(() => document.activeElement?.getAttribute("data-testid") ?? "none"), "chat-input", "where the focus is after Send");
+  });
+}
+
 const browser = await engines[ENGINE].launch(ENGINE === "chromium" ? chromeLaunchOptions({ args: ["--no-sandbox"] }) : {});
 try {
   for (const item of cases) {
