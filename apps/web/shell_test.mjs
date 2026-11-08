@@ -674,6 +674,36 @@ const boxOf = (locator) => locator.evaluate((el) => {
   return [Math.round(box.width), Math.round(box.height)];
 });
 
+const dotLines = (p) =>
+  p.evaluate(() =>
+    [...document.querySelectorAll('[data-testid="card-row"]')].flatMap((row) => {
+      const dot = row.querySelector('[data-testid="changed-dot"]');
+      const pill = row.querySelector("[data-pill]");
+      if (!dot && !pill) return [];
+      const title = document.createRange();
+      title.selectNodeContents(row.querySelector("a"));
+      const lines = [...title.getClientRects()];
+      const middle = (box) => box.top + box.height / 2;
+      const first = middle(lines[0]);
+      const edge = row.getBoundingClientRect().top + row.clientTop;
+      return [{ id: row.dataset.id, wraps: new Set(lines.map((box) => Math.round(box.top))).size > 1, dot: dot ? middle(dot.getBoundingClientRect()) - first : null, tile: pill ? middle(pill.getBoundingClientRect()) - first : null, tileInside: !pill || pill.getBoundingClientRect().top >= edge }];
+    }),
+  );
+const offLine = (value) => value !== null && Math.abs(value) > 1;
+const pxOrNone = (value) => (value === null ? "none" : value.toFixed(1) + " px");
+
+for (const [where, size, wraps] of [["a phone", PHONE, true], ["iPad upright", IPAD_UPRIGHT, false], ["iPad sideways", TOUCH_SIDEWAYS, true], ["the Mac", MAC, true]])
+  it("Queue on " + where + ": a changed card's dot and every priority tile sit on the middle of the title's first line, inside the row, " + (wraps ? "for a one-line title and a wrapping one" : "where every title fits on one line"), size, async (p) => {
+    await open(p, "/queue");
+    await T(p, "changed-dot").first().waitFor();
+    const rows = await dotLines(p);
+    const dotted = rows.filter((row) => row.dot !== null);
+    equal([dotted.some((row) => !row.wraps), dotted.some((row) => row.wraps)], [true, wraps], "a one-line title and a wrapping title among the rows with a dot");
+    equal(rows.some((row) => row.tile !== null), true, "a row with a tile among the rows measured");
+    equal(rows.filter((row) => offLine(row.dot) || offLine(row.tile)).map((row) => row.id + ": dot " + pxOrNone(row.dot) + ", tile " + pxOrNone(row.tile)), [], "rows whose dot or tile is more than 1 px off the middle of the first line");
+    equal(rows.filter((row) => !row.tileInside).map((row) => row.id), [], "rows whose tile reaches above the row's top edge");
+  });
+
 it("Task Card on a phone: the floating top has the round Back with Queue · N waiting and a capsule with Talk and More, each at least 44 px", PHONE, async (p) => {
   await open(p, "/queue/alba-1");
   await p.locator('[data-float="capsule"]').waitFor();
@@ -4393,6 +4423,22 @@ it("Server Queue with no priority: the rule reads by due then newest change, Sor
   const sorts = await sheet.innerText();
   equal([sorts.includes("Ranked"), sorts.includes("Due soonest")], [false, true], "Sort entries: Ranked shown, Due soonest shown");
 });
+
+for (const [where, size] of [["a phone", PHONE], ["the Mac", MAC]])
+  it("Server Queue with no priority on " + where + ": a row's title starts 20 px in from the row's padding, level with its top, as before", size, async (p) => {
+    await serverBuild(p, "list-fixed-only.json");
+    await open(p, "/queue");
+    await shown(p, "How many results should each Search group show?");
+    const starts = await T(p, "card-row").evaluateAll((rows) =>
+      rows.map((row) => {
+        const box = row.getBoundingClientRect();
+        const style = getComputedStyle(row);
+        const title = row.querySelector("a").getBoundingClientRect();
+        return [Math.round(title.left - box.left - row.clientLeft - parseFloat(style.paddingLeft)), Math.round(title.top - box.top - row.clientTop - parseFloat(style.paddingTop))];
+      }),
+    );
+    equal([starts.length > 0, starts.filter(([left, top]) => left !== 20 || top !== 0)], [true, []], "rows, and rows whose title starts elsewhere");
+  });
 
 const cardRead = async (p, id, replies) => {
   const body = readFileSync(new URL("./src/data/server-payloads/card-open.json", import.meta.url), "utf8");
