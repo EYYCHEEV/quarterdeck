@@ -189,7 +189,7 @@ export function createServerChat(host: ChatHost): ChatPart {
   function showNewest(bot: string): void {
     const newest = newestOf(bot);
     const row = listed?.find((one) => one.bot.id === bot);
-    if (!listed || !newest || !row || row.last === newest.id) return;
+    if (!listed || !newest || !row || row.last === newest.id || newest.text.trim() === "") return;
     if (row.last !== "" && !(Date.parse(newest.at) > Date.parse(row.at))) return;
     listed = listed.map((one) => (one === row ? { ...one, preview: newest.text, at: newest.at, last: newest.id } : one));
     for (const heard of [...rowWatchers]) heard();
