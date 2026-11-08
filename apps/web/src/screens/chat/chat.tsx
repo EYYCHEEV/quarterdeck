@@ -198,14 +198,14 @@ export function ChatScreen({ botId }: { botId: string }) {
     });
   };
 
-  const send = () => {
+  const send = (): boolean => {
     const text = draft.text.trim();
-    if (!text && !draft.files.length) return;
+    if (!text && !draft.files.length) return false;
     if (__QD_SOURCE__ === "server" && __QD_CHAT__ === "on") {
-      if (!thread.value) return;
+      if (!thread.value) return false;
       if (!withinLimit(text)) {
         setRefused([SEND_LONG_TEXT]);
-        return;
+        return false;
       }
     }
     deliver({
@@ -220,6 +220,7 @@ export function ChatScreen({ botId }: { botId: string }) {
     });
     setRefused([]);
     setDraft({ text: "", quote: null, files: [] });
+    return true;
   };
 
   const attach = (list: File[]) => {

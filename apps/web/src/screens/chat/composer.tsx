@@ -116,7 +116,7 @@ export function Composer({
   world: World;
   draft: ChatDraft;
   onDraft: (draft: ChatDraft) => void;
-  onSend: () => void;
+  onSend: () => boolean;
   cards: ReactNode;
   inputRef: RefObject<HTMLTextAreaElement | null>;
   onAttach: (files: File[]) => void;
@@ -145,6 +145,11 @@ export function Composer({
       keyboard.current = null;
     };
   }, []);
+
+  const submit = () => {
+    if (!ready || !onSend()) return;
+    if (keyboard.current?.up() && window.matchMedia("(min-width: 640px)").matches) inputRef.current?.blur();
+  };
 
   const clearPaste = useCallback(() => {
     pasteBypass.current = false;
@@ -280,7 +285,7 @@ export function Composer({
           className="chat-composer-form relative min-w-0"
           onSubmit={(event) => {
             event.preventDefault();
-            if (ready) onSend();
+            submit();
           }}
         >
           {draft.files.length > 0 && <DraftStrip files={draft.files} onRemove={onUnattach} />}
@@ -324,7 +329,7 @@ export function Composer({
               onKeyDown={(event) => {
                 if (!enterSends(event.nativeEvent, keyboard.current?.up() ?? false)) return;
                 event.preventDefault();
-                if (ready) onSend();
+                submit();
               }}
               className="chat-compose-input min-h-11 min-w-0 flex-1 border-0 bg-transparent text-base leading-[1.4] text-ink outline-none"
               data-testid="chat-input"
