@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Clipboa
 import type { ChatDraft } from "../../data/session";
 import { looksLikeSecret, SECRET_TEXT } from "../../domain/secrets";
 import type { World } from "../../domain/types";
-import { enterSends } from "../../platform/keyboard";
+import { enterSends, watchKeyboard, type KeyboardWatch } from "../../platform/keyboard";
 import { useFilePicker, type PickSource } from "../../platform/pick-files";
 import { Button } from "../../ui/button";
 import { cx } from "../../ui/cx";
@@ -134,7 +134,17 @@ export function Composer({
   const [pasteBlocked, setPasteBlocked] = useState(false);
   const [pasteNotice, setPasteNotice] = useState<"again" | "unavailable" | null>(null);
   const pasteBypass = useRef(false);
+  const keyboard = useRef<KeyboardWatch | null>(null);
   const ready = draft.text.trim().length > 0 || draft.files.length > 0;
+
+  useEffect(() => {
+    const watch = watchKeyboard(window);
+    keyboard.current = watch;
+    return () => {
+      watch.stop();
+      keyboard.current = null;
+    };
+  }, []);
 
   const clearPaste = useCallback(() => {
     pasteBypass.current = false;
@@ -312,7 +322,7 @@ export function Composer({
               onPaste={pasted}
               enterKeyHint="enter"
               onKeyDown={(event) => {
-                if (!enterSends(event.nativeEvent, window.matchMedia("(pointer: coarse)").matches)) return;
+                if (!enterSends(event.nativeEvent, keyboard.current?.up() ?? false)) return;
                 event.preventDefault();
                 if (ready) onSend();
               }}

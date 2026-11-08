@@ -16,6 +16,13 @@ The notices for the packages that ship in the web app are generated from `apps/w
   - `apps/web/src/ui/copy.ts` from `apps/web/src/hooks/useCopyToClipboard.ts`: copy text with the clipboard API, fall back to selecting a hidden field and the browser copy command when the API is missing, and show a short "copied" state.
   - The code block frame in `apps/web/src/ui/markdown.tsx` (language label, Wrap lines and Copy code) from `apps/web/src/components/chat/MarkdownCodeBlock.tsx`. The markdown parser is Quarterdeck's own.
   - The chat package of the server, `apps/server/qd-web`, which arrives in a later change, adapts the interaction design for a compact message list, streaming refresh, optimistic sends with stable retry identifiers, canonical-message reconciliation, seen and typing state, and safe Markdown and code-block rendering, from the same commit.
+  - `apps/web/src/platform/keyboard.ts` from `apps/web/src/composer-logic.ts` and `apps/web/src/lib/softwareKeyboard.ts` at commit `25bf84ab07f53f141c20239c63e383823a9d5ea0`. Return sends unless the on-screen keyboard is up; Shift or Option makes a new line; and the Enter that ends an IME composition (keyCode 229) never sends. The keyboard counts as up when the visible height drops more than 150 px at the same width. Quarterdeck compares with the tallest height seen at that width while no text box has focus, and on a touch screen with no such height it counts the keyboard as up.
+
+## Ionic Framework
+
+- Project: Ionic Framework, https://github.com/ionic-team/ionic-framework
+- License: MIT, Copyright (c) 2015-present Drifty Co. Full text: [licenses/IONIC-MIT.txt](licenses/IONIC-MIT.txt).
+- Credit: `apps/web/src/platform/keyboard.ts` tells that the on-screen keyboard is up when the visible height drops by more than a threshold at the same width. That idea comes from Ionic's keyboard assist (`core/src/utils/keyboard/keyboard.ts`), by way of T3 Code. Nothing is copied as is.
 
 ## Tailwind CSS
 
