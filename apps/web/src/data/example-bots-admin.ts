@@ -100,7 +100,7 @@ export function createExampleBots(): BotsApi {
       const line: HistoryLine = { id: "ended-" + inviteId, text: "Invite for " + (invite.forName ?? "any bot") + " ended", at: "Today" };
       change({ ...current, invites: current.invites.filter((item) => item.id !== inviteId), history: [line, ...current.history] });
     },
-    approveJoin: (joinId) => {
+    approveJoin: async (joinId) => {
       const join = current.pending.find((item) => item.id === joinId);
       if (!join) return null;
       const bot: JoinedBot = { id: join.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"), name: join.name, role: "New bot", at: "Today" };
