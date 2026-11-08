@@ -97,7 +97,7 @@ test("opening the Bots screen reads the list once and shows it as the screen wan
   assert.equal(api.current(), admin, "the same snapshot until something changes");
 });
 
-test("the list's answer sets the state: 404 and a page that is not JSON say the approval app, a 503 or an unreadable list says failed, and Try again reads it again", async () => {
+test("the list's answer sets the state: 404 and a page that is not JSON say Backchannel, a 503 or an unreadable list says failed, and Try again reads it again", async () => {
   for (const [answer, state] of [[json('{"error":"not found"}', 404), "approval"], [json("<!doctype html><p>app</p>", 200), "approval"], [json("", 405), "approval"], [json('{"error":"request unavailable"}', 503), "failed"], [json({ pending: [] }), "failed"], [() => { throw new TypeError("Failed to fetch"); }, "failed"]]) {
     const h = host(answer, list(2));
     const { api } = await ready(h);
@@ -157,7 +157,7 @@ test("a list read out when he taps is not used for the token: the action reads t
   assert.deepEqual(api.current().pending.map((one) => one.id), ["M3X85T2R"]);
 });
 
-test("a failed token read sends no POST: a 503 says Could not do that. with Try again, which reads again and sends; a 404 shows the the approval app line; a 401 ends quietly", async () => {
+test("a failed token read sends no POST: a 503 says Could not do that. with Try again, which reads again and sends; a 404 shows the Backchannel line; a 401 ends quietly", async () => {
   const { BOTS_WORDS } = await (await import("../../tools/load-ts.mjs")).loadTs("src/data/bots-client.ts");
   const h = host(list(1), json({ error: "request unavailable" }, 503));
   const { api } = await ready(h);

@@ -86,7 +86,7 @@ test("each action body holds exactly its fields, and the code goes back without 
   for (const csrf of ["", null, undefined]) assert.throws(() => refuseBody("K7P42Q9M", csrf), named("Refused"), String(csrf));
 });
 
-test("a typed name is checked against the approval app's rule before anything is sent, and an empty name means any bot", async () => {
+test("a typed name is checked against Backchannel's rule before anything is sent, and an empty name means any bot", async () => {
   const { forNameOf, BOTS_WORDS } = await load();
   assert.equal(forNameOf(""), null);
   assert.equal(forNameOf("   "), null);
