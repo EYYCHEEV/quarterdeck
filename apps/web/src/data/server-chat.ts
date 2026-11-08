@@ -344,15 +344,10 @@ export function createServerChat(host: ChatHost): ChatPart {
     for (const heard of [...rowWatchers]) heard();
   }
 
-  function pokedBot(): string | null {
-    for (const bot of poked) if ((threadWatchers.get(bot)?.size ?? 0) > 0 && threads.get(bot)?.features.includes("cursor")) return bot;
-    return null;
-  }
-
   function due(): ChatDue | null {
     if (busy || !host.live()) return null;
-    const poke = pokedBot();
-    if (poke !== null) return { kind: "thread", bot: poke };
+    const [poke] = poked;
+    if (poke !== undefined) return { kind: "thread", bot: poke };
     if (wanted && onScreen()) return { kind: "list" };
     if (listed !== null) {
       for (const [bot, set] of threadWatchers) {
