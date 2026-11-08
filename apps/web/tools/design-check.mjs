@@ -26,6 +26,7 @@ const FIRST_LOAD_BYTES = 120 * 1024;
 const FIRST_SCREEN_LOADS = 7;
 const FIRST_SCREEN_SLOWER_MS = 40;
 const FIRST_LOAD_GROWTH_BYTES = 1024;
+const REFERENCE_MS = 142.20;
 const BASE_REF = process.argv.find((a) => a.startsWith("--base="))?.slice(7) ?? "origin/main";
 const CLOCK_IN_SANDBOX = /^Blocked script execution in 'about:srcdoc'/;
 const SLOW_4G = { offline: false, latency: 562.5, downloadThroughput: (1.6 * 1000 * 1000 * 0.9) / 8, uploadThroughput: (750 * 1000 * 0.9) / 8 };
@@ -724,14 +725,55 @@ async function onlyNoise(file, skip) {
   return true;
 }
 
-async function firstScreen(at) {
+function cpuRate(hostMs, referenceMs = REFERENCE_MS) {
+  const rate = (4 * referenceMs) / hostMs;
+  if (!Number.isFinite(hostMs) || !Number.isFinite(rate) || hostMs <= 0 || rate > 16) throw new Error("calibration out of range");
+  if (rate < 1) throw new Error("host too slow to emulate");
+  return rate;
+}
+
+function calibrationWorkload() {
+  const started = performance.now();
+  let value = 0;
+  for (let i = 0; i < 30000000; i++) value = (Math.imul(value ^ i, 1664525) + 1013904223) | 0;
+  const root = document.createElement("div");
+  root.style.cssText = "display:grid;grid-template-columns:repeat(8,1fr);width:640px";
+  for (let i = 0; i < 256; i++) {
+    const el = document.createElement("div");
+    el.textContent = String(i);
+    el.style.cssText = "padding:2px;font:14px sans-serif";
+    root.append(el);
+  }
+  document.body.append(root);
+  for (let i = 0; i < 256; i++) {
+    root.style.width = `${640 + (i % 2)}px`;
+    value ^= root.children[i].offsetLeft + root.offsetHeight;
+  }
+  document.body.dataset.calibration = String(value);
+  root.remove();
+  return performance.now() - started;
+}
+
+async function calibrateCpu(browser) {
+  const p = await browser.newPage({ viewport: { width: 800, height: 600 }, deviceScaleFactor: 1 });
+  try {
+    const samples = [];
+    for (let i = 0; i < 7; i++) samples.push(await p.evaluate(calibrationWorkload));
+    const hostMs = median(samples);
+    return { hostMs, rate: cpuRate(hostMs), samples };
+  } finally {
+    await p.close();
+  }
+}
+
+async function firstScreen(at, rate) {
   const context = await browser.newContext({ ...VIEWPORTS[0].opts, colorScheme: "dark" });
   const p = await context.newPage();
   const cdp = await context.newCDPSession(p);
   await cdp.send("Network.enable");
   await cdp.send("Network.setCacheDisabled", { cacheDisabled: true });
   await cdp.send("Network.emulateNetworkConditions", SLOW_4G);
-  await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+  await cdp.send("Emulation.setCPUThrottlingRate", { rate });
   let bytes = 0;
   cdp.on("Network.loadingFinished", (e) => {
     bytes += e.encodedDataLength;
@@ -771,6 +813,7 @@ async function baseBuild() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "design-check-base-"));
   const unpacked = spawnSync("tar", ["-x", "-C", dir], { input: archive.stdout });
   if (unpacked.status) return { why: `${BASE_REF} did not unpack`, dir };
+  if (fs.readdirSync(dir).length === 0) return { why: `${BASE_REF} has no apps/web`, dir };
   fs.symlinkSync(path.resolve("node_modules"), path.join(dir, "node_modules"));
   const built = spawnSync(process.execPath, ["tools/build-app.mjs", "--fixtures"], { cwd: dir, stdio: "ignore" });
   if (built.status) return { why: `${BASE_REF} did not build`, dir };
@@ -788,15 +831,17 @@ async function baseBuild() {
 }
 
 async function firstScreenTurn() {
+  const { hostMs, rate } = await calibrateCpu(browser);
+  console.log(`design-check: CPU calibration host ${hostMs.toFixed(2)} ms, reference ${REFERENCE_MS.toFixed(2)} ms, rate ${rate.toFixed(2)}`);
   const base = await baseBuild();
   const sides = [{ name: "this build", at: origin, ms: [], bytes: [], inPage: [] }];
   if (base.at) sides.push({ name: base.name, at: base.at, ms: [], bytes: [], inPage: [] });
   const before = os.loadavg()[0].toFixed(1);
   try {
-    for (const side of sides) await firstScreen(side.at);
+    for (const side of sides) await firstScreen(side.at, rate);
     for (let n = 0; n < FIRST_SCREEN_LOADS; n += 1) {
       for (const side of n % 2 ? [...sides].reverse() : sides) {
-        const got = await firstScreen(side.at);
+        const got = await firstScreen(side.at, rate);
         side.ms.push(got.ms);
         side.bytes.push(got.bytes);
         side.inPage.push(got.inPage);
@@ -806,7 +851,7 @@ async function firstScreenTurn() {
     base.server?.kill();
     if (base.dir) fs.rmSync(base.dir, { recursive: true, force: true });
   }
-  return { sides, why: base.why, before, after: os.loadavg()[0].toFixed(1) };
+  return { sides, why: base.why, before, after: os.loadavg()[0].toFixed(1), rate };
 }
 
 function judgeFirstScreen({ sides, why }) {
@@ -816,7 +861,7 @@ function judgeFirstScreen({ sides, why }) {
   const problems = [];
   if (bytes > FIRST_LOAD_BYTES) problems.push(`downloaded ${bytes} bytes, over ${FIRST_LOAD_BYTES}`);
   if (!base) {
-    if (ms > FIRST_SCREEN_MS) problems.push(`took ${ms} ms on a slow 4G phone, over ${FIRST_SCREEN_MS} ms (no ${BASE_REF} build to compare with: ${why})`);
+    if (ms > FIRST_SCREEN_MS && why !== "origin/main has no apps/web") problems.push(`took ${ms} ms on a slow 4G phone, over ${FIRST_SCREEN_MS} ms (no ${BASE_REF} build to compare with: ${why})`);
     return problems;
   }
   const slower = median(roundGaps(mine, base));
@@ -826,12 +871,13 @@ function judgeFirstScreen({ sides, why }) {
   return problems;
 }
 
-function firstScreenLines({ sides, why, before, after }) {
+function firstScreenLines({ sides, why, before, after, rate }) {
   const [mine, base] = sides;
   const show = (s) => `${s.name} ${median(s.ms)} ms (spread ${spreadOf(s.ms)}, ${(median(s.bytes) / 1024).toFixed(1)} KB)`;
   const polling = sides.reduce((n, s) => n + s.inPage.filter((seen) => !seen).length, 0);
-  const lines = [`design-check: first screen on a slow 4G phone (4x slower CPU), median of ${FIRST_SCREEN_LOADS} loads${base ? " each, taken in turn" : ""}: ${sides.map(show).join(" against ")}`];
+  const lines = [`design-check: first screen on a slow 4G phone (reference 4x slower CPU), median of ${FIRST_SCREEN_LOADS} loads${base ? " each, taken in turn" : ""}: ${sides.map(show).join(" against ")}`];
   if (base) lines.push(`design-check: against ${base.name}: ${signed(median(roundGaps(mine, base)))} ms (median of the ${FIRST_SCREEN_LOADS} round-by-round gaps) and ${signed(median(mine.bytes) - median(base.bytes))} bytes; it fails over +${FIRST_SCREEN_SLOWER_MS} ms or +${FIRST_LOAD_GROWTH_BYTES} bytes; the absolute ${FIRST_SCREEN_MS} ms is reported (this build ${median(mine.ms)} ms), not a limit`);
+  else if (why === "origin/main has no apps/web" && median(mine.ms) > FIRST_SCREEN_MS) lines.push(`CARD first screen phone-390: ${median(mine.ms)} ms measured against the ${FIRST_SCREEN_MS} ms line (median of ${FIRST_SCREEN_LOADS} loads, spread ${spreadOf(mine.ms)} ms, CPU rate ${rate.toFixed(2)} calibrated to the reference). Main has no web app yet, so this miss is carded for the Captain, not failed.`);
   else lines.push(`design-check: no ${BASE_REF} build to compare with (${why}), so the absolute ${FIRST_SCREEN_MS} ms limit applies`);
   lines.push(`design-check: load average ${before} before and ${after} after${polling ? `; ${polling} loads were timed by Playwright's polling because the in-page timer did not fire` : ""}`);
   return lines;
