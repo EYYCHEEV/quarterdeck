@@ -79,6 +79,12 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Fetch the pinned Node
+        run: python3 tools/ci/fetch-pinned node
+
+      - name: Put the pinned Node first on the path
+        run: echo "$RUNNER_TEMP/pinned/node-v22.21.0-linux-x64/bin" >> "$GITHUB_PATH"
+
       - name: Server suites, one process each
         run: python3 deploy/server_lane.py
 
@@ -146,7 +152,7 @@ jobs:
       - name: Scan the checkout and the new commits
         run: |
           gitleaks="$RUNNER_TEMP/pinned/gitleaks/gitleaks"
-          "$gitleaks" dir --redact --no-banner --report-format json --report-path "$RUNNER_TEMP/leaks-dir.json" --exit-code 0 .
+          "$gitleaks" dir --redact --no-banner --config tools/ci/gitleaks.toml --ignore-gitleaks-allow --gitleaks-ignore-path "$RUNNER_TEMP/no-gitleaksignore" --report-format json --report-path "$RUNNER_TEMP/leaks-dir.json" --exit-code 0 .
           if [ "$EVENT" = "pull_request" ]; then
             range="$BASE..$HEAD"
           elif [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
@@ -154,7 +160,7 @@ jobs:
           else
             range="$BEFORE..$AFTER"
           fi
-          "$gitleaks" git --redact --no-banner --report-format json --report-path "$RUNNER_TEMP/leaks-git.json" --exit-code 0 --log-opts="$range" .
+          "$gitleaks" git --redact --no-banner --config tools/ci/gitleaks.toml --ignore-gitleaks-allow --gitleaks-ignore-path "$RUNNER_TEMP/no-gitleaksignore" --report-format json --report-path "$RUNNER_TEMP/leaks-git.json" --exit-code 0 --log-opts="$range" .
 
       - name: Report the rule and the path only
         run: |

@@ -1,0 +1,35 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Public file sha256 digests for auth_bridge.py and captain_auth.py in the captain-app package manifest"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['^deploy/captain-app/package-manifest\.json$']
+regexTarget = "line"
+regexes = [
+  '^\n?    "auth_bridge\.py": "[0-9a-f]{64}",?$',
+  '^\n?    "captain_auth\.py": "[0-9a-f]{64}",?$',
+]
+
+[[allowlists]]
+description = "Public file sha256 digests for auth_bridge.py, chat_api.py and mail_api.py in the qd-web package manifest"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['^deploy/qd-web/package-manifest\.json$']
+regexTarget = "line"
+regexes = [
+  '^\n?    "auth_bridge\.py": "[0-9a-f]{64}",?$',
+  '^\n?    "chat_api\.py": "[0-9a-f]{64}",?$',
+  '^\n?    "mail_api\.py": "[0-9a-f]{64}",?$',
+]
+
+[[allowlists]]
+description = "Public label sha256 digest for first_start/password_file.py in the container layout test"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['^deploy/containers/test_layout\.py$']
+regexTarget = "line"
+regexes = [
+  '^\n?    "first_start/password_file\.py": "[0-9a-f]{64}",?$',
+]

@@ -262,6 +262,9 @@ def main(argv=None):
     if args.assemble_only:
         print(assemble(args.assemble_only))
         return 0
+    if shutil.which("node", path=environment("", {})["PATH"]) is None:
+        print("missing node: captain-app test_chat_bubbles, test_chat_chime, test_chat_page, test_chat_windowing require it")
+        return 1
     if args.tree:
         return run_all(Path(args.tree), args)
     with tempfile.TemporaryDirectory(prefix="qd-server-lane-") as scratch:
