@@ -1,13 +1,23 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import * as engines from "playwright";
 import { chromeLaunchOptions } from "../../../tools/browser.mjs";
 import { startAppServer } from "../../../tools/app-server.mjs";
 
 const ENGINE = process.env.QD_ENGINE ?? "chromium";
+const EXPECT = process.env.QD_EXPECT ?? "";
+const ROWS = Boolean(process.env.QD_ROWS);
+const PROBE = fileURLToPath(new URL("./typing_probe.js", import.meta.url));
+const WEBKIT_VIEWPORT_LINE = 'Viewport argument key "interactive-widget" not recognized and ignored.';
 const only = process.argv.slice(2);
 const failed = [];
 let passed = 0;
+
+if (EXPECT !== "" && EXPECT !== "shrink") {
+  console.log("QD_EXPECT is either unset or shrink, not " + JSON.stringify(EXPECT));
+  process.exit(1);
+}
 
 const build = spawnSync(process.execPath, ["tools/build-app.mjs", "--fixtures"], { stdio: "inherit" });
 if (build.status) process.exit(build.status ?? 1);
@@ -15,6 +25,8 @@ const { server, origin } = await startAppServer();
 
 const T = (p, id) => p.locator(`[data-testid="${id}"]`);
 const frames = (p) => p.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+const settled = (p) => p.evaluate(() => window.qdProbe.settled());
+const phone = (width, height) => ({ viewport: { width, height }, hasTouch: true, isMobile: true });
 
 const counting = () => {
   window.qdScrolls = 0;
@@ -87,42 +99,130 @@ const typeText = async (p, text, newline) => {
 
 const dips = (keys) => keys.slice(1).filter((s, at) => s.low !== null && s.low < Math.min(s.sh, keys[at].sh)).map(row);
 
-const cases = [];
-const it = (name, size, run) => cases.push({ name: "[" + ENGINE + "] " + name, size, run });
+const ready = async (p, mode, tapFirst) => {
+  await p.addInitScript({ path: PROBE });
+  await p.goto(origin + "/chat/iris");
+  await T(p, "chat-bot-message").first().waitFor();
+  assert.equal(await p.evaluate(() => window.qdProbe.draft()), true, "the two-line draft is in the box");
+  if (tapFirst) await T(p, "chat-input").tap();
+  await p.evaluate(() => window.qdProbe.toEnd());
+  await settled(p);
+  if (mode === "reading") {
+    const place = await p.evaluate(() => window.qdProbe.upBy(400));
+    assert.ok(place.top > 0 && place.top < place.max - 100, `scrolled up into older messages (${place.top} of ${place.max})`);
+    await settled(p);
+  }
+  if (!tapFirst) await T(p, "chat-input").tap();
+  await settled(p);
+  return p.evaluate((next) => window.qdProbe.start(next), mode);
+};
 
-for (const [label, width, height] of [["390 x 500", 390, 500], ["440 x 600", 440, 600]]) {
-  it(`Chat on a phone with the keyboard up (${label}): typing letter by letter and new lines never shortens the page mid-key and keeps the newest message just above the composer in every frame`, { viewport: { width, height }, hasTouch: true, isMobile: true }, async (p) => {
-    await p.addInitScript(counting);
-    await p.goto(origin + "/chat/iris");
-    await T(p, "chat-bot-message").first().waitFor();
-    await T(p, "chat-input").tap();
-    await p.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-    await frames(p);
-    const [bottom, scrolled] = await p.evaluate(() => [Math.round(document.documentElement.scrollHeight - window.innerHeight - window.scrollY), Math.round(window.scrollY)]);
-    assert.deepEqual([bottom, scrolled > 0], [0, true], "the chat can scroll, and starts at its bottom");
-    const start = await p.evaluate(() => window.qdTake());
-    await p.evaluate(() => {
-      window.qdFrames = [];
-      const step = () => {
-        window.qdFrames.push(window.qdNow());
-        requestAnimationFrame(step);
-      };
-      requestAnimationFrame(step);
-    });
-    const keys = [start];
-    keys.push(...(await typeText(p, TYPED, "Enter")));
-    const recorded = await p.evaluate(() => window.qdFrames.splice(0));
-    console.log("     per key:\n" + keys.map((s) => "       " + row(s)).join("\n"));
-    const moved = recorded.filter((s) => s.gap !== start.gap).map(row).filter((line, at, all) => line !== all[at - 1]);
-    if (moved.length) console.log("     frames off the bottom:\n" + moved.map((line) => "       " + line).join("\n"));
-    assert.equal(await T(p, "chat-input").inputValue(), TYPED);
-    const letters = keys.slice(1).filter((s, at) => s.key !== "\n" && s.dock === keys[at].dock && s.y !== keys[at].y);
-    assert.deepEqual(letters.map(row), [], "the page's scroll after each letter that adds no line");
-    assert.deepEqual([...new Set(keys.map((s) => s.gap))], [start.gap], "the gap from the newest message to the composer after each key");
-    assert.deepEqual([...new Set(recorded.map((s) => s.gap))], [start.gap], "the gap from the newest message to the composer in every frame");
-    assert.deepEqual(dips(keys), [], "the page's height while the composer measures each key");
+const typeKeys = async (p, keys) => {
+  for (const key of keys) {
+    if (key === "\n") await p.keyboard.press("Enter");
+    else await p.keyboard.type(key);
+    await settled(p);
+    await p.evaluate((name) => window.qdProbe.take(name), key);
+  }
+};
+
+const verdict = async (p) => {
+  await typeKeys(p, await p.evaluate(() => window.qdProbe.KEYS));
+  const result = await p.evaluate(() => window.qdProbe.verdict());
+  console.log("     " + JSON.stringify(result.env));
+  if (ROWS) console.log(result.rows.map((line) => "       " + line).join("\n"));
+  return result;
+};
+
+const judge = ({ fails }) => {
+  const lines = fails.map((f) => f.line);
+  if (EXPECT === "shrink") {
+    assert.ok(
+      fails.some((f) => f.rule === "shrink"),
+      "the planted shrink was not seen: " + (lines.join("; ") || "no fail at all"),
+    );
+    console.log("     red on the shrink rule, as planted: " + fails.find((f) => f.rule === "shrink").line);
+    return;
+  }
+  assert.deepEqual(lines.slice(0, 20), [], `the shared probe's jumps (${lines.length})`);
+};
+
+const hold = async (p, message) => {
+  await message.evaluate((el) => {
+    const box = el.getBoundingClientRect();
+    el.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "touch", bubbles: true, clientX: box.left + 60, clientY: box.top + 12 }));
   });
+  const sheet = p.locator('[data-pop="message-actions"]');
+  await sheet.waitFor();
+  return sheet;
+};
+
+const cases = [];
+const it = (name, size, run, probe = false) => cases.push({ name: "[" + ENGINE + "] " + name, size, run, probe });
+
+for (const [label, width, height] of [
+  ["390 x 500, the keyboard's height taken off", 390, 500],
+  ["440 x 600, the keyboard's height taken off", 440, 600],
+  ["390 x 844", 390, 844],
+]) {
+  it(
+    `Chat on a phone (${label}), at the end of the chat: typing 40 keys and a Return after a two-line draft keeps the newest message just above the composer and the composer's bottom still in every painted frame, and nothing gets shorter while the box measures`,
+    phone(width, height),
+    async (p) => {
+      await ready(p, "end", true);
+      judge(await verdict(p));
+    },
+    true,
+  );
+  for (const [order, tapFirst] of [
+    ["the box tapped, then scrolled up", true],
+    ["scrolled up, then the box tapped", false],
+  ])
+    it(
+      `Chat on a phone (${label}), ${order} to read older messages: typing 40 keys and a Return after a two-line draft never moves the message being read in any painted frame, and nothing gets shorter while the box measures`,
+      phone(width, height),
+      async (p) => {
+        await ready(p, "reading", tapFirst);
+        judge(await verdict(p));
+      },
+      true,
+    );
 }
+
+it("Chat on a phone (390 x 500): with a chat open the window never scrolls; letters, a Return, a quote in the composer and Send all leave it still, and the sent message ends just above the composer", phone(390, 500), async (p) => {
+  await ready(p, "end", true);
+  for (const key of [..."Hello", "\n", ..."there"]) {
+    if (key === "\n") await p.keyboard.press("Enter");
+    else await p.keyboard.type(key);
+    await settled(p);
+    await p.evaluate((name) => window.qdProbe.take(name), key);
+  }
+  const sheet = await hold(p, T(p, "chat-bot-message").last());
+  await sheet.getByRole("button", { name: "Reply" }).tap();
+  await T(p, "chat-quote").waitFor();
+  await settled(p);
+  await p.evaluate(() => window.qdProbe.take("a quote in the composer"));
+  await T(p, "chat-send").click();
+  await p.waitForFunction(() => document.querySelector('[data-testid="chat-input"]').value === "");
+  await settled(p);
+  const sent = await p.evaluate(() => window.qdProbe.take("Send"));
+  const seen = (await p.evaluate(() => window.qdProbe.records())).flatMap((record) => [...record.frames, record]);
+  assert.deepEqual([...new Set(seen.map((s) => s.y))], [0], "the window's scroll, in every painted frame and after every step");
+  assert.ok(sent.newest <= sent.top + 1, `the sent message ends above the composer (message bottom ${sent.newest}, composer top ${sent.top})`);
+});
+
+it("Chat on a phone (390 x 500), at the end of the chat: the thread list is what scrolls, and it keeps its end in view after every one of 40 keys and a Return after a two-line draft", phone(390, 500), async (p) => {
+  const start = await ready(p, "end", true);
+  assert.equal(start.scroller, "list", "the part that scrolls in a chat (the thread list, not the window)");
+  const result = await verdict(p);
+  const records = await p.evaluate(() => window.qdProbe.records());
+  assert.deepEqual(
+    records.filter((record) => record.end > 1).map((record) => JSON.stringify(record.key) + " " + record.end),
+    [],
+    "the thread list's distance from its end after each key",
+  );
+  judge(result);
+});
 
 for (const [label, size, newline, hit] of [
   ["a phone (390 x 844)", { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true }, "Enter", "tap"],
@@ -146,7 +246,8 @@ for (const [label, size, newline, hit] of [
     keys.push(...(await typeText(p, TYPED.slice("First line".length), newline)));
     const again = await tall();
     await p.evaluate(() => (window.qdKey = "Send"));
-    await T(p, "chat-send")[hit]();
+    if (ENGINE === "webkit" && hit === "tap") console.log("     Send pressed by click: Playwright's WebKit gives no click for a tap on a button that cancels pointerdown");
+    await T(p, "chat-send")[ENGINE === "webkit" ? "click" : hit]();
     await p.waitForFunction(() => document.querySelector('[data-testid="chat-input"]').value === "");
     await frames(p);
     keys.push(await p.evaluate(() => window.qdTake()));
@@ -164,12 +265,13 @@ const browser = await engines[ENGINE].launch(ENGINE === "chromium" ? chromeLaunc
 try {
   for (const item of cases) {
     if (only.length && !only.some((part) => item.name.includes(part))) continue;
+    if (EXPECT && !item.probe) continue;
     const context = await browser.newContext({ ...item.size, reducedMotion: "reduce" });
     const page = await context.newPage();
     page.setDefaultTimeout(5000);
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    page.on("console", (message) => message.type() === "error" && errors.push(message.text()));
+    page.on("console", (message) => message.type() === "error" && !(ENGINE === "webkit" && message.text() === WEBKIT_VIEWPORT_LINE) && errors.push(message.text()));
     try {
       await item.run(page);
       assert.deepEqual(errors, [], "console errors");
@@ -186,5 +288,5 @@ try {
   server.kill();
 }
 
-console.log(`chat typing (${ENGINE}): ${passed} of ${passed + failed.length} pass`);
+console.log(`chat typing (${ENGINE}${EXPECT ? ", the planted shrink expected" : ""}): ${passed} of ${passed + failed.length} pass`);
 process.exit(failed.length ? 1 : 0);
