@@ -57,9 +57,9 @@ export function CardRow({
       data-testid="card-row"
       data-id={id}
     >
-      <span className="flex flex-none items-center gap-2 pt-px">
-        <PriorityTile priority={priority} />
-        {changed ? <ChangedDot label={changed} /> : <span className="size-2 flex-none" />}
+      <span className="flex flex-none items-start gap-2">
+        <PriorityTile priority={priority} className="mt-px" />
+        <span className="flex h-[1lh] w-2 flex-none items-center text-row">{changed && <ChangedDot label={changed} />}</span>
       </span>
       <span className="grid min-w-0 flex-1 gap-1.5">
         <Link
