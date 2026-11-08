@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Clipboa
 import type { ChatDraft } from "../../data/session";
 import { looksLikeSecret, SECRET_TEXT } from "../../domain/secrets";
 import type { World } from "../../domain/types";
+import { enterSends } from "../../platform/keyboard";
 import { useFilePicker, type PickSource } from "../../platform/pick-files";
 import { Button } from "../../ui/button";
 import { cx } from "../../ui/cx";
@@ -311,11 +312,9 @@ export function Composer({
               onPaste={pasted}
               enterKeyHint="enter"
               onKeyDown={(event) => {
-                if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
-                if (event.metaKey || event.ctrlKey || (!event.shiftKey && !window.matchMedia("(pointer: coarse)").matches)) {
-                  event.preventDefault();
-                  if (ready) onSend();
-                }
+                if (!enterSends(event.nativeEvent, window.matchMedia("(pointer: coarse)").matches)) return;
+                event.preventDefault();
+                if (ready) onSend();
               }}
               className="chat-compose-input min-h-11 min-w-0 flex-1 border-0 bg-transparent text-base leading-[1.4] text-ink outline-none"
               data-testid="chat-input"
