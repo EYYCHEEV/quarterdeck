@@ -401,6 +401,22 @@ for (const [width, height, unit] of [
   });
 }
 
+for (const [label, width, height, most] of [
+  ["an iPad upright (744 x 1133)", 744, 1133, 208],
+  ["an iPad sideways (1133 x 744)", 1133, 744, 208],
+  ["a phone (390 x 844)", 390, 844, 160],
+]) {
+  it(`Chat on ${label}: a long draft grows the box to ${most} px, then scrolls inside it`, phone(width, height), async (p) => {
+    await p.goto(origin + "/chat/iris");
+    await T(p, "chat-bot-message").first().waitFor();
+    const box = T(p, "chat-input");
+    await box.fill(Array.from({ length: 16 }, (_, n) => "Line " + (n + 1)).join("\n"));
+    await frames(p);
+    const [tall, inside] = await box.evaluate((el) => [Math.round(el.getBoundingClientRect().height), el.scrollHeight > el.clientHeight]);
+    assert.deepEqual([tall, inside], [most, true], "the box's height, and whether the rest scrolls inside it");
+  });
+}
+
 const browser = await engines[ENGINE].launch(ENGINE === "chromium" ? chromeLaunchOptions({ args: ["--no-sandbox"] }) : {});
 try {
   for (const item of cases) {
