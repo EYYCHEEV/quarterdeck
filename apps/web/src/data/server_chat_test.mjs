@@ -963,7 +963,7 @@ test("with cursor listed, the timed refresh asks only for the messages after the
   const replies = [h.add("steward", "bot", "one"), h.add("steward", "bot", "two")];
   await h.refresh();
   await h.time.advance(6_000);
-  assert.deepEqual(h.chatRequests(from), [LIST, AFTER("steward", "m3")]);
+  assert.deepEqual(h.chatRequests(from), [AFTER("steward", "m3"), LIST]);
   const shown = watcher.seen.at(-1);
   assert.deepEqual(shown.messages.map((one) => one.id), ["m1", "m2", "m3", ...replies.map((one) => one.id)]);
   assert.deepEqual([shown.seenUpTo, shown.seenAt, shown.working?.note, shown.features], ["m2", stamp(30), "reading", ["cursor"]]);
@@ -979,14 +979,14 @@ test("with cursor listed, a 409 cursor answer falls back to one newest-page read
   const first = h.add("steward", "bot", "one");
   await h.refresh();
   await h.time.advance(6_000);
-  assert.deepEqual(h.chatRequests(from), [LIST, AFTER("steward", "m3"), THREAD("steward")]);
+  assert.deepEqual(h.chatRequests(from), [AFTER("steward", "m3"), THREAD("steward"), LIST]);
   assert.equal(watcher.seen.at(-1).messages.at(-1).id, first.id);
   s.refuse = false;
   from = h.calls.length;
   const second = h.add("steward", "bot", "two");
   await h.refresh();
   await h.time.advance(6_000);
-  assert.deepEqual(h.chatRequests(from), [LIST, AFTER("steward", first.id)]);
+  assert.deepEqual(h.chatRequests(from), [AFTER("steward", first.id), LIST]);
   assert.deepEqual(watcher.seen.at(-1).messages.slice(-2).map((one) => one.id), [first.id, second.id]);
   assert.ok(once(watcher.seen.at(-1).messages));
 });
@@ -999,7 +999,7 @@ test("with cursor listed, a cursor answer that comes back after a newer newest-p
   const first = h.add("steward", "bot", "one");
   await h.refresh();
   await h.time.advance(6_000);
-  assert.deepEqual(h.chatRequests(from), [LIST, AFTER("steward", "m3")]);
+  assert.deepEqual(h.chatRequests(from), [AFTER("steward", "m3")]);
   const second = h.add("steward", "bot", "two");
   await h.source.chat.openThread("steward");
   assert.deepEqual(watcher.seen.at(-1).messages.slice(-2).map((one) => one.id), [first.id, second.id]);
@@ -1018,14 +1018,14 @@ test("with cursor listed, his sent message the server has not shown yet survives
   const reply = h.add("steward", "bot", "a reply");
   await h.refresh();
   await h.time.advance(6_000);
-  assert.deepEqual(h.chatRequests(from), [LIST, AFTER("steward", "m3")]);
+  assert.deepEqual(h.chatRequests(from), [AFTER("steward", "m3"), LIST]);
   assert.deepEqual(watcher.seen.at(-1).messages.slice(-2).map((one) => one.id), [reply.id, sent.id]);
   s.refuse = true;
   from = h.calls.length;
   const next = h.add("steward", "bot", "later");
   await h.refresh();
   await h.time.advance(6_000);
-  assert.deepEqual(h.chatRequests(from), [LIST, AFTER("steward", reply.id), THREAD("steward")]);
+  assert.deepEqual(h.chatRequests(from), [AFTER("steward", reply.id), THREAD("steward"), LIST]);
   assert.deepEqual(watcher.seen.at(-1).messages.slice(-3).map((one) => one.id), [reply.id, next.id, sent.id]);
   assert.ok(once(watcher.seen.at(-1).messages));
 });
@@ -1039,6 +1039,176 @@ test("without cursor listed, the timed refresh reads the newest page as before a
   assert.deepEqual(h.chatRequests(from), [LIST, THREAD("steward")]);
   assert.equal(watcher.seen.at(-1).messages.at(-1).id, reply.id);
   assert.ok(!h.chatRequests().some((one) => one.includes("after=")));
+});
+
+const STREAM_OPEN = 1;
+const afterCalls = (h, from = 0) => h.calls.slice(from).filter((call) => call.method === "GET" && call.path.includes("&after="));
+const creditsBefore = (h, at) => h.calls.filter((call) => call.at < at && call.at >= at - 60_000).reduce((total, call) => total + (call.method === "POST" ? 2 : 1), 0);
+
+test("with cursor listed and the chat open, a refresh that names chats makes the next request the read after the newest held message, at once and with no list read before it, and the list read follows five seconds later", async () => {
+  const { h, watcher } = await cursorThread();
+  await h.source.chat.listChats();
+  await h.time.advance(1_000);
+  const from = h.calls.length;
+  const reply = h.add("steward", "bot", "a reply");
+  const refreshedAt = h.time.now() - NOW;
+  await h.refresh();
+  await pass(h, 100);
+  assert.deepEqual(h.chatRequests(from), [AFTER("steward", "m3")]);
+  assert.equal(h.calls[from].at, refreshedAt);
+  assert.equal(watcher.seen.at(-1).messages.at(-1).id, reply.id);
+  await pass(h, 5_000);
+  assert.deepEqual(h.chatRequests(from), [AFTER("steward", "m3"), LIST]);
+  assert.equal(h.calls[from + 1].at - refreshedAt, 5_000);
+});
+
+test("twenty refreshes while a read after the newest held message is in flight make exactly one more read after it, no list read inside the spacing, and credits inside the automatic budget of twenty-one", async () => {
+  const { s, h, watcher } = await cursorThread();
+  const from = h.calls.length;
+  const gate = Promise.withResolvers();
+  s.gate = gate;
+  const first = h.add("steward", "bot", "one");
+  await h.refresh();
+  await pass(h, 100);
+  assert.deepEqual(h.chatRequests(from), [AFTER("steward", "m3")]);
+  const second = h.add("steward", "bot", "two");
+  for (let n = 0; n < 19; n += 1) {
+    await h.refresh();
+    await pass(h, 100);
+  }
+  assert.deepEqual(h.chatRequests(from), [AFTER("steward", "m3")]);
+  gate.resolve();
+  await pass(h, 1_000);
+  assert.deepEqual(h.chatRequests(from), [AFTER("steward", "m3"), AFTER("steward", first.id)]);
+  assert.deepEqual(watcher.seen.at(-1).messages.slice(-2).map((one) => one.id), [first.id, second.id]);
+  assert.ok(once(watcher.seen.at(-1).messages));
+  assert.ok(h.credits(from) <= 21);
+});
+
+for (const status of [401, 403]) {
+  test("a read after the newest held message answered with " + status + " ends the session with nothing painted, keeps no rows, and after signing in the chat opens from the newest page", async () => {
+    let end = false;
+    const gate = Promise.withResolvers();
+    const s = afterReads();
+    const h = serve(lib, { thread: CURSOR, read: (path) => (end && path.includes("&after=") ? gate.promise.then(() => json({ error: "session" }, status)) : s.read(path)) });
+    s.threads = h.threads;
+    await h.boot();
+    await h.source.chat.openThread("steward");
+    const watcher = await h.watchThread("steward");
+    await h.source.chat.listChats();
+    await tick();
+    await h.time.advance(6_000);
+    assert.equal(h.worlds.at(-1).bots.length, 3);
+    const painted = watcher.seen.length;
+    end = true;
+    const from = h.calls.length;
+    h.add("steward", "bot", "a reply");
+    await h.refresh();
+    await pass(h, 100);
+    assert.deepEqual(h.chatRequests(from), [AFTER("steward", "m3")]);
+    await h.refresh();
+    gate.resolve();
+    await pass(h, 1_000);
+    assert.equal(watcher.seen.length, painted);
+    const after = h.calls.length;
+    await assert.rejects(h.source.chat.listChats(), named("SignInRequired"));
+    await assert.rejects(h.source.chat.openThread("steward"), named("SignInRequired"));
+    await h.time.advance(10_000);
+    assert.equal(h.calls.length, after);
+    end = false;
+    h.source.signIn();
+    await h.source.load();
+    await tick();
+    assert.deepEqual(h.worlds.at(-1).bots, []);
+    const reopened = h.calls.length;
+    await h.source.chat.openThread("steward");
+    await h.watchThread("steward");
+    await h.time.advance(1_000);
+    assert.deepEqual(h.chatRequests(reopened), [THREAD("steward")]);
+  });
+}
+
+test("every list read starts at least five seconds after the request before it, with reads after the newest held message between them and replies arriving in bursts", async () => {
+  const { h } = await cursorThread();
+  await h.watchRows();
+  const from = h.calls.length;
+  for (let second = 0; second < 40; second += 1) {
+    if (second % 7 < 2) {
+      h.add("steward", "bot", "reply " + second);
+      await h.refresh();
+    }
+    await pass(h, 1_000);
+  }
+  await pass(h, 10_000);
+  const sent = h.calls.filter((call) => call.method === "GET");
+  const lists = h.calls.slice(from).filter((call) => call.method === "GET" && call.path === "/captain/api/chats");
+  assert.ok(lists.length >= 2, "list reads: " + lists.length);
+  assert.ok(afterCalls(h, from).length >= 6, "reads after the newest held message: " + afterCalls(h, from).length);
+  for (const list of lists) {
+    const before = sent.filter((call) => call.at < list.at).at(-1);
+    assert.ok(before === undefined || list.at - before.at >= 5_000, "list at " + list.at + " after " + before?.path + " at " + before?.at);
+  }
+});
+
+test("with cursor listed, a refresh that arrives in a hidden tab reads the list first and then the messages after the newest held one when the tab returns", async () => {
+  const { h, watcher } = await cursorThread();
+  h.hide();
+  const from = h.calls.length;
+  const reply = h.add("steward", "bot", "a reply");
+  await h.refresh();
+  await h.time.advance(10_000);
+  assert.deepEqual(h.chatRequests(from), []);
+  h.show();
+  await h.time.advance(6_000);
+  await h.time.advance(6_000);
+  assert.deepEqual(h.chatRequests(from), [LIST, AFTER("steward", "m3")], h.requests(from).join(", "));
+  assert.equal(watcher.seen.at(-1).messages.at(-1).id, reply.id);
+});
+
+test("with cursor listed and no thread open, a refresh that names chats reads only the list, and one that names only cards reads no chat request", async () => {
+  const { h, watcher } = await cursorThread();
+  watcher.stop();
+  await h.watchRows();
+  await h.time.advance(6_000);
+  let from = h.calls.length;
+  h.add("steward", "bot", "a reply");
+  await h.refresh();
+  await h.time.advance(6_000);
+  assert.deepEqual(h.chatRequests(from), [LIST]);
+  await h.watchThread("steward");
+  await h.time.advance(6_000);
+  from = h.calls.length;
+  await h.refresh({ cards: true, mail: false, chats: false });
+  await h.time.advance(10_000);
+  assert.deepEqual(h.chatRequests(from), []);
+});
+
+test("with the automatic budget spent, a refresh that names chats waits for a credit to return, and no read after the newest held message starts with twenty or more credits spent in the last minute", async () => {
+  const { h, watcher } = await cursorThread();
+  const from = h.calls.length;
+  const used = creditsBefore(h, h.time.now() - NOW) + STREAM_OPEN;
+  for (let n = 0; n < 40; n += 1) {
+    h.add("steward", "bot", "reply " + n);
+    await h.refresh();
+    await pass(h, 100);
+  }
+  assert.equal(afterCalls(h, from).length, 21 - used);
+  await h.time.advance(60_000);
+  assert.equal(watcher.seen.at(-1).messages.at(-1).text, "reply 39");
+  for (const call of afterCalls(h, from)) assert.ok(creditsBefore(h, call.at) + STREAM_OPEN <= 20, "read at " + call.at + " with " + creditsBefore(h, call.at) + " credits in the minute before");
+});
+
+test("leaving the chat before the read after the newest held message starts cancels it, and opening the chat again reads the list first as it does without the event", async () => {
+  const { h, watcher } = await cursorThread();
+  const from = h.calls.length;
+  h.add("steward", "bot", "a reply");
+  await h.refresh();
+  watcher.stop();
+  await h.time.advance(6_000);
+  assert.deepEqual(h.chatRequests(from), []);
+  await h.watchThread("steward");
+  await h.time.advance(6_000);
+  assert.deepEqual(h.chatRequests(from), [LIST, AFTER("steward", "m3")]);
 });
 
 test("a row whose last is empty reads no thread", async () => {
