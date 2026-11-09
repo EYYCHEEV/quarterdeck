@@ -6018,6 +6018,47 @@ it("Server Chat: with cursor listed, a bot reply that arrives on the refresh is 
   equal([asked.threads.filter((one) => one.startsWith("iris")), ids.slice(-2), ids.length === new Set(ids).size], [["iris", "iris after iris-m30"], ["iris-m30", "iris-reply"], true], "the iris reads, the last rows in order, each row once");
 });
 
+it("Server Chat on a phone: with cursor listed, a bot reply that arrives one second after his message turns Delivered is on screen within one round trip and 400 ms of the refresh", PHONE, async (p) => {
+  const ROUND_TRIP = 562.5;
+  const REPLY = { id: "iris-reply", from: "bot", text: "A reply after his message.", at: "2026-11-06T00:35:00-05:00", refs: [] };
+  const sentRows = [];
+  let arrived = false;
+  await serverBuildChat(p, {
+    rows: () => chatPayload("rows.json").map((row) => (row.bot.id === "iris" && arrived ? { ...row, last: REPLY.id, at: REPLY.at, preview: REPLY.text } : row)),
+    "iris": (messages) => [...messages, ...sentRows, ...(arrived ? [REPLY] : [])],
+    shape: (body) => ({ ...body, features: ["cursor"] }),
+    post: (route, body, n) => {
+      const sent = chatSent(body, n);
+      sentRows.push({ id: sent.id, from: sent.from, text: sent.text, at: sent.at, refs: sent.refs ?? [], clientId: sent.clientId });
+      return chatReply(route, 200, sent);
+    },
+  });
+  await p.addInitScript(() => {
+    const Quiet = window.EventSource;
+    window.EventSource = class extends Quiet {
+      constructor(...args) {
+        super(...args);
+        window.qdStream = this;
+      }
+    };
+  });
+  await p.route((url) => url.pathname.startsWith("/captain/"), async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, ROUND_TRIP));
+    await route.fallback();
+  });
+  await chatOpened(p);
+  await T(p, "chat-input").fill("Please send the sheet.");
+  await T(p, "chat-send").click();
+  await bubble(p, "Please send the sheet.").locator('[data-testid="chat-delivered"]').waitFor();
+  await p.waitForTimeout(1_000);
+  arrived = true;
+  const refreshed = Date.now();
+  await p.evaluate(() => window.qdStream.dispatchEvent(new MessageEvent("refresh", { data: '{"cards":false,"mail":false,"chats":true}' })));
+  await p.locator('[data-message-id="iris-reply"]').waitFor({ timeout: 10_000 });
+  const took = Date.now() - refreshed;
+  assert.ok(took <= ROUND_TRIP + 400, "the reply showed " + Math.round(took) + " ms after the refresh, over one round trip and 400 ms");
+});
+
 it("Server Chat: leaving the chat while a send is out and coming back shows the same Sending row, and it turns Sent once when the answer lands", MAC, async (p) => {
   const { promise: held, resolve: release } = Promise.withResolvers();
   const asked = await serverBuildChat(p, {

@@ -76,6 +76,7 @@ export function createServerChat(host: ChatHost): ChatPart {
   let staleAt: number | null = null;
   let busy = false;
   const marked = new Map<string, string>();
+  const poked = new Set<string>();
   let reading: Promise<void> | null = null;
   let sending = 0;
   const unshown = new Map<string, Map<string, ChatMessage>>();
@@ -170,15 +171,28 @@ export function createServerChat(host: ChatHost): ChatPart {
     return rowsOf(listed ?? []);
   }
 
-  function cursorOf(bot: string): string | null {
+  function newestOf(bot: string): ChatMessage | null {
     const held = threads.get(bot);
-    if (!held?.features.includes("cursor")) return null;
+    if (!held) return null;
     const mine = unshown.get(bot);
     for (let at = held.messages.length - 1; at >= 0; at -= 1) {
       const one = held.messages[at];
-      if (one.clientId === undefined || !mine?.has(one.clientId)) return one.id;
+      if (one.clientId === undefined || !mine?.has(one.clientId)) return one;
     }
     return null;
+  }
+
+  function cursorOf(bot: string): string | null {
+    return threads.get(bot)?.features.includes("cursor") ? (newestOf(bot)?.id ?? null) : null;
+  }
+
+  function showNewest(bot: string): void {
+    const newest = newestOf(bot);
+    const row = listed?.find((one) => one.bot.id === bot);
+    if (!listed || !newest || !row || row.last === newest.id || newest.text.trim() === "") return;
+    if (row.last !== "" && !(Date.parse(newest.at) > Date.parse(row.at))) return;
+    listed = listed.map((one) => (one === row ? { ...one, preview: newest.text, at: newest.at, last: newest.id } : one));
+    for (const heard of [...rowWatchers]) heard();
   }
 
   async function readThread(bot: string, automatic: boolean): Promise<void> {
@@ -345,6 +359,8 @@ export function createServerChat(host: ChatHost): ChatPart {
 
   function due(): ChatDue | null {
     if (busy || !host.live()) return null;
+    const [poke] = poked;
+    if (poke !== undefined) return { kind: "thread", bot: poke };
     if (wanted && onScreen()) return { kind: "list" };
     if (listed !== null) {
       for (const [bot, set] of threadWatchers) {
@@ -374,9 +390,11 @@ export function createServerChat(host: ChatHost): ChatPart {
           if (reading === flight) reading = null;
         }
       } else {
+        poked.delete(job.bot);
         const row = listed?.find((one) => one.bot.id === job.bot);
         if (row) tried.set(job.bot, stamp(row));
         await readThread(job.bot, true);
+        showNewest(job.bot);
       }
     } catch {
       return;
@@ -387,8 +405,10 @@ export function createServerChat(host: ChatHost): ChatPart {
   }
 
   function event(): void {
-    if (onScreen()) wanted = true;
-    else staleAt = host.clock();
+    if (onScreen()) {
+      wanted = true;
+      for (const [bot, set] of threadWatchers) if (set.size > 0 && threads.get(bot)?.features.includes("cursor")) poked.add(bot);
+    } else staleAt = host.clock();
     host.arm();
   }
 
@@ -407,6 +427,7 @@ export function createServerChat(host: ChatHost): ChatPart {
     olderFlights.clear();
     listFlight = null;
     wanted = false;
+    poked.clear();
     staleAt = null;
   }
 
@@ -427,7 +448,10 @@ export function createServerChat(host: ChatHost): ChatPart {
       return () => {
         const set = threadWatchers.get(bot);
         set?.delete(onChange);
-        if (set?.size === 0) marked.delete(bot);
+        if (set?.size === 0) {
+          marked.delete(bot);
+          poked.delete(bot);
+        }
         host.arm();
       };
     },
