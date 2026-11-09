@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Clipboa
 import type { ChatDraft } from "../../data/session";
 import { looksLikeSecret, SECRET_TEXT } from "../../domain/secrets";
 import type { World } from "../../domain/types";
+import { enterSends, pageKey, watchKeyboard, type KeyboardWatch } from "../../platform/keyboard";
 import { useFilePicker, type PickSource } from "../../platform/pick-files";
 import { Button } from "../../ui/button";
 import { cx } from "../../ui/cx";
@@ -102,6 +103,7 @@ export function Composer({
   draft,
   onDraft,
   onSend,
+  onPage,
   cards,
   inputRef,
   onAttach,
@@ -115,7 +117,8 @@ export function Composer({
   world: World;
   draft: ChatDraft;
   onDraft: (draft: ChatDraft) => void;
-  onSend: () => void;
+  onSend: () => boolean;
+  onPage: (direction: -1 | 1) => void;
   cards: ReactNode;
   inputRef: RefObject<HTMLTextAreaElement | null>;
   onAttach: (files: File[]) => void;
@@ -133,7 +136,22 @@ export function Composer({
   const [pasteBlocked, setPasteBlocked] = useState(false);
   const [pasteNotice, setPasteNotice] = useState<"again" | "unavailable" | null>(null);
   const pasteBypass = useRef(false);
+  const keyboard = useRef<KeyboardWatch | null>(null);
   const ready = draft.text.trim().length > 0 || draft.files.length > 0;
+
+  useEffect(() => {
+    const watch = watchKeyboard(window);
+    keyboard.current = watch;
+    return () => {
+      watch.stop();
+      keyboard.current = null;
+    };
+  }, []);
+
+  const submit = () => {
+    if (!ready || !onSend()) return;
+    if (keyboard.current?.up() && window.matchMedia("(min-width: 640px)").matches) inputRef.current?.blur();
+  };
 
   const clearPaste = useCallback(() => {
     pasteBypass.current = false;
@@ -161,7 +179,7 @@ export function Composer({
     if (!el || !form) return;
     form.style.minHeight = form.offsetHeight + "px";
     el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, 160) + "px";
+    el.style.height = Math.min(el.scrollHeight, window.matchMedia("(min-width: 640px)").matches ? 208 : 160) + "px";
     form.style.minHeight = "";
   }, [draft.text, inputRef]);
 
@@ -269,7 +287,7 @@ export function Composer({
           className="chat-composer-form relative min-w-0"
           onSubmit={(event) => {
             event.preventDefault();
-            if (ready) onSend();
+            submit();
           }}
         >
           {draft.files.length > 0 && <DraftStrip files={draft.files} onRemove={onUnattach} />}
@@ -311,11 +329,15 @@ export function Composer({
               onPaste={pasted}
               enterKeyHint="enter"
               onKeyDown={(event) => {
-                if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
-                if (event.metaKey || event.ctrlKey || (!event.shiftKey && !window.matchMedia("(pointer: coarse)").matches)) {
+                const direction = pageKey(event.nativeEvent, event.currentTarget);
+                if (direction !== 0) {
                   event.preventDefault();
-                  if (ready) onSend();
+                  onPage(direction);
+                  return;
                 }
+                if (!enterSends(event.nativeEvent, keyboard.current?.up() ?? false)) return;
+                event.preventDefault();
+                submit();
               }}
               className="chat-compose-input min-h-11 min-w-0 flex-1 border-0 bg-transparent text-base leading-[1.4] text-ink outline-none"
               data-testid="chat-input"
@@ -323,7 +345,7 @@ export function Composer({
             <button
               type="submit"
               disabled={!ready}
-              onPointerDown={(event) => event.preventDefault()}
+              onPointerDown={(event) => event.pointerType === "mouse" && event.preventDefault()}
               onMouseDown={(event) => event.preventDefault()}
               aria-label="Send"
               title="Send"

@@ -1,0 +1,18 @@
+diff --git a/src/screens/chat/composer.tsx b/src/screens/chat/composer.tsx
+index 243b5b9..402eea5 100644
+--- a/src/screens/chat/composer.tsx
++++ b/src/screens/chat/composer.tsx
+@@ -157,12 +157,9 @@ export function Composer({
+ 
+   useLayoutEffect(() => {
+     const el = inputRef.current;
+-    const form = el?.form;
+-    if (!el || !form) return;
+-    form.style.minHeight = form.offsetHeight + "px";
++    if (!el) return;
+     el.style.height = "auto";
+     el.style.height = Math.min(el.scrollHeight, window.matchMedia("(min-width: 640px)").matches ? 208 : 160) + "px";
+-    form.style.minHeight = "";
+   }, [draft.text, inputRef]);
+ 
+   useEffect(() => {

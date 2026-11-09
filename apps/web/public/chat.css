@@ -210,9 +210,12 @@
   height: 48px;
 }
 
+.chat-scroll {
+  overflow-anchor: none;
+}
+
 .chat-composer-dock {
-  position: sticky;
-  bottom: 0;
+  position: relative;
   z-index: 10;
   padding: 12px 30px max(24px, env(safe-area-inset-bottom));
   pointer-events: none;
@@ -253,6 +256,12 @@
   max-height: 10rem;
   resize: none;
   padding: 11px 2px;
+}
+
+@media (min-width: 640px) {
+  .chat-compose-input {
+    max-height: 13rem;
+  }
 }
 
 .chat-composer-form [data-testid="cite-btn"] {
@@ -402,8 +411,8 @@
 }
 
 html:has(.chat-view) {
-  scroll-padding-top: 90px;
-  scroll-padding-bottom: 180px;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 .chat-bot-bubble [data-testid="ref-chip"] {

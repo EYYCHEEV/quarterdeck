@@ -4,6 +4,7 @@ import { chromeLaunchOptions } from "./tools/browser.mjs";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { startAppServer } from "./tools/app-server.mjs";
+import { standInKeyboard } from "./tools/stand-in-keyboard.mjs";
 import { animationsOf, blankSeen, frames, motionPair, moveOf, pseudos, QUICK, runningAnimations, SCREEN, settle, STANDARD, viewTransitionCalls, watchBlank } from "./motion-steps.mjs";
 
 const build = spawnSync(process.execPath, ["tools/build-app.mjs", "--fixtures"], { stdio: "inherit" });
@@ -2895,7 +2896,7 @@ for (const [where, size, menu] of [
   ["a phone", PHONE, true],
   ["an iPad 1024 wide", { viewport: { width: 1024, height: 768 }, hasTouch: true, isMobile: true }, true],
 ])
-  it("Frame on " + where + ": scrolling over the sidebar" + (menu ? " in the menu" : "") + " never moves the page behind it, at either end of the list", size, async (p) => {
+  it("Frame on " + where + ": scrolling over the sidebar" + (menu ? " in the menu" : "") + " never moves the chat behind it, at either end of the list", size, async (p) => {
     await open(p, "/chat/iris");
     await T(p, "chat-bot-message").first().waitFor();
     await frames(p, 3);
@@ -2905,13 +2906,19 @@ for (const [where, size, menu] of [
     }
     const nav = p.locator(menu ? '[data-pop="drawer"]' : "aside").getByRole("navigation", { name: "Quarterdeck" });
     const box = await nav.boundingBox();
-    const [start, long] = await p.evaluate(() => [Math.round(window.scrollY), document.documentElement.scrollHeight > window.innerHeight + 400]);
+    const place = () =>
+      p.evaluate(() => {
+        const pane = document.querySelector('[data-testid="chat-scroll"]');
+        return [Math.round(pane.scrollTop), pane.scrollHeight > pane.clientHeight + 400, Math.round(window.scrollY)];
+      });
+    const [start, long] = await place();
     await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     for (const step of [-1500, 1500, 1500, -1500]) {
       await p.mouse.wheel(0, step);
       await frames(p, 4);
     }
-    equal([long, start > 0, await p.evaluate(() => Math.round(window.scrollY))], [true, true, start], "the page is long and starts below its top; after scrolling up and down over the sidebar it is where it was");
+    const [after, , page] = await place();
+    equal([long, start > 0, after, page], [true, true, start, 0], "the chat is long and starts below its top; after scrolling up and down over the sidebar it is where it was, and the page never scrolls");
   });
 
 it("Frame: Cmd+K opens Search, results come grouped, Esc closes it", MAC, async (p) => {
@@ -5368,10 +5375,11 @@ const boxReads = (p, text) => p.waitForFunction((want) => document.querySelector
 const boxEmpty = (p) => boxReads(p, "");
 
 for (const [name, size] of [["a phone", PHONE], ["an iPad upright", IPAD_UPRIGHT]])
-  it("Server Chat on " + name + ": Return in the message box starts a new line and sends nothing, Send sends it, and Cmd or Ctrl plus Return sends", size, async (p) => {
+  it("Server Chat on " + name + " with the on-screen keyboard up: Return in the message box starts a new line and sends nothing, Send sends it, and Cmd or Ctrl plus Return sends", size, async (p) => {
     const asked = await serverBuildChat(p);
     await chatOpened(p);
     equal(await T(p, "chat-input").getAttribute("enterkeyhint"), "enter", "the Return key's hint");
+    await p.evaluate(standInKeyboard);
     await T(p, "chat-input").click();
     await p.keyboard.type("a");
     await p.keyboard.press("Enter");
@@ -5380,9 +5388,11 @@ for (const [name, size] of [["a phone", PHONE], ["an iPad upright", IPAD_UPRIGHT
     equal([await T(p, "chat-input").inputValue(), sentWords(asked)], ["a\nb", []], "the box and the POSTs after Return");
     await T(p, "chat-send").tap();
     await boxEmpty(p);
+    await T(p, "chat-input").click();
     await p.keyboard.type("c");
     await p.keyboard.press("Control+Enter");
     await boxEmpty(p);
+    await T(p, "chat-input").click();
     await p.keyboard.type("d");
     await p.keyboard.press("Meta+Enter");
     await boxEmpty(p);

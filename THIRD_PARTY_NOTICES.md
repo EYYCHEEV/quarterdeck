@@ -16,6 +16,18 @@ The notices for the packages that ship in the web app are generated from `apps/w
   - `apps/web/src/ui/copy.ts` from `apps/web/src/hooks/useCopyToClipboard.ts`: copy text with the clipboard API, fall back to selecting a hidden field and the browser copy command when the API is missing, and show a short "copied" state.
   - The code block frame in `apps/web/src/ui/markdown.tsx` (language label, Wrap lines and Copy code) from `apps/web/src/components/chat/MarkdownCodeBlock.tsx`. The markdown parser is Quarterdeck's own.
   - The chat package of the server, `apps/server/qd-web`, which arrives in a later change, adapts the interaction design for a compact message list, streaming refresh, optimistic sends with stable retry identifiers, canonical-message reconciliation, seen and typing state, and safe Markdown and code-block rendering, from the same commit.
+  - `apps/web/src/platform/keyboard.ts` from `apps/web/src/composer-logic.ts` and `apps/web/src/lib/softwareKeyboard.ts` at commit `25bf84ab07f53f141c20239c63e383823a9d5ea0`. Return sends unless the on-screen keyboard is up; Shift or Option makes a new line; and the Enter that ends an IME composition (keyCode 229) never sends. The keyboard counts as up when the visible height drops more than 150 px at the same width. Quarterdeck compares with the tallest height seen at that width while no text box has focus, and on a touch screen with no such height it counts the keyboard as up.
+  - The rest of the chat's iPad typing behaviour, from the same commit `25bf84ab07f53f141c20239c63e383823a9d5ea0`:
+    - The page keys, in `apps/web/src/platform/keyboard.ts` and `apps/web/src/screens/chat/chat.tsx`, from `apps/web/src/components/chat/pageScrollController.ts`. Page Up and Page Down typed in the message box page the message list only when the box cannot scroll that way (within 1 px), and never with a modifier key or during an IME composition. Each step is the list's height less 36 px. Quarterdeck moves in one step, without T3 Code's animation.
+    - Letting go of the message box after a send while the on-screen keyboard is up, in `apps/web/src/screens/chat/composer.tsx`, from `apps/web/src/components/chat/ChatComposer.tsx`. Quarterdeck does it from 640 px wide only.
+    - The chat's height, the small viewport height (`svh`) below 768 px and the dynamic one (`dvh`) from 768 px, in `apps/web/src/screens/chat/chat.tsx`, from `apps/web/src/components/ThreadRouteView.tsx`.
+    - The message box's 208 px height cap, in `apps/web/src/screens/chat/composer.tsx` and `apps/web/public/chat.css`, from `apps/web/src/components/ComposerPromptEditorTiptap.tsx`. Quarterdeck keeps 160 px below 640 px wide.
+
+## Ionic Framework
+
+- Project: Ionic Framework, https://github.com/ionic-team/ionic-framework
+- License: MIT, Copyright (c) 2015-present Drifty Co. Full text: [licenses/IONIC-MIT.txt](licenses/IONIC-MIT.txt).
+- Credit: `apps/web/src/platform/keyboard.ts` tells that the on-screen keyboard is up when the visible height drops by more than a threshold at the same width. That idea comes from Ionic's keyboard assist (`core/src/utils/keyboard/keyboard.ts`), by way of T3 Code. Nothing is copied as is.
 
 ## Tailwind CSS
 
