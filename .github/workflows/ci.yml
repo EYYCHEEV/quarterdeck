@@ -421,6 +421,208 @@ jobs:
             exit 1
           fi
 
+  ios-typing-26:
+    name: iOS typing lane on iOS 26
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: macos-26
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    env:
+      IOS_RUNTIME: "26"
+      IOS_MODEL: iPhone 17
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Fetch the pinned Node
+        run: python3 tools/ci/fetch-pinned node-darwin-arm64
+
+      - name: Put the pinned Node first on the path
+        run: echo "$RUNNER_TEMP/pinned/node-v22.21.0-darwin-arm64/bin" >> "$GITHUB_PATH"
+
+      - name: Install from the lock file
+        working-directory: apps/web
+        run: npm ci --ignore-scripts
+
+      - name: Record the versions
+        run: |
+          {
+            echo "- macOS $(sw_vers -productVersion), build $(sw_vers -buildVersion)"
+            echo "- $(xcodebuild -version | tr '\n' ' ')"
+            echo "- safaridriver $(safaridriver --version 2>&1 | head -n 1)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Choose the simulator
+        run: |
+          xcrun simctl list -j devices available > "$RUNNER_TEMP/simulators.json"
+          python3 tools/ci/ios_simulator.py pick "$IOS_RUNTIME" "$IOS_MODEL" < "$RUNNER_TEMP/simulators.json" > "$RUNNER_TEMP/simulator.env"
+          cat "$RUNNER_TEMP/simulator.env" >> "$GITHUB_ENV"
+          sed 's/^/- /' "$RUNNER_TEMP/simulator.env" >> "$GITHUB_STEP_SUMMARY"
+          echo "- model: $IOS_MODEL" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Turn on Remote Automation and boot the simulator
+        run: |
+          defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool NO
+          if xcrun simctl spawn "$QD_UDID" defaults write com.apple.WebInspector RemoteAutomationEnabled -bool YES > /dev/null 2>&1; then
+            echo "- Remote Automation preference written before the first boot" >> "$GITHUB_STEP_SUMMARY"
+          else
+            xcrun simctl boot "$QD_UDID"
+            xcrun simctl bootstatus "$QD_UDID" -b
+            xcrun simctl spawn "$QD_UDID" defaults write com.apple.WebInspector RemoteAutomationEnabled -bool YES || { echo "iOS typing lane: Remote Automation is not on in the simulator, the preference could not be written"; exit 1; }
+            xcrun simctl shutdown "$QD_UDID"
+            echo "- Remote Automation preference written after a first boot, because simctl spawn needs a booted device" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          xcrun simctl boot "$QD_UDID"
+          xcrun simctl bootstatus "$QD_UDID" -b
+
+      - name: Start safaridriver
+        run: |
+          sudo safaridriver --enable
+          driver_port=$(python3 tools/ci/ios_simulator.py port)
+          safaridriver --port "$driver_port" > "$RUNNER_TEMP/safaridriver.log" 2>&1 &
+          python3 tools/ci/ios_simulator.py wait safaridriver "http://127.0.0.1:$driver_port/status" 60
+          echo "QD_WEBDRIVER=http://127.0.0.1:$driver_port" >> "$GITHUB_ENV"
+
+      - name: Check that safaridriver can open a session on the simulator
+        run: python3 tools/ci/ios_simulator.py session "$QD_WEBDRIVER" "$QD_UDID"
+
+      - name: Build and serve the app on a loopback port
+        working-directory: apps/web
+        run: |
+          node tools/build-app.mjs --fixtures
+          app_port=$(python3 ../../tools/ci/ios_simulator.py port)
+          PORT="$app_port" node tools/serve-app.mjs > "$RUNNER_TEMP/app-server.log" 2>&1 &
+          python3 ../../tools/ci/ios_simulator.py wait "the app server" "http://127.0.0.1:$app_port/" 60
+          echo "QD_ORIGIN=http://127.0.0.1:$app_port" >> "$GITHUB_ENV"
+
+      - name: Typing test on the real app
+        run: node apps/web/src/screens/chat/chat_typing_ios.mjs
+
+      - name: Build and serve a copy with the old typing code planted
+        run: |
+          planted="$RUNNER_TEMP/planted"
+          mkdir "$planted"
+          git archive HEAD:apps/web | tar -x -f - -C "$planted"
+          ln -s "$GITHUB_WORKSPACE/apps/web/node_modules" "$planted/node_modules"
+          cd "$planted"
+          git apply --check src/screens/chat/pre-367.patch
+          git apply src/screens/chat/pre-367.patch
+          node tools/build-app.mjs --fixtures
+          planted_port=$(python3 "$GITHUB_WORKSPACE/tools/ci/ios_simulator.py" port)
+          PORT="$planted_port" node tools/serve-app.mjs > "$RUNNER_TEMP/planted-server.log" 2>&1 &
+          python3 "$GITHUB_WORKSPACE/tools/ci/ios_simulator.py" wait "the planted app server" "http://127.0.0.1:$planted_port/" 60
+          echo "QD_PLANTED_ORIGIN=http://127.0.0.1:$planted_port" >> "$GITHUB_ENV"
+
+      - name: Typing test on the planted copy must fail on the shrink rule
+        env:
+          QD_EXPECT: shrink
+        run: QD_ORIGIN="$QD_PLANTED_ORIGIN" node apps/web/src/screens/chat/chat_typing_ios.mjs
+
+  ios-typing-27:
+    name: iOS typing lane on iOS 27
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: xcode-27
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    env:
+      IOS_RUNTIME: "27.0"
+      IOS_MODEL: iPhone 17
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Fetch the pinned Node
+        run: python3 tools/ci/fetch-pinned node-darwin-arm64
+
+      - name: Put the pinned Node first on the path
+        run: echo "$RUNNER_TEMP/pinned/node-v22.21.0-darwin-arm64/bin" >> "$GITHUB_PATH"
+
+      - name: Install from the lock file
+        working-directory: apps/web
+        run: npm ci --ignore-scripts
+
+      - name: Record the versions
+        run: |
+          {
+            echo "- macOS $(sw_vers -productVersion), build $(sw_vers -buildVersion)"
+            echo "- $(xcodebuild -version | tr '\n' ' ')"
+            echo "- safaridriver $(safaridriver --version 2>&1 | head -n 1)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Choose the simulator
+        run: |
+          xcrun simctl list -j devices available > "$RUNNER_TEMP/simulators.json"
+          python3 tools/ci/ios_simulator.py pick "$IOS_RUNTIME" "$IOS_MODEL" < "$RUNNER_TEMP/simulators.json" > "$RUNNER_TEMP/simulator.env"
+          cat "$RUNNER_TEMP/simulator.env" >> "$GITHUB_ENV"
+          sed 's/^/- /' "$RUNNER_TEMP/simulator.env" >> "$GITHUB_STEP_SUMMARY"
+          echo "- model: $IOS_MODEL" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Turn on Remote Automation and boot the simulator
+        run: |
+          defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool NO
+          if xcrun simctl spawn "$QD_UDID" defaults write com.apple.WebInspector RemoteAutomationEnabled -bool YES > /dev/null 2>&1; then
+            echo "- Remote Automation preference written before the first boot" >> "$GITHUB_STEP_SUMMARY"
+          else
+            xcrun simctl boot "$QD_UDID"
+            xcrun simctl bootstatus "$QD_UDID" -b
+            xcrun simctl spawn "$QD_UDID" defaults write com.apple.WebInspector RemoteAutomationEnabled -bool YES || { echo "iOS typing lane: Remote Automation is not on in the simulator, the preference could not be written"; exit 1; }
+            xcrun simctl shutdown "$QD_UDID"
+            echo "- Remote Automation preference written after a first boot, because simctl spawn needs a booted device" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          xcrun simctl boot "$QD_UDID"
+          xcrun simctl bootstatus "$QD_UDID" -b
+
+      - name: Start safaridriver
+        run: |
+          sudo safaridriver --enable
+          driver_port=$(python3 tools/ci/ios_simulator.py port)
+          safaridriver --port "$driver_port" > "$RUNNER_TEMP/safaridriver.log" 2>&1 &
+          python3 tools/ci/ios_simulator.py wait safaridriver "http://127.0.0.1:$driver_port/status" 60
+          echo "QD_WEBDRIVER=http://127.0.0.1:$driver_port" >> "$GITHUB_ENV"
+
+      - name: Check that safaridriver can open a session on the simulator
+        run: python3 tools/ci/ios_simulator.py session "$QD_WEBDRIVER" "$QD_UDID"
+
+      - name: Build and serve the app on a loopback port
+        working-directory: apps/web
+        run: |
+          node tools/build-app.mjs --fixtures
+          app_port=$(python3 ../../tools/ci/ios_simulator.py port)
+          PORT="$app_port" node tools/serve-app.mjs > "$RUNNER_TEMP/app-server.log" 2>&1 &
+          python3 ../../tools/ci/ios_simulator.py wait "the app server" "http://127.0.0.1:$app_port/" 60
+          echo "QD_ORIGIN=http://127.0.0.1:$app_port" >> "$GITHUB_ENV"
+
+      - name: Typing test on the real app
+        run: node apps/web/src/screens/chat/chat_typing_ios.mjs
+
+      - name: Build and serve a copy with the old typing code planted
+        run: |
+          planted="$RUNNER_TEMP/planted"
+          mkdir "$planted"
+          git archive HEAD:apps/web | tar -x -f - -C "$planted"
+          ln -s "$GITHUB_WORKSPACE/apps/web/node_modules" "$planted/node_modules"
+          cd "$planted"
+          git apply --check src/screens/chat/pre-367.patch
+          git apply src/screens/chat/pre-367.patch
+          node tools/build-app.mjs --fixtures
+          planted_port=$(python3 "$GITHUB_WORKSPACE/tools/ci/ios_simulator.py" port)
+          PORT="$planted_port" node tools/serve-app.mjs > "$RUNNER_TEMP/planted-server.log" 2>&1 &
+          python3 "$GITHUB_WORKSPACE/tools/ci/ios_simulator.py" wait "the planted app server" "http://127.0.0.1:$planted_port/" 60
+          echo "QD_PLANTED_ORIGIN=http://127.0.0.1:$planted_port" >> "$GITHUB_ENV"
+
+      - name: Typing test on the planted copy must fail on the shrink rule
+        env:
+          QD_EXPECT: shrink
+        run: QD_ORIGIN="$QD_PLANTED_ORIGIN" node apps/web/src/screens/chat/chat_typing_ios.mjs
+
   pr-title:
     name: pr-title
     if: github.event_name == 'pull_request'
@@ -449,6 +651,8 @@ jobs:
       - web-browser
       - web-design
       - web-design-selftest
+      - ios-typing-26
+      - ios-typing-27
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     permissions: {}
@@ -465,6 +669,8 @@ jobs:
       WEB_BROWSER_RESULT: ${{ needs.web-browser.result }}
       WEB_DESIGN_RESULT: ${{ needs.web-design.result }}
       WEB_DESIGN_SELFTEST_RESULT: ${{ needs.web-design-selftest.result }}
+      IOS_TYPING_26_RESULT: ${{ needs.ios-typing-26.result }}
+      IOS_TYPING_27_RESULT: ${{ needs.ios-typing-27.result }}
     steps:
       - name: Require every lane to pass
         run: |
@@ -476,6 +682,6 @@ jobs:
           else
             expected=skipped
           fi
-          for result in "$WEB_STATIC_RESULT" "$WEB_BUILD_RESULT" "$WEB_BROWSER_RESULT" "$WEB_DESIGN_RESULT" "$WEB_DESIGN_SELFTEST_RESULT"; do
+          for result in "$WEB_STATIC_RESULT" "$WEB_BUILD_RESULT" "$WEB_BROWSER_RESULT" "$WEB_DESIGN_RESULT" "$WEB_DESIGN_SELFTEST_RESULT" "$IOS_TYPING_26_RESULT" "$IOS_TYPING_27_RESULT"; do
             test "$result" = "$expected" || exit 1
           done
