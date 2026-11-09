@@ -28,6 +28,16 @@ export function sendingText(state: AnswerState): string {
   return choice && choice.kind !== "approve" && choice.kind !== "reject" ? "Sending " + choiceText(choice) + " ..." : "Sending ...";
 }
 
+export const NOT_SURE_TEXT = "Not sure it was sent. Check Answered before you try again.";
+
+export const SIGN_IN_AGAIN_TEXT = "Not sent. Sign in again, reload Quarterdeck, then send.";
+
+export const SIGN_IN_AGAIN_PATH = "/captain/step-up?next=%2Fcaptain%2Fchat";
+
 export function failedText(state: AnswerState): string {
+  if (state.cause === "unsure") return NOT_SURE_TEXT;
+  if (state.cause === "sign-in") return SIGN_IN_AGAIN_TEXT;
   return state.limited ? "Not sent: too many sends this minute. Wait up to a minute, then Try again." : "Not sent. Try again.";
 }
+
+export const canTryAgain = (state: AnswerState): boolean => state.cause === undefined;

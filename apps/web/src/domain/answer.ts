@@ -5,7 +5,9 @@ import type { Answer, Card, Choice } from "./types";
 
 export type Phase = "ready" | "confirm" | "sending" | "failed";
 
-export type AnswerState = { choice: Choice | null; note: string; phase: Phase; askedAt: number; limited?: boolean };
+export type AnswerState = { choice: Choice | null; note: string; phase: Phase; askedAt: number; limited?: boolean; cause?: FailCause };
+
+export type FailCause = "unsure" | "sign-in";
 
 export type AnswerEvent =
   | { type: "choose"; choice: Choice }
@@ -16,6 +18,15 @@ export type AnswerEvent =
   | { type: "failed"; error?: unknown };
 
 export const CONFIRM_GUARD_MS = 500;
+
+export const SEND_LIMIT_MS = 45_000;
+
+const nameOf = (error: unknown): string => (error instanceof Error ? error.name : "");
+
+const causeOf = (error: unknown): FailCause | undefined => {
+  const name = nameOf(error);
+  return name === "TimedOut" ? "unsure" : name === "FreshSignInRequired" ? "sign-in" : undefined;
+};
 
 export type CardKey = { type: "choose"; choice: Choice } | { type: "send" } | { type: "talk" } | { type: "keys" };
 
@@ -50,7 +61,7 @@ function isOneWay(card: Card, choice: Choice): boolean {
 }
 
 export function answerStep(card: Card, state: AnswerState, event: AnswerEvent): AnswerState {
-  if (event.type === "failed") return state.phase === "sending" ? { ...state, phase: "failed", limited: event.error instanceof Error && event.error.name === "RateLimited" } : state;
+  if (event.type === "failed") return state.phase === "sending" ? { ...state, phase: "failed", limited: nameOf(event.error) === "RateLimited", cause: causeOf(event.error) } : state;
   if (state.phase === "sending") return state;
   const ready = state.phase === "confirm" ? "ready" : state.phase;
   switch (event.type) {

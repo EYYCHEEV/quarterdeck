@@ -4394,7 +4394,12 @@ it("Server Queue: a refused native event stream checks the list and removes the 
   equal(await p.evaluate(() => [localStorage.getItem("qd.seen"), localStorage.getItem("qd.settings")]), kept, "local storage kept");
 }, /401 \(Unauthorized\)/);
 
+const parallelCases = new WeakMap();
+const keepSharedApp = (p) => {
+  if (parallelCases.has(p.context())) throw new Error("rebuilds the shared app inside a parallel case: " + parallelCases.get(p.context()));
+};
 const serverBuild = async (p, list) => {
+  keepSharedApp(p);
   const built = spawnSync(process.execPath, ["tools/build-app.mjs", "--server"], { stdio: "inherit", timeout: 60_000 });
   if (built.status !== 0) throw new Error("server build failed: " + (built.error?.message ?? built.status));
   const body = readFileSync(new URL("./src/data/server-payloads/" + list, import.meta.url), "utf8");
@@ -4866,6 +4871,226 @@ it("Server Task Card: a send refused for the rate and an open refused for the ra
   equal([sendButtons, await buttons(refusedOpen)], [[1, 0], [1, 0]], "Try again and Retry buttons on the refused send line, then on the refused open line after " + reads.length + " card reads");
 }, /429 \(Too Many Requests\)|503 \(Service Unavailable\)/);
 
+const SIGN_IN_AGAIN = "Not sent. Sign in again, reload Quarterdeck, then send.";
+const SIGN_IN_AGAIN_HREF = "/captain/step-up?next=%2Fcaptain%2Fchat";
+const NOT_SURE = "Not sure it was sent. Check Answered before you try again.";
+const SEND_NOTE = "Five, if the keyboard still fits.";
+const SEND_KEPT = [SEND_NOTE, "true", false, false, "Send B"];
+const SEND_DOORS = [["one-way", "a one-way card's pick, through Confirm"], ["two-way", "a two-way card"]];
+const SEND_COMMENTS = [
+  "I tried five rows on the iPhone with the keyboard open. The fifth row sits just above it.",
+  "Eight rows pushed the Chats group off the screen on the small phone.",
+  "Three rows hide the fourth match, which is often the one he wants.",
+  "The Mac shows all groups at once, so this is only about the phone.",
+  "If we pick five, Settings can still offer eight later.",
+  "Search already remembers the last group he opened.",
+  "I checked the light look too. Nothing else changes.",
+];
+const sendShot = (p, name) => (process.env.QD_CARD_SEND_SHOTS ? p.screenshot({ path: process.env.QD_CARD_SEND_SHOTS + "/" + name + ".png" }) : undefined);
+const answerServer = async (p, door, { answer, comments = 0 } = {}) => {
+  await serverBuild(p, "list-fixed-only.json");
+  const list = JSON.parse(readFileSync(new URL("./src/data/server-payloads/list-fixed-only.json", import.meta.url), "utf8"));
+  const detail = JSON.parse(readFileSync(new URL("./src/data/server-payloads/card-open.json", import.meta.url), "utf8"));
+  detail.card.door = door;
+  for (const option of detail.card.options) delete option.door;
+  SEND_COMMENTS.slice(0, comments).forEach((text, at) => detail.thread.push({ id: "mail-2" + at, kind: "comment", sender: at % 2 ? "alba" : "kivo", sent: "2026-11-02T10:0" + at + ":00-05:00", document: { qd: "comment/1", card: "alba-1", text } }));
+  const server = { lists: "open", tokens: [], held: [], posts: [], landed: false, receipt: readFileSync(new URL("./src/data/server-payloads/answer/answer-200-current.json", import.meta.url), "utf8") };
+  await p.route("**/captain/cards", (route) => {
+    if (server.lists === "down") return route.fulfill({ status: 503, contentType: "application/json", body: '{"error":"offline"}' });
+    const csrf = "list-token-" + (server.tokens.length + 1);
+    server.tokens.push(csrf);
+    const reply = () => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ...list, csrf }) });
+    if (server.lists === "open") return reply();
+    if (server.lists === "hold-one") server.lists = "down";
+    server.held.push(reply);
+  });
+  await p.route("**/captain/cards/alba-1", (route) => {
+    const landed = { id: "qd.landed", kind: "answer", sender: "account-user", sent: "2026-11-05T07:00:30-05:00", document: { qd: "answer/1", card: "alba-1", rev: detail.rev, pick: "B", note: SEND_NOTE, at: "2026-11-05T07:00:30-05:00" } };
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ...detail, thread: server.landed ? [...detail.thread, landed] : detail.thread }) });
+  });
+  await p.route("**/captain/cards/alba-1/answer", (route) => {
+    server.posts.push(JSON.parse(route.request().postData()));
+    return answer ? answer(route, server) : route.fulfill({ status: 200, contentType: "application/json", body: server.receipt });
+  });
+  return server;
+};
+const releaseHeld = async (server) => {
+  for (const reply of server.held.splice(0)) await reply();
+};
+const answerReady = async (p) => {
+  await installSessionClock(p);
+  await open(p, "/queue/alba-1");
+  await T(p, "option").nth(2).waitFor();
+  await T(p, "note").fill(SEND_NOTE);
+};
+const sendPick = async (p, door) => {
+  await T(p, "send").tap();
+  if (door === "two-way") return;
+  await T(p, "confirm").getByText("Send B? This cannot be undone.", { exact: true }).waitFor();
+  await p.clock.runFor(600);
+  await T(p, "confirm-send").tap();
+};
+const keptOnCard = async (p) => {
+  const pick = p.locator('[data-testid="option"][data-letter="B"] [role="radio"]');
+  return [await T(p, "note").inputValue(), await pick.getAttribute("aria-checked"), await pick.isDisabled(), await T(p, "send").isDisabled(), await T(p, "send").innerText()];
+};
+const failedLine = async (p, words, tryAgain) => {
+  const line = T(p, "send-failed");
+  await line.waitFor().catch(() => undefined);
+  const said = (await line.count()) ? await line.innerText() : null;
+  equal([await line.getByText(words, { exact: true }).count(), await line.getByRole("button", { name: "Try again", exact: true }).count()], [1, tryAgain ? 1 : 0], "the words " + JSON.stringify(words) + " and Try again on the failed line, which says " + JSON.stringify(said) + " beside Send " + JSON.stringify(await T(p, "send").innerText()));
+};
+const pickNearBottom = async (p, letter) => {
+  const row = p.locator('[data-testid="option"][data-letter="' + letter + '"]');
+  await row.evaluate((element) => element.scrollIntoView({ block: "end" }));
+  await row.locator('[role="radio"]').tap();
+};
+const answerGeometry = (p, letter) =>
+  p.evaluate((letter) => {
+    const box = (element) => (element ? (({ top, bottom }) => ({ top: Math.round(top), bottom: Math.round(bottom) }))(element.getBoundingClientRect()) : null);
+    const pinned = [...document.querySelectorAll("body *")].filter((element) => ["fixed", "sticky"].includes(getComputedStyle(element).position) && element.getBoundingClientRect().height > 0).map((element) => element.getBoundingClientRect());
+    const row = document.querySelector('[data-testid="option"][data-letter="' + letter + '"]');
+    return {
+      top: Math.round(Math.max(0, ...pinned.filter((rect) => rect.top <= 1 && rect.bottom < innerHeight / 2).map((rect) => rect.bottom))),
+      bottom: Math.round(Math.min(innerHeight, ...pinned.filter((rect) => rect.bottom >= innerHeight - 1 && rect.top > innerHeight / 2).map((rect) => rect.top))),
+      checked: row?.querySelector('[role="radio"]')?.getAttribute("aria-checked") ?? null,
+      chosen: box(row),
+      send: box(document.querySelector('[data-testid="send"]')),
+      confirm: box(document.querySelector('[data-testid="confirm"]')),
+    };
+  }, letter);
+const onScreen = (area, part) => part !== null && part.top >= area.top && part.bottom <= area.bottom;
+
+for (const [door, what] of SEND_DOORS) {
+  it("Server Task Card on a phone: a send on " + what + " that the server answers with a fresh sign-in ends Sending with " + SIGN_IN_AGAIN + " and a Sign in again link to the sign-in, no Try again, and his pick and note kept", PHONE, async (p) => {
+    const server = await answerServer(p, door, { answer: (route) => route.fulfill({ status: 303, headers: { Location: SIGN_IN_AGAIN_HREF } }) });
+    await answerReady(p);
+    await sendPick(p, door);
+    await failedLine(p, SIGN_IN_AGAIN, false);
+    const link = T(p, "send-failed").getByRole("link", { name: "Sign in again", exact: true });
+    const box = (await link.count()) ? await link.boundingBox() : null;
+    equal([await link.count(), await link.first().getAttribute("href").catch(() => null), box !== null && box.height >= 44 && box.width >= 44], [1, SIGN_IN_AGAIN_HREF, true], "the Sign in again link, its address and its 44 px tap area " + JSON.stringify(box));
+    equal([new URL(p.url()).pathname, await keptOnCard(p), server.posts.length], ["/queue/alba-1", SEND_KEPT, 1], "where he is, his pick and note on the card, and posts");
+    if (door === "two-way") await sendShot(p, "sign-in-again-390");
+  });
+
+  it("Server Task Card on a phone: a send on " + what + " whose session can't be confirmed while its token read is out ends Sending, and after Retry the card says Not sent. Try again. with Try again and his pick and note", PHONE, async (p) => {
+    const server = await answerServer(p, door);
+    await answerReady(p);
+    await p.clock.runFor(40_000);
+    server.lists = "hold-one";
+    const asked = p.waitForRequest((request) => new URL(request.url()).pathname === "/captain/cards");
+    await sendPick(p, door);
+    await asked;
+    await p.clock.runFor(21_000);
+    const hidden = p.getByRole("alert").filter({ has: p.getByRole("button", { name: "Retry", exact: true }) });
+    await hidden.waitFor();
+    equal(await T(p, "task-card").count(), 0, "the card hidden while the session can't be confirmed");
+    const answered = p.waitForResponse((response) => new URL(response.url()).pathname === "/captain/cards" && response.status() === 200);
+    await releaseHeld(server);
+    await (await answered).finished();
+    server.lists = "open";
+    await hidden.getByRole("button", { name: "Retry", exact: true }).tap();
+    await T(p, "option").nth(2).waitFor();
+    equal(await keptOnCard(p), SEND_KEPT, "his pick and note on the card, and Send, after Retry");
+    await failedLine(p, "Not sent. Try again.", true);
+    equal(server.posts.length, 0, "posts");
+  }, /503 \(Service Unavailable\)/);
+
+  it("Server Task Card on a phone: a send on " + what + " whose card he leaves while it is out, answered by a 503, says Not sent. Try again. with Try again and his pick and note when he comes back", PHONE, async (p) => {
+    const held = Promise.withResolvers();
+    await answerServer(p, door, { answer: async (route) => { await held.promise; return route.fulfill({ status: 503, contentType: "application/json", body: '{"error":"request unavailable"}' }); } });
+    await answerReady(p);
+    const asked = p.waitForRequest("**/captain/cards/alba-1/answer");
+    await sendPick(p, door);
+    await asked;
+    await p.getByRole("link", { name: /^Queue · \d+ waiting$/ }).tap();
+    await T(p, "card-row").first().waitFor();
+    const checked = p.waitForResponse((response) => new URL(response.url()).pathname === "/captain/cards/alba-1");
+    held.resolve();
+    await (await checked).finished();
+    await T(p, "card-row").getByRole("link", { name: "How many results should each Search group show?", exact: true }).tap();
+    await T(p, "option").nth(2).waitFor();
+    equal(await keptOnCard(p), SEND_KEPT, "his pick and note on the card, and Send, after the 503");
+    await failedLine(p, "Not sent. Try again.", true);
+  }, /503 \(Service Unavailable\)/);
+
+  it("Server Task Card on a phone: a send on " + what + " whose token read never answers ends at 45 seconds with " + NOT_SURE + " and no Try again, his pick and note kept and nothing posted", PHONE, async (p) => {
+    const server = await answerServer(p, door);
+    await answerReady(p);
+    server.lists = "hold";
+    await sendPick(p, door);
+    await p.clock.runFor(44_000);
+    equal(await T(p, "send").innerText(), "Sending B ...", "Send before 45 seconds");
+    await p.clock.runFor(1_000);
+    await failedLine(p, NOT_SURE, false);
+    equal([await keptOnCard(p), server.posts.length], [SEND_KEPT, 0], "his pick and note on the card, and posts");
+    if (door === "two-way") await sendShot(p, "not-sure-390");
+  });
+
+  it("Server Task Card on a phone: a send on " + what + " whose post gets no reply is cut at 20 seconds and says " + NOT_SURE + " with no Try again, his pick and note kept", PHONE, async (p) => {
+    const server = await answerServer(p, door, { answer: () => undefined });
+    await answerReady(p);
+    const asked = p.waitForRequest("**/captain/cards/alba-1/answer");
+    await sendPick(p, door);
+    await asked;
+    const checked = p.waitForResponse((response) => new URL(response.url()).pathname === "/captain/cards/alba-1");
+    await p.clock.runFor(20_000);
+    await (await checked).finished();
+    await failedLine(p, NOT_SURE, false);
+    equal([await keptOnCard(p), server.posts.length], [SEND_KEPT, 1], "his pick and note on the card, and posts");
+  });
+}
+
+it("Server Task Card on a phone: a post cut at 20 seconds whose answer did reach the server shows the card answered, with no failed line", PHONE, async (p) => {
+  await answerServer(p, "two-way", { answer: (route, server) => { server.landed = true; } });
+  await answerReady(p);
+  const asked = p.waitForRequest("**/captain/cards/alba-1/answer");
+  await T(p, "send").tap();
+  await asked;
+  await p.clock.runFor(20_000);
+  await T(p, "got-it").waitFor();
+  equal(await T(p, "send-failed").count(), 0, "failed lines");
+});
+
+it("Server Task Card on a phone: a 503 on an open card says Not sent. Try again. with Try again and his pick and note, and Try again posts with a token from a list read made after the 503", PHONE, async (p) => {
+  const server = await answerServer(p, "two-way", { answer: (route, server) => route.fulfill({ status: server.posts.length === 1 ? 503 : 200, contentType: "application/json", body: server.posts.length === 1 ? '{"error":"request unavailable"}' : server.receipt }) });
+  await answerReady(p);
+  await T(p, "send").tap();
+  await failedLine(p, "Not sent. Try again.", true);
+  equal(await keptOnCard(p), SEND_KEPT, "his pick and note on the card, and Send");
+  const issued = server.tokens.length;
+  await T(p, "send-failed").getByRole("button", { name: "Try again", exact: true }).tap();
+  await T(p, "got-it").waitFor();
+  const [first, second] = server.posts.map((post) => post.csrf);
+  equal([server.posts.length, first !== second, server.tokens.indexOf(second) >= issued], [2, true, true], "posts, and the second post's token from a list read made after the 503 " + JSON.stringify({ tokens: server.tokens, posted: [first, second] }));
+}, /503 \(Service Unavailable\)/);
+
+it("Server Task Card on a phone: when he picks an option near the bottom of the screen, Send comes fully into view below the note with no scrolling by him, and the option stays in view under the header", PHONE, async (p) => {
+  await answerServer(p, "two-way");
+  await answerReady(p);
+  await pickNearBottom(p, "A");
+  const after = await answerGeometry(p, "A");
+  equal([after.checked, onScreen(after, after.send), onScreen(after, after.chosen)], ["true", true, true], "A chosen, and Send and A on screen after the pick " + JSON.stringify(after));
+  await sendShot(p, "send-in-view-390");
+});
+
+it("Server Task Card on a phone, on the one-way card with seven comments: he picks its pick near the bottom of the screen, Send comes into view with no scrolling by him, Send asks Send B? This cannot be undone. with Confirm on screen, and Confirm gets the receipt", PHONE, async (p) => {
+  const server = await answerServer(p, "one-way", { comments: 7 });
+  await answerReady(p);
+  await pickNearBottom(p, "B");
+  const picked = await answerGeometry(p, "B");
+  equal([picked.checked, onScreen(picked, picked.send), onScreen(picked, picked.chosen)], ["true", true, true], "B chosen, and Send and B on screen after the pick " + JSON.stringify(picked));
+  await T(p, "send").tap();
+  await T(p, "confirm").getByText("Send B? This cannot be undone.", { exact: true }).waitFor();
+  const asking = await answerGeometry(p, "B");
+  equal(onScreen(asking, asking.confirm), true, "Confirm on screen " + JSON.stringify(asking));
+  await p.clock.runFor(600);
+  await T(p, "confirm-send").tap();
+  await T(p, "got-it").waitFor();
+  equal(server.posts.map((post) => post.pick), ["B"], "posted picks");
+});
+
 it("Server Add bot on the Mac: the sidebar offers no Add bot", MAC, async (p) => {
   await serverBuild(p, "list-fixed-only.json");
   await queueShown(p);
@@ -4904,6 +5129,7 @@ const CHAT_LAST = "Answer 30: the export sheet is on its way.";
 const SEND_CAP = Number(/const SEND_CAP = ([\d_]+);/.exec(readFileSync(new URL("./src/data/server-chat.ts", import.meta.url), "utf8"))[1].replaceAll("_", ""));
 const sendSettles = (locator) => locator.waitFor({ timeout: SEND_CAP });
 const serverBuildChat = async (p, { post, older, rows, "iris": iris, shape, read, list = "list-fixed-only.json" } = {}) => {
+  keepSharedApp(p);
   const built = spawnSync(process.execPath, ["tools/build-app.mjs", "--server", "--chat"], { stdio: "inherit", timeout: 60_000 });
   if (built.status !== 0) throw new Error("server chat build failed: " + (built.error?.message ?? built.status));
   const listing = readFileSync(new URL("./src/data/server-payloads/" + list, import.meta.url), "utf8");
@@ -6748,8 +6974,9 @@ if (!selected.length) {
 
 const browser = await chromium.launch(chromeLaunchOptions({ args: ["--no-sandbox"] }));
 const failed = [];
-const runCase = async (item) => {
+const runCase = async (item, parallel = false) => {
   const context = await browser.newContext({ colorScheme: "dark", ...item.size, reducedMotion: "reduce" });
+  if (parallel) parallelCases.set(context, item.name);
   await context.route((url) => MAIL_PATH.test(url.pathname), (route) => route.fulfill({ status: 404, contentType: "application/json", body: '{"error":"not found"}' }));
   const page = await context.newPage();
   page.setDefaultTimeout(5000);
@@ -6770,12 +6997,12 @@ const runCase = async (item) => {
   await context.close();
 };
 const workers = Math.max(1, Number.parseInt(process.env.QD_APP_WORKERS ?? "", 10) || 1);
-const alone = selected.filter((item) => /clipboard|copiedByKey|serverBuild|build-app/.test(item.run.toString()));
+const alone = selected.filter((item) => /clipboard|copiedByKey|serverBuild|answerServer|build-app/.test(item.run.toString()));
 const together = workers > 1 ? selected.filter((item) => !alone.includes(item)) : [];
 if (workers > 1) console.log(`app: ${together.length} behaviours in ${workers} parallel contexts, then ${alone.length} one at a time: ${alone.map(({ name }) => name).join(" | ")}`);
 try {
   await Promise.all(Array.from({ length: workers }, async () => {
-    for (let item = together.shift(); item; item = together.shift()) await runCase(item);
+    for (let item = together.shift(); item; item = together.shift()) await runCase(item, true);
   }));
   for (const item of workers > 1 ? alone : selected) await runCase(item);
 } finally {

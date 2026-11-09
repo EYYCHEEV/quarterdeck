@@ -6,7 +6,7 @@ import type { CardFields } from "./card";
 import type { MailListing, MailRead } from "./mail-client";
 import type { ChatListed, ChatRead, ChatReceipt } from "./chat-client";
 import type { WireOutgoing } from "./chat-types";
-import { FreshSignInRequired, NotConfirmed, RateLimited, Refused, SignInRequired } from "./source";
+import { FreshSignInRequired, NotConfirmed, RateLimited, Refused, SignInRequired, TimedOut } from "./source";
 export { SignInRequired } from "./source";
 
 export class NotFound extends Error {
@@ -375,7 +375,7 @@ export function createApiClient(options: { send?: Send; openEvents?: (address: s
 
   const signOutToken = async (): Promise<string> => (await tokenRead()).csrf;
 
-  type Submit = { limit?: number; refuse?: (response: Response, mine: number) => Promise<Error> };
+  type Submit = { limit?: number; refuse?: (response: Response, mine: number) => Promise<Error>; cut?: () => Error };
 
   async function submit<T extends CommentReceipt>(path: string, check: () => void, bodyOf: (token: string) => string, receiptOf: (raw: unknown) => T, onList?: TokenList, more: Submit = {}): Promise<T> {
     check();
@@ -391,7 +391,7 @@ export function createApiClient(options: { send?: Send; openEvents?: (address: s
         try {
           return await send(path, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json" }, body, credentials: "same-origin", redirect: "manual", signal: controller.signal });
         } catch {
-          throw new NotConfirmed();
+          throw controller.signal.aborted && more.cut ? more.cut() : new NotConfirmed();
         }
       });
       if (response.type === "opaqueredirect" || response.status === 303) throw new FreshSignInRequired();
@@ -464,7 +464,7 @@ export function createApiClient(options: { send?: Send; openEvents?: (address: s
   }
 
   async function answer(id: string, input: AnswerPost, onList?: TokenList): Promise<AnswerSent> {
-    const { message, stale, rev } = await submit(LIST_PATH + "/" + idOf(id) + "/answer", () => checkAnswer(input), (token) => answerBody(input, token), answerReceiptOf, onList);
+    const { message, stale, rev } = await submit(LIST_PATH + "/" + idOf(id) + "/answer", () => checkAnswer(input), (token) => answerBody(input, token), answerReceiptOf, onList, { cut: () => new TimedOut() });
     return { message, stale, rev };
   }
 
