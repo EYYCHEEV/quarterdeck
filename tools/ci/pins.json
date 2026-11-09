@@ -12,19 +12,6 @@
     "version_args": ["--version"],
     "version_output": "v22.21.0"
   },
-  "node-darwin-arm64": {
-    "version": "22.21.0",
-    "platform": "darwin-arm64",
-    "url": "https://nodejs.org/dist/v22.21.0/node-v22.21.0-darwin-arm64.tar.xz",
-    "format": "tar.xz",
-    "bytes": 25587028,
-    "sha256": "54b884588727c9833cad6e4b902f922128b8da136ba845e76e878b0d2d08c8f4",
-    "extract_dir": ".",
-    "binary": "node-v22.21.0-darwin-arm64/bin/node",
-    "binary_sha256": null,
-    "version_args": ["--version"],
-    "version_output": "v22.21.0"
-  },
   "chrome-headless-shell": {
     "version": "156.0.8078.80",
     "platform": "linux64",

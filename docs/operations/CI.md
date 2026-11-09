@@ -1,6 +1,6 @@
 # CI
 
-Every pull request and every push to `main` runs `.github/workflows/ci.yml` on GitHub-hosted runners: `ubuntu-24.04` for every lane except the two iOS typing lanes, which run on the `macos-26` and `xcode-27` images. No job in this repository runs on a self-hosted runner.
+Every pull request and every push to `main` runs `.github/workflows/ci.yml` on GitHub-hosted `ubuntu-24.04` runners. No job in this repository runs on a self-hosted runner.
 
 This page lists the lanes, the required checks, the pin rules, and the rules that keep secrets out of reach.
 
@@ -18,7 +18,6 @@ The stdlib-only `tools/ci/workflow-contexts` checker runs through the CI tool te
 | web-browser | `test:app` and `test:chat` | Playwright 1.64.1 from the lock file, and the Chrome for Testing headless shell below | 25 min |
 | web-design | `design:check` as four parallel jobs, one per size: 390, 744x1133, 1133x744 and 1512. The 390 job also measures the first screen | As web-browser | 40 min each |
 | web-design-selftest | The design check at 390 with a planted spill. It must exit with code 1 and print a failure line, or the lane fails | As web-browser | 30 min |
-| ios-typing-26, ios-typing-27 | The typing test in iPhone Safari on a simulator, run twice: on the real app, and on a copy with the old typing code planted. See [The iOS typing lane](#the-ios-typing-lane) | Node 22.21.0 darwin-arm64 by checksum in `tools/ci/pins.json`, and the `macos-26` and `xcode-27` images | 40 min each |
 | leaks | gitleaks 8.30.1: `dir` on the checkout and `git` on the pull request's own commits. It loads `tools/ci/gitleaks.toml`: the default rules plus three per-file exceptions for the named digest fields listed there, for `generic-api-key` only. Other keys, files and rules still fail, as do values in the six named fields that are not exactly 64 lowercase hex characters. A different 64-character hex value, or a repeated matching line for one of those six fields, passes this public scan. The maintainers' own scan before each push checks those fields with the default rules, without this file. Inline allow markers are not honored. gitleaks always reads a `.gitleaksignore` file at the top of the checkout, whatever its options say, so this repository keeps none, and the scan step fails right before it runs gitleaks if one is there. A pull request that changes `tools/ci/` or `.github/` can change what this job runs, so those changes are reviewed as code. Output is redacted: the rule id and the path only | The tarball and its checksums file, by sha256 in `tools/ci/pins.json` | 10 min |
 | no-comments | Python by its tokenizer; `.ts`, `.tsx`, `.js` and `.mjs` by a check for a line that starts with a comment; `.css`, `.html`, `.yml` and shell files by their own checks. The keep-list is empty. Inside `apps/web`, the web-static lane also runs the syntax-aware TypeScript scanner through `npm run lint`. The lane checks file kinds too: no symlinks or special files, and every binary file listed by sha256 in `tools/ci/binaries.txt` | Scripts in this repository | 5 min |
 | pr-title | The title is a conventional commit title | None | 2 min |
@@ -49,7 +48,7 @@ The repository allows exactly four actions, each pinned by full commit SHA:
 
 A workflow never refers to an action by tag or branch. Node and the browser come from `tools/ci/pins.json` through `tools/ci/fetch-pinned`, so they need no extra action. The `server` job runs in a container image pinned by digest in `.github/workflows/ci.yml`, the same image that the `approval-qd` service uses.
 
-The `ubuntu-24.04`, `macos-26` and `xcode-27` runner images themselves are updated by GitHub and cannot be pinned by digest. Every tool that matters is pinned inside them, except Xcode, Safari and the simulator runtimes, which come with the macOS images and are recorded in each iOS job's summary.
+The `ubuntu-24.04` runner image itself is updated by GitHub and cannot be pinned by digest. Every tool that matters is pinned inside it.
 
 ## The browser
 
@@ -60,10 +59,6 @@ The `ubuntu-24.04`, `macos-26` and `xcode-27` runner images themselves are updat
 - Never run `npx playwright install`. It downloads an unpinned build.
 
 Before first-screen loads, `design:check` calibrates the same browser in a fresh unthrottled page: seven runs of a fixed workload (30 million integer-compute iterations, then 256 grid elements and 256 forced-layout reads), taking their median. The CPU rate is `4 × REFERENCE_MS / host median`, shared by both builds; rates below 1 or above 16 fail, and the 2,000 ms line stays fixed (a miss is carded only when `origin/main` has no `apps/web`). To retake `REFERENCE_MS`, use a quiet reference host and the CI-pinned chrome-headless-shell, launch five separate seven-sample runs, and take the median of those five medians. The 142.20 ms reference was measured on 2026-11-08 with version 156.0.8078.80.
-
-## The iOS typing lane
-
-`ios-typing-26` runs on the `macos-26` image with the newest installed iOS 26 simulator, and `ios-typing-27` runs on the `xcode-27` image, a public preview label, with iOS 27.0. Both use the image's ready iPhone 17 and create no device. Each job records macOS, Xcode, safaridriver, the runtime and the device in its summary, serves the fixture build on a loopback port, and runs `apps/web/src/screens/chat/chat_typing_ios.mjs` through safaridriver with the on-screen keyboard up. It then serves a copy of `apps/web` with `src/screens/chat/pre-367.patch` applied and runs the same driver with `QD_EXPECT=shrink`. That run passes only if every case fails on the shrink rule, so a patch that no longer applies, or a test that stops seeing the bug, fails the job. The Safari Remote Automation preference in the simulator, `com.apple.WebInspector RemoteAutomationEnabled`, is not documented by Apple. The job writes it with `xcrun simctl spawn`, then a preflight opens and closes one WebDriver session. If the preflight is refused, the job fails with one plain line: `Remote Automation is not on in the simulator` or `safaridriver refused the session`. The jobs upload nothing. A simulator is not a phone: typing in the installed Home Screen web app on a real iPhone, which WebDriver cannot drive, stays the final check.
 
 ## Add a lane
 
