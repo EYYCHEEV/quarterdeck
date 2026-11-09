@@ -523,7 +523,7 @@ jobs:
           show() {
             echo "$1"
             if [ -f "$2" ]; then
-              tail -n "$3" "$2"
+              tail -n "$3" "$2" || echo "unreadable"
             else
               echo "none"
             fi
@@ -541,7 +541,7 @@ jobs:
             if [ -f "$file" ]; then
               found=yes
               basename "$file"
-              tail -n 200 "$file"
+              tail -n 200 "$file" || echo "unreadable"
             fi
           done
           if [ "$found" = no ]; then
@@ -652,7 +652,7 @@ jobs:
           show() {
             echo "$1"
             if [ -f "$2" ]; then
-              tail -n "$3" "$2"
+              tail -n "$3" "$2" || echo "unreadable"
             else
               echo "none"
             fi
@@ -670,7 +670,7 @@ jobs:
             if [ -f "$file" ]; then
               found=yes
               basename "$file"
-              tail -n 200 "$file"
+              tail -n 200 "$file" || echo "unreadable"
             fi
           done
           if [ "$found" = no ]; then
