@@ -4546,6 +4546,7 @@ it("Server Settings: the Bots page says Approve new bots in Backchannel for now.
 const BOTS_FRESH = Date.parse("2026-11-05T12:00:00Z") / 1000 + 3600;
 const botsSample = (name) => JSON.parse(readFileSync(new URL("./src/data/server-payloads/bots/" + name, import.meta.url), "utf8"));
 const botsList = (csrf = "t-list-1", change = (raw) => raw) => change({ ...botsSample("list-200.json"), csrf, freshUntil: BOTS_FRESH });
+const approvingHere = (raw) => ({ ...raw, approveHere: true });
 const BOTS_NAME_WORDS = "A bot name starts with a letter and uses a to z, 0 to 9 and hyphens, up to 32 characters.";
 const serverBots = async (p, { lists = [botsList()], posts = {} } = {}) => {
   const asked = { reads: 0, posts: [] };
@@ -4642,16 +4643,94 @@ it("Server Bots: a 303 on Refuse takes him to the fresh sign-in, which brings hi
   equal([new URL(p.url()).searchParams.get("next"), asked.posts.length, asked.reads], ["/settings/bots", 1, 2], "the way back, POSTs and reads");
 });
 
-it("Server Bots: with under 30 s of fresh sign-in left, Refuse sends nothing and goes to the fresh sign-in first", PHONE, async (p) => {
+it("Server Bots: with the fresh sign-in long past, Approve and Refuse each post at once, and nothing opens the fresh sign-in", PHONE, async (p) => {
   await serverBuild(p, "list-fixed-only.json");
-  const asked = await serverBots(p, { lists: [botsList("t-list-1", (raw) => ({ ...raw, freshUntil: Date.parse("2026-11-05T12:00:20Z") / 1000 }))] });
-  await stepUpPage(p);
+  const past = (csrf, change = (raw) => raw) => botsList(csrf, (raw) => change({ ...approvingHere(raw), freshUntil: Date.parse("2026-11-05T11:00:00Z") / 1000 }));
+  const withoutTarn = (raw) => ({ ...raw, pending: raw.pending.slice(1) });
+  const asked = await serverBots(p, { lists: [past("t-list-1"), past("t-list-2"), past("t-list-3", withoutTarn), past("t-list-4", withoutTarn), past("t-list-5", (raw) => ({ ...raw, pending: [] }))] });
+  let stepUps = 0;
+  await p.route((url) => url.pathname === "/captain/step-up", (route) => {
+    stepUps += 1;
+    return route.fulfill({ status: 200, contentType: "text/html", body: "<p>Fresh sign-in</p>" });
+  });
   await installSessionClock(p);
   await open(p, "/settings/bots");
-  await T(p, "pending-join").first().getByRole("button", { name: "Refuse", exact: true }).click();
-  await p.waitForURL((url) => url.pathname === "/captain/step-up");
-  equal([new URL(p.url()).searchParams.get("next"), asked.posts.length], ["/settings/bots", 0], "the way back and POSTs");
+  const tarn = T(p, "pending-join").filter({ hasText: "tarn wants to join" });
+  await tarn.getByRole("button", { name: "Approve", exact: true }).tap();
+  await gone(tarn);
+  const quorl = T(p, "pending-join").filter({ hasText: "quorl wants to join" });
+  await quorl.getByRole("button", { name: "Refuse", exact: true }).tap();
+  await gone(quorl);
+  equal([asked.posts.map(([path]) => path), stepUps, new URL(p.url()).pathname], [["approve", "refuse"], 0, "/settings/bots"], "POSTs, fresh sign-in pages and the screen");
 });
+
+for (const [where, shot, size] of [["a phone", "phone-390", PHONE], ["iPad upright", "ipad-744x1133", IPAD_UPRIGHT], ["iPad sideways", "ipad-1133x744", TOUCH_SIDEWAYS], ["the Mac", "mac-1512", MAC]])
+  for (const look of ["dark", "light"])
+    it("Server Bots on " + where + " in the " + look + " look with approving here: each request shows Approve next to Refuse with no password field, the Joins group still says Joins history is in Backchannel for now., and no password control shows", { ...size, colorScheme: look }, async (p) => {
+      await serverBuild(p, "list-fixed-only.json");
+      await serverBots(p, { lists: [botsList("t-list-1", approvingHere)] });
+      await installSessionClock(p);
+      await open(p, "/settings/bots");
+      const join = T(p, "pending-join").filter({ hasText: "tarn wants to join" });
+      await join.getByRole("button", { name: "Approve", exact: true }).waitFor();
+      equal([await join.getByRole("button", { name: "Refuse", exact: true }).count(), await join.locator("input").count(), await join.getByText("Approve in Backchannel for now.", { exact: true }).count()], [1, 0, 0], "Refuse, a password field and the Backchannel words in the request");
+      equal([await p.getByText("Joins history is in Backchannel for now.", { exact: true }).count(), await p.getByText("Password to approve a bot").count(), await T(p, "history-toggle").count()], [1, 0, 0], "the Joins line, a password control and history rows");
+      if (process.env.QD_BOTS_SHOTS) await p.screenshot({ path: process.env.QD_BOTS_SHOTS + "/bots-approve-" + shot + (look === "light" ? "-light" : "") + ".png", fullPage: true });
+    });
+
+for (const [how, change] of [["is not here", (raw) => raw], ["is here", approvingHere]])
+  it("Server Settings: when approving " + how + ", the overview keeps Joins history and shows no Password to approve a bot row", PHONE, async (p) => {
+    await serverBuild(p, "list-fixed-only.json");
+    await serverBots(p, { lists: [botsList("t-list-1", change)] });
+    await installSessionClock(p);
+    await open(p, "/settings");
+    await T(p, "settings-screen").getByText("Joins history", { exact: true }).waitFor();
+    equal(await p.getByText("Password to approve a bot").count(), 0, "the password row");
+  });
+
+it("Server Bots: a double tap on Approve sends one POST with the code and the token of a list read after the tap, then the request leaves and the bot shows under All bots", MAC, async (p) => {
+  await serverBuild(p, "list-fixed-only.json");
+  const joined = (raw) => ({ ...approvingHere(raw), pending: raw.pending.slice(1), joined: [...raw.joined, { id: "tarn", name: "tarn" }] });
+  const asked = await serverBots(p, { lists: [botsList("t-list-1", approvingHere), botsList("t-list-2", approvingHere), botsList("t-list-3", joined)] });
+  await installSessionClock(p);
+  await open(p, "/settings/bots");
+  const tarn = T(p, "pending-join").filter({ hasText: "tarn wants to join" });
+  await tarn.getByRole("button", { name: "Approve", exact: true }).dblclick();
+  await gone(tarn);
+  await T(p, "bot-row").and(p.locator('[data-id="tarn"]')).waitFor();
+  equal([asked.posts, asked.reads], [[["approve", { code: "K7P42Q9M", csrf: "t-list-2" }]], 3], "POSTs and reads after a double tap on Approve");
+});
+
+it("Server Bots: an Approve that the other app already handled says That request is no longer waiting. and shows the list as it is now", MAC, async (p) => {
+  await serverBuild(p, "list-fixed-only.json");
+  const asked = await serverBots(p, {
+    lists: [botsList("t-list-1", approvingHere), botsList("t-list-2", approvingHere), botsList("t-list-3", (raw) => ({ ...approvingHere(raw), pending: raw.pending.slice(1) }))],
+    posts: { approve: [(route) => chatReply(route, 404, { error: "gone" })] },
+  });
+  await installSessionClock(p);
+  await open(p, "/settings/bots");
+  const tarn = T(p, "pending-join").filter({ hasText: "tarn wants to join" });
+  await tarn.getByRole("button", { name: "Approve", exact: true }).click();
+  await p.getByRole("alert").filter({ hasText: "That request is no longer waiting." }).waitFor();
+  await gone(tarn);
+  equal([asked.posts.map(([path]) => path), asked.reads], [["approve"], 3], "POSTs and reads");
+}, /404 \(Not Found\)/);
+
+for (const [how, change, line] of [["is here", approvingHere, "Invite copied. When it asks, approve it under Pending joins."], ["is not here", (raw) => raw, "Approve it in Backchannel when it asks."]])
+  it("Server Bots: when approving " + how + ", Add bot waits for the bot with the line " + line, PHONE, async (p) => {
+    await p.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await serverBuild(p, "list-fixed-only.json");
+    const made = botsSample("invite-200.json");
+    await serverBots(p, { lists: [botsList("t-list-1", change), botsList("t-list-2", change)], posts: { invites: [(route) => chatReply(route, 200, { ...made, csrf: "t-done-1", freshUntil: BOTS_FRESH })] } });
+    await installSessionClock(p);
+    await open(p, "/settings/bots");
+    await T(p, "bots-add").click();
+    await T(p, "bot-name").fill("tarn");
+    await p.locator('[data-pop="add-bot"]').getByRole("button", { name: "Create invite" }).click();
+    await T(p, "invite-copy").click();
+    await T(p, "bot-waiting").getByText(line, { exact: true }).waitFor();
+    if (process.env.QD_BOTS_SHOTS && how === "is here") await p.screenshot({ path: process.env.QD_BOTS_SHOTS + "/add-waiting-approve-phone-390.png" });
+  });
 
 it("Server Bots: Add bot on the Bots screen checks the name before sending, then shows the prompt and its invite code once with Copy, and closing drops them", PHONE, async (p) => {
   await serverBuild(p, "list-fixed-only.json");
@@ -6157,6 +6236,47 @@ it("Server Chat: with cursor listed, a bot reply that arrives on the refresh is 
   await p.locator('[data-message-id="iris-reply"]').waitFor({ timeout: 15_000 });
   const ids = (await chatTimeline(p)).filter((item) => item.startsWith("iris-"));
   equal([asked.threads.filter((one) => one.startsWith("iris")), ids.slice(-2), ids.length === new Set(ids).size], [["iris", "iris after iris-m30"], ["iris-m30", "iris-reply"], true], "the iris reads, the last rows in order, each row once");
+});
+
+it("Server Chat on a phone: with cursor listed, a bot reply that arrives one second after his message turns Delivered is on screen within one round trip and 400 ms of the refresh", PHONE, async (p) => {
+  const ROUND_TRIP = 562.5;
+  const REPLY = { id: "iris-reply", from: "bot", text: "A reply after his message.", at: "2026-11-06T00:35:00-05:00", refs: [] };
+  const sentRows = [];
+  let arrived = false;
+  await serverBuildChat(p, {
+    rows: () => chatPayload("rows.json").map((row) => (row.bot.id === "iris" && arrived ? { ...row, last: REPLY.id, at: REPLY.at, preview: REPLY.text } : row)),
+    "iris": (messages) => [...messages, ...sentRows, ...(arrived ? [REPLY] : [])],
+    shape: (body) => ({ ...body, features: ["cursor"] }),
+    post: (route, body, n) => {
+      const sent = chatSent(body, n);
+      sentRows.push({ id: sent.id, from: sent.from, text: sent.text, at: sent.at, refs: sent.refs ?? [], clientId: sent.clientId });
+      return chatReply(route, 200, sent);
+    },
+  });
+  await p.addInitScript(() => {
+    const Quiet = window.EventSource;
+    window.EventSource = class extends Quiet {
+      constructor(...args) {
+        super(...args);
+        window.qdStream = this;
+      }
+    };
+  });
+  await p.route((url) => url.pathname.startsWith("/captain/"), async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, ROUND_TRIP));
+    await route.fallback();
+  });
+  await chatOpened(p);
+  await T(p, "chat-input").fill("Please send the sheet.");
+  await T(p, "chat-send").click();
+  await bubble(p, "Please send the sheet.").locator('[data-testid="chat-delivered"]').waitFor();
+  await p.waitForTimeout(1_000);
+  arrived = true;
+  const refreshed = Date.now();
+  await p.evaluate(() => window.qdStream.dispatchEvent(new MessageEvent("refresh", { data: '{"cards":false,"mail":false,"chats":true}' })));
+  await p.locator('[data-message-id="iris-reply"]').waitFor({ timeout: 10_000 });
+  const took = Date.now() - refreshed;
+  assert.ok(took <= ROUND_TRIP + 400, "the reply showed " + Math.round(took) + " ms after the refresh, over one round trip and 400 ms");
 });
 
 it("Server Chat: leaving the chat while a send is out and coming back shows the same Sending row, and it turns Sent once when the answer lands", MAC, async (p) => {

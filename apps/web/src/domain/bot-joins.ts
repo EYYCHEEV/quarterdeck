@@ -5,6 +5,7 @@ export const BOTS_WORDS = {
   approve: "Approve in Backchannel for now.",
   history: "Joins history is in Backchannel for now.",
   waiting: "Approve it in Backchannel when it asks.",
+  waitingHere: "Invite copied. When it asks, approve it under Pending joins.",
   list: "Could not load the bots.",
   failed: "Could not do that.",
   gone: "That request is no longer waiting.",

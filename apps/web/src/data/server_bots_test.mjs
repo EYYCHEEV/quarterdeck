@@ -19,6 +19,7 @@ const ticks = async (n = 8) => {
 const json = (body, status = 200) => () => new Response(typeof body === "string" ? body : JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 const list = (n, change = (raw) => raw) => json(change({ ...sample("list-200.json"), csrf: "t-list-" + n, freshUntil: FRESH }));
 const done = (n) => json({ ...sample("action-200.json"), csrf: "t-done-" + n, freshUntil: FRESH });
+const here = (raw) => ({ ...raw, approveHere: true });
 
 function host(...steps) {
   const calls = [];
@@ -124,6 +125,59 @@ test("Refuse reads the list after the tap and sends the code without its space w
   assert.deepEqual(h.calls.filter((call) => call.method === "POST").map((call) => call.body.csrf), ["t-list-2", "t-list-4"], "each POST carries the token of the read just before it");
 });
 
+test("Approve reads the list after the tap, sends exactly the code without its space and that read's token to the approve path, then reads the list again and shows that read", async () => {
+  const h = host(list(1, here), list(2, here), done(1), list(3, (raw) => ({ ...here(raw), pending: raw.pending.slice(1) })));
+  const { api } = await ready(h);
+  await api.approveJoin("K7P42Q9M");
+  assert.deepEqual(shape(h.calls), ["GET /captain/api/bots", "GET /captain/api/bots", "POST /captain/api/bots/approve", "GET /captain/api/bots"]);
+  assert.deepEqual(h.calls[2].body, { code: "K7P42Q9M", csrf: "t-list-2" });
+  assert.deepEqual([h.calls[2].meta.kind, h.calls[2].redirect], ["post", "manual"]);
+  assert.deepEqual([api.current().pending.map((one) => one.id), api.current().notice, api.current().busy], [["M3X85T2R"], null, false]);
+});
+
+test("Approve sends nothing when the list read after the tap says approving is not here", async () => {
+  const h = host(list(1, here), list(2));
+  const { api } = await ready(h);
+  await api.approveJoin("K7P42Q9M");
+  assert.deepEqual(shape(h.calls), ["GET /captain/api/bots", "GET /captain/api/bots"]);
+  assert.deepEqual([api.current().approveHere, api.current().notice, api.current().busy, api.current().pending.length], [false, null, false, 2]);
+});
+
+test("a failed Approve keeps the request and shows its words: gone and the rate limit with the list read again, a body fault or an unavailable service with Try again, and 401 or 403 quietly", async () => {
+  const { BOTS_WORDS } = await (await import("../../tools/load-ts.mjs")).loadTs("src/data/bots-client.ts");
+  for (const [answer, notice, after] of [
+    [json({ error: "gone" }, 404), { words: BOTS_WORDS.gone, again: false }, ["GET /captain/api/bots"]],
+    [json({ error: "rate" }, 429), { words: BOTS_WORDS.rate, again: false }, ["GET /captain/api/bots"]],
+    [json({ error: "request refused" }, 400), { words: BOTS_WORDS.failed, again: true }, ["GET /captain/api/bots"]],
+    [json({ error: "request unavailable" }, 503), { words: BOTS_WORDS.failed, again: true }, ["GET /captain/api/bots"]],
+    [json({ error: "session" }, 401), null, []],
+    [json({ error: "request refused" }, 403), null, []],
+  ]) {
+    const h = host(list(1, here), list(2, here), answer, list(3, here));
+    const { api } = await ready(h);
+    await api.approveJoin("K7P42Q9M");
+    const status = String(answer().status);
+    assert.deepEqual(shape(h.calls).slice(2), ["POST /captain/api/bots/approve", ...after], status);
+    assert.deepEqual([api.current().notice, api.current().busy, api.current().pending.length], [notice, false, 2], status);
+  }
+});
+
+test("one Approve at a time: a second tap while it is out sends nothing, and the screen knows it is busy", async () => {
+  const h = host(list(1, here), list(2, here), "hold");
+  const { api } = await ready(h);
+  const first = api.approveJoin("K7P42Q9M");
+  await tick();
+  assert.equal(api.current().busy, true);
+  await api.approveJoin("K7P42Q9M");
+  await api.refuseJoin("K7P42Q9M");
+  await ticks();
+  assert.deepEqual(shape(h.calls), ["GET /captain/api/bots", "GET /captain/api/bots", "POST /captain/api/bots/approve"]);
+  h.more(list(3, here));
+  h.held[0](done(1)());
+  await first;
+  assert.equal(api.current().busy, false);
+});
+
 test("the token comes only from a list read after the tap: with another read between the bots list and the tap, and a server that takes only the newest token it gave, Refuse, Create invite and Cancel invite are each taken", async () => {
   const server = newestOnly();
   const { api } = await ready(server);
@@ -211,22 +265,16 @@ test("one action at a time: a second tap while one is out sends nothing, and the
   assert.deepEqual(shape(h.calls), ["GET /captain/api/bots", "GET /captain/api/bots", "POST /captain/api/bots/refuse", "GET /captain/api/bots"]);
 });
 
-test("with under 30 s of fresh sign-in left nothing is sent and he goes to the fresh sign-in; with more the action goes; a token read whose fresh sign-in has under 30 s left sends no POST and goes there too", async () => {
-  const short = host(list(1, (raw) => ({ ...raw, freshUntil: NOW / 1000 + 29 })));
-  const { api } = await ready(short);
-  await api.refuseJoin("K7P42Q9M");
+test("no fresh sign-in is asked first: with the list's fresh sign-in long past, Approve, Refuse, Create invite and Cancel invite each post, and he is never sent to the fresh sign-in", async () => {
+  const past = (n) => list(n, (raw) => ({ ...here(raw), freshUntil: NOW / 1000 - 3600 }));
+  const h = host(past(1), past(2), done(1), past(3), past(4), done(2), past(5), past(6), json({ ...sample("invite-200.json"), csrf: "t-done-3", freshUntil: FRESH }), past(7), past(8), done(4), past(9));
+  const { api } = await ready(h);
+  await api.approveJoin("K7P42Q9M");
+  await api.refuseJoin("M3X85T2R");
   await api.createInvite("tarn");
-  assert.deepEqual(shape(short.calls), ["GET /captain/api/bots"]);
-  assert.deepEqual(short.went, [STEP_UP, STEP_UP]);
-  const enough = host(list(1, (raw) => ({ ...raw, freshUntil: NOW / 1000 + 31 })), list(2, (raw) => ({ ...raw, freshUntil: NOW / 1000 + 31 })), done(1), list(3));
-  const ok = await ready(enough);
-  await ok.api.refuseJoin("K7P42Q9M");
-  assert.deepEqual(shape(enough.calls), ["GET /captain/api/bots", "GET /captain/api/bots", "POST /captain/api/bots/refuse", "GET /captain/api/bots"]);
-  assert.deepEqual(enough.went, []);
-  const late = host(list(1), list(2, (raw) => ({ ...raw, freshUntil: NOW / 1000 + 29 })));
-  const lapsed = await ready(late);
-  await lapsed.api.refuseJoin("K7P42Q9M");
-  assert.deepEqual([shape(late.calls), late.went, lapsed.api.current().busy], [["GET /captain/api/bots", "GET /captain/api/bots"], [STEP_UP], false]);
+  await api.cancelInvite("inv-12charsxx");
+  assert.deepEqual(shape(h.calls).filter((one) => one.startsWith("POST")), ["POST /captain/api/bots/approve", "POST /captain/api/bots/refuse", "POST /captain/api/bots/invites", "POST /captain/api/bots/invites/cancel"]);
+  assert.deepEqual(h.went, []);
 });
 
 test("a 303 on an action goes to the fresh sign-in with next=/settings/bots and reads nothing more; a 401 or 403 reads nothing more", async () => {
