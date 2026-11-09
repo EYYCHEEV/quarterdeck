@@ -52,7 +52,7 @@ function fakeClock() {
 
 const stamp = (n) => "2026-11-06T00:" + String(Math.floor(n / 60) % 60).padStart(2, "0") + ":" + String(n % 60).padStart(2, "0") + "-05:00";
 
-function serve(chatLib = lib, { post, rows, read, thread, cards } = {}) {
+function serve(chatLib = lib, { post, rows, read, thread, cards, upload } = {}) {
   const time = fakeClock();
   let hidden = false;
   const watchers = new Set();
@@ -63,6 +63,10 @@ function serve(chatLib = lib, { post, rows, read, thread, cards } = {}) {
   const sent = new Map();
   let serial = 0;
   let counter = 0;
+  let uploadCount = 0;
+  const uploaded = new Map();
+  const navigations = [];
+  const pages = { goTo: (path) => navigations.push(path), postForm: (path) => navigations.push(path) };
   const add = (bot, from, body, extra = {}) => {
     counter += 1;
     const made = { id: "m" + counter, from, text: body, at: stamp(counter), refs: [], ...extra };
@@ -86,17 +90,22 @@ function serve(chatLib = lib, { post, rows, read, thread, cards } = {}) {
     return thread ? thread(body) : body;
   };
   const send = async (path, init) => {
-    const body = init.body ? JSON.parse(init.body) : null;
-    calls.push({ method: init.method, path, body, at: time.now() - NOW });
+    const body = typeof init.body === "string" ? (init.body ? JSON.parse(init.body) : null) : (init.body ?? null);
+    const call = { method: init.method, path, body, headers: Object.fromEntries(new Headers(init.headers ?? {})), at: time.now() - NOW };
+    calls.push(call);
+    if (init.method === "POST" && path === "/captain/api/files") {
+      uploadCount += 1;
+      return (await upload?.(init, uploadCount)) ?? fileAnswer(call, uploadCount, uploaded);
+    }
     if (init.method === "POST" && path === "/captain/api/chat") {
-      if (post) return post(body, init, { add, sent });
-      if (!sent.has(body.clientId)) sent.set(body.clientId, add(body.bot, "captain", body.text, { clientId: body.clientId }));
-      return json({ ...sent.get(body.clientId), uploadVerdicts: [], csrf: "token-post", freshUntil: Math.floor(NOW / 1000) + 1800 });
+      if (post) return post(body, init, { add, sent, uploaded });
+      return store(body, { add, sent, uploaded });
     }
     if (path === "/captain/cards") {
       const held = cards?.();
       if (held) return held;
       serial += 1;
+      call.csrf = "token-" + serial;
       return json({ ...structuredClone(LISTING), csrf: "token-" + serial }, 200, { ETag: '"list-' + serial + '"' });
     }
     const answer = read?.(path, init, { threadBody });
@@ -121,13 +130,13 @@ function serve(chatLib = lib, { post, rows, read, thread, cards } = {}) {
     streams.push(stream);
     return stream;
   };
-  const source = chatLib.createServerSource(chatLib.createApiClient({ send, openEvents, schedule: time.schedule }), time.now, time.schedule, undefined, visibility);
+  const source = chatLib.createServerSource(chatLib.createApiClient({ send, openEvents, schedule: time.schedule }), time.now, time.schedule, pages, visibility);
   const worlds = [];
   source.watch((failure) => {
     if (!failure) void source.load().then((world) => worlds.push(world)).catch(() => undefined);
   });
   return {
-    source, calls, time, worlds, threads, add,
+    source, calls, time, worlds, threads, add, uploaded, navigations,
     hide() { hidden = true; for (const run of [...watchers]) run(); },
     show() { hidden = false; for (const run of [...watchers]) run(); },
     requests: (from = 0) => calls.slice(from).map((call) => call.method + " " + call.path),
@@ -167,9 +176,17 @@ const THREAD = (bot, before) => "GET /captain/api/chat?bot=" + bot + (before ? "
 const POST = "POST /captain/api/chat";
 const TOKEN = "GET /captain/cards";
 const READ = "POST /captain/api/chat/read";
-const store = (body, { add, sent }) => {
-  if (!sent.has(body.clientId)) sent.set(body.clientId, add(body.bot, "captain", body.text, { clientId: body.clientId }));
+const store = (body, { add, sent, uploaded }) => {
+  if (body.files?.some((id) => !uploaded?.has(id))) return json({ error: "files" }, 422);
+  if (!sent.has(body.clientId)) sent.set(body.clientId, add(body.bot, "captain", body.text, { clientId: body.clientId, ...(body.files ? { files: body.files.map((id) => uploaded.get(id)) } : {}) }));
   return json({ ...sent.get(body.clientId), uploadVerdicts: [], csrf: "token-post", freshUntil: Math.floor(NOW / 1000) + 1800 });
+};
+const fileAnswer = (call, n, uploaded) => {
+  const id = "f-" + n;
+  const type = call.headers["content-type"] ?? "";
+  const item = { id, name: decodeURIComponent(call.headers["x-qd-file-name"] ?? "file"), type, size: new Blob([call.body]).size, kind: type.startsWith("image/") ? "photo" : "file", url: "/captain/api/files/" + id };
+  uploaded.set(id, item);
+  return json({ id, name: item.name, type, size: item.size, sha256: "0".repeat(64), kind: item.kind, csrf: "up-" + n, freshUntil: Math.floor(NOW / 1000) + 1800 });
 };
 const hang = (init) => new Promise((resolve, reject) => init.signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))));
 const never = () => new Promise(() => {});
@@ -1748,4 +1765,289 @@ test("the mark-read POST goes to its own path after a fresh token read, and its 
   const refused = bare(() => json({ csrf: "t", freshUntil: 1 }));
   await assert.rejects(refused.client.chat.read("has space", "m3"), refusedWith("This bot is not in your chat list."));
   assert.deepEqual(refused.calls, []);
+});
+
+const UPLOAD = "POST /captain/api/files";
+const LIMITS = { fileBytes: 10485760, messageBytes: 26214400, count: 5 };
+const FILES_ON = { rows: (full) => ({ chats: full, fileLimits: LIMITS }), thread: (body) => ({ ...body, features: ["files"] }) };
+const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]);
+const photo = (name) => new File([PNG], name, { type: "image/png" });
+const doc = (name, words = "words") => new File([words], name, { type: "text/plain" });
+const five = () => [photo("one.png"), doc("two.txt"), photo("three.png"), doc("four.txt"), photo("five.png")];
+const uploads = (h, from = 0) => h.calls.slice(from).filter((call) => call.path === "/captain/api/files");
+const chatPosts = (h, from = 0) => h.calls.slice(from).filter((call) => call.method === "POST" && call.path === "/captain/api/chat");
+const tokenBefore = (h, call) => h.calls.slice(0, h.calls.indexOf(call)).filter((one) => one.path === "/captain/cards").at(-1)?.csrf;
+const bytesOf = async (body) => Buffer.from(await new Response(body).arrayBuffer());
+const LISTED_CARD = LISTING.projects.flatMap((project) => project.lanes.flatMap((lane) => lane.cards))[0];
+
+async function filesThread(options = {}) {
+  const h = serve(lib, { ...FILES_ON, ...options });
+  await h.boot();
+  await h.source.chat.listChats();
+  await h.source.chat.openThread("steward");
+  return h;
+}
+
+test("a send with files reads one token, uploads each file in turn with its type, its percent-encoded name and the csrf the answer before gave, then posts the ids with the same clientId and the last csrf: five files cost thirteen credits", async () => {
+  const h = await filesThread();
+  const files = [photo("one.png"), new File(["%PDF-1.7"], "two words \u00e9.pdf", { type: "application/pdf" }), new File(["# notes"], "notes.md"), new File(["a,b"], "data.csv", { type: "application/vnd.ms-excel" }), new File([JPEG], "five.jpg", { type: "image/jpeg" })];
+  const phases = [];
+  const from = h.calls.length;
+  const message = await h.source.chat.send("steward", { text: "five files", clientId: "client-f1", files }, (phase) => phases.push(phase));
+  assert.deepEqual(h.requests(from), [TOKEN, UPLOAD, UPLOAD, UPLOAD, UPLOAD, UPLOAD, POST]);
+  assert.equal(h.credits(from), 13);
+  const ups = uploads(h, from);
+  assert.deepEqual(ups.map((call) => call.headers["x-qd-csrf"]), [h.calls[from].csrf, "up-1", "up-2", "up-3", "up-4"]);
+  assert.deepEqual(ups.map((call) => call.headers["x-qd-file-name"]), ["one.png", "two%20words%20%C3%A9.pdf", "notes.md", "data.csv", "five.jpg"]);
+  assert.deepEqual(ups.map((call) => call.headers["content-type"]), ["image/png", "application/pdf", "text/markdown", "text/csv", "image/jpeg"]);
+  for (const [n, call] of ups.entries()) assert.ok((await bytesOf(call.body)).equals(await bytesOf(files[n])), files[n].name);
+  const posted = h.calls.at(-1).body;
+  assert.deepEqual(Object.keys(posted), ["bot", "text", "clientId", "csrf", "files"]);
+  assert.deepEqual(posted, { bot: "steward", text: "five files", clientId: "client-f1", csrf: "up-5", files: ["f-1", "f-2", "f-3", "f-4", "f-5"] });
+  assert.deepEqual(phases, ["uploading", "sending"]);
+  assert.equal(message.clientId, "client-f1");
+});
+
+test("a send with files and no words resolves with the receipt's items, a photo and a file with their own urls, and the open thread shows the same items", async () => {
+  const h = await filesThread();
+  const watcher = await h.watchThread("steward");
+  const message = await h.source.chat.send("steward", { text: "", clientId: "client-f2", files: [photo("one.png"), doc("two.txt")] });
+  const shown = [
+    { id: "f-1", name: "one.png", size: PNG.length, type: "image/png", kind: "photo", url: "/captain/api/files/f-1" },
+    { id: "f-2", name: "two.txt", size: 5, type: "text/plain", kind: "file", url: "/captain/api/files/f-2" },
+  ];
+  assert.equal(message.text, "");
+  assert.deepEqual(message.attachments, shown);
+  assert.deepEqual(watcher.seen.at(-1).messages.find((one) => one.clientId === "client-f2").attachments, shown);
+});
+
+const UPLOAD_REFUSALS = [
+  ["422 type says the file's type is not allowed", () => json({ error: "type" }, 422), refusedWith("This file's type is not allowed: two.txt")],
+  ["413 size says the file is too big", () => json({ error: "size" }, 413), refusedWith("This file is too big: two.txt")],
+  ["429 rate is today's rate line", () => json({ error: "rate" }, 429), named("RateLimited")],
+  ["401 is today's sign-in path", () => json({ error: "session" }, 401), named("SignInRequired")],
+  ["403 is today's sign-in path", () => json({ error: "session" }, 403), named("SignInRequired")],
+];
+
+for (const [label, reply, check] of UPLOAD_REFUSALS) {
+  test("an upload answered with " + label + ", with no new upload and no send", async () => {
+    const h = await filesThread({ upload: (init, n) => (n === 2 ? reply() : null) });
+    const from = h.calls.length;
+    const state = watchSend(h, h.source.chat.send("steward", { text: "two", clientId: "client-f3", files: [photo("one.png"), doc("two.txt")] }));
+    await pass(h, 10_000);
+    assert.ok(check(state.error), String(state.error));
+    assert.deepEqual(h.requests(from), [TOKEN, UPLOAD, UPLOAD]);
+  });
+}
+
+const LOST_UPLOADS = [
+  ["502 mail with retryAfter", () => json({ error: "mail", retryAfter: 3 }, 502)],
+  ["502 mail without retryAfter", () => json({ error: "mail" }, 502)],
+  ["504 and no body, a lost answer", () => new Response("", { status: 504 })],
+  ["a 200 whose answer cannot be read", () => json({ ok: true })],
+  ["a network failure", () => { throw new TypeError("Failed to fetch"); }],
+  ["400 when the body was cut", () => json({ error: "body" }, 400)],
+];
+
+for (const [label, reply] of LOST_UPLOADS) {
+  test("an upload answered with " + label + " reads a fresh token and uploads that file once more as a new upload with that token's csrf, then sends: ten credits for two files", async () => {
+    const h = await filesThread({ upload: (init, n) => (n === 2 ? reply() : null) });
+    const from = h.calls.length;
+    const state = watchSend(h, h.source.chat.send("steward", { text: "two", clientId: "client-f4", files: [photo("one.png"), doc("two.txt")] }));
+    await pass(h, 10_000);
+    assert.equal(state.value?.clientId, "client-f4", String(state.error));
+    assert.deepEqual(h.requests(from), [TOKEN, UPLOAD, UPLOAD, TOKEN, UPLOAD, POST]);
+    assert.equal(h.credits(from), 10);
+    const ups = uploads(h, from);
+    assert.deepEqual(ups.map((call) => call.headers["x-qd-file-name"]), ["one.png", "two.txt", "two.txt"]);
+    assert.equal(ups[1].headers["x-qd-csrf"], "up-1");
+    assert.equal(ups[2].headers["x-qd-csrf"], tokenBefore(h, ups[2]));
+    assert.notEqual(ups[2].headers["x-qd-csrf"], h.calls[from].csrf);
+    assert.deepEqual(h.calls.at(-1).body.files, ["f-1", "f-3"]);
+    assert.equal(h.calls.at(-1).body.csrf, "up-3");
+  });
+}
+
+for (const [label, reply] of [["400", () => json({ error: "body" }, 400)], ["502 mail", () => json({ error: "mail", retryAfter: 3 }, 502)]]) {
+  test("an upload answered " + label + " twice ends as Not Delivered after one fresh token read and one new upload, eight credits, and Try Again resumes from the kept ids", async () => {
+    let failing = true;
+    const h = await filesThread({ upload: (init) => (failing && new Headers(init.headers).get("X-QD-File-Name") === "two.txt" ? reply() : null) });
+    const outgoing = { text: "two", clientId: "client-f5", files: [photo("one.png"), doc("two.txt")] };
+    const from = h.calls.length;
+    const state = watchSend(h, h.source.chat.send("steward", outgoing));
+    await pass(h, 10_000);
+    assert.ok(refusedWith("Not Delivered")(state.error), String(state.error));
+    assert.deepEqual(h.requests(from), [TOKEN, UPLOAD, UPLOAD, TOKEN, UPLOAD]);
+    assert.equal(h.credits(from), 8);
+    const ups = uploads(h, from);
+    assert.equal(ups[2].headers["x-qd-csrf"], tokenBefore(h, ups[2]));
+    failing = false;
+    const again = h.calls.length;
+    const message = await h.source.chat.send("steward", outgoing);
+    assert.deepEqual(h.requests(again), [TOKEN, UPLOAD, POST]);
+    assert.equal(uploads(h, again)[0].headers["x-qd-file-name"], "two.txt");
+    assert.deepEqual(h.calls.at(-1).body.files, ["f-1", "f-4"]);
+    assert.deepEqual(message.attachments.map((one) => one.name), ["one.png", "two.txt"]);
+  });
+}
+
+test("an upload that never answers is aborted one hundred eighty seconds after it went out, and that file is uploaded once more after a fresh token read", async () => {
+  const h = await filesThread({ upload: (init, n) => (n === 1 ? hang(init) : null) });
+  const from = h.calls.length;
+  const state = watchSend(h, h.source.chat.send("steward", { text: "one", clientId: "client-f6", files: [photo("one.png")] }));
+  await pass(h, 179_000);
+  assert.equal(state.done, false);
+  assert.equal(uploads(h, from).length, 1);
+  await pass(h, 2_000);
+  assert.equal(state.value?.clientId, "client-f6", String(state.error));
+  const ups = uploads(h, from);
+  assert.equal(ups.length, 2);
+  assert.ok(ups[1].at - ups[0].at >= 180_000, "the new upload went out " + (ups[1].at - ups[0].at) + " ms after the first");
+  assert.equal(ups[1].headers["x-qd-csrf"], tokenBefore(h, ups[1]));
+  assert.notEqual(ups[1].headers["x-qd-csrf"], ups[0].headers["x-qd-csrf"]);
+  assert.deepEqual(chatPosts(h, from).map((call) => call.body.files), [["f-2"]]);
+});
+
+test("a send answered 422 files says the files expired and drops the kept ids, so Try Again uploads them again and sends", async () => {
+  let expired = 1;
+  const post = (body, init, server) => {
+    if (expired === 0) return store(body, server);
+    expired -= 1;
+    return json({ error: "files" }, 422);
+  };
+  const h = await filesThread({ post });
+  const outgoing = { text: "two", clientId: "client-f7", files: [photo("one.png"), doc("two.txt")] };
+  const from = h.calls.length;
+  await assert.rejects(h.source.chat.send("steward", outgoing), refusedWith("Your files expired. Tap Try Again to upload them again."));
+  assert.deepEqual(h.requests(from), [TOKEN, UPLOAD, UPLOAD, POST]);
+  const again = h.calls.length;
+  const message = await h.source.chat.send("steward", outgoing);
+  assert.deepEqual(h.requests(again), [TOKEN, UPLOAD, UPLOAD, POST]);
+  assert.deepEqual(h.calls.at(-1).body.files, ["f-3", "f-4"]);
+  assert.deepEqual(message.attachments.map((one) => one.name), ["one.png", "two.txt"]);
+});
+
+test("Try Again after a lost send answer posts the same ids with no upload inside the hour, and after fifty-five minutes uploads the files again", async () => {
+  let lost = true;
+  const post = (body, init, server) => (lost ? new Response("", { status: 503 }) : store(body, server));
+  const h = await filesThread({ post });
+  const outgoing = { text: "two", clientId: "client-f8", files: [photo("one.png"), doc("two.txt")] };
+  const from = h.calls.length;
+  const first = watchSend(h, h.source.chat.send("steward", outgoing));
+  await pass(h, 10_000);
+  assert.equal(first.error?.name, "NotConfirmed");
+  assert.deepEqual(h.requests(from), [TOKEN, UPLOAD, UPLOAD, POST, THREAD("steward"), THREAD("steward"), TOKEN, POST, THREAD("steward")]);
+  assert.deepEqual(chatPosts(h, from).map((call) => call.body.files), [["f-1", "f-2"], ["f-1", "f-2"]]);
+  const again = h.calls.length;
+  const second = watchSend(h, h.source.chat.send("steward", outgoing));
+  await pass(h, 10_000);
+  assert.equal(second.error?.name, "NotConfirmed");
+  assert.equal(uploads(h, again).length, 0);
+  assert.deepEqual(chatPosts(h, again).map((call) => call.body.files), [["f-1", "f-2"], ["f-1", "f-2"]]);
+  await h.time.advance(55 * 60_000);
+  lost = false;
+  const late = h.calls.length;
+  const message = await h.source.chat.send("steward", outgoing);
+  assert.equal(uploads(h, late).length, 2);
+  assert.deepEqual(chatPosts(h, late).map((call) => call.body.files), [["f-3", "f-4"]]);
+  assert.equal(message.clientId, "client-f8");
+});
+
+test("the thread carries the file limits only when the list gave them, and a send with files is refused with today's line before any request unless the thread lists files and the limits are held", async () => {
+  for (const [label, options, limits] of [["a bare list with files listed", { thread: FILES_ON.thread }, false], ["limits with files not listed", { rows: FILES_ON.rows }, true], ["neither", {}, false]]) {
+    const h = serve(lib, options);
+    await h.boot();
+    await h.source.chat.listChats();
+    const thread = await h.source.chat.openThread("steward");
+    if (limits) assert.deepEqual(thread.fileLimits, LIMITS, label);
+    else assert.equal("fileLimits" in thread, false, label);
+    const from = h.calls.length;
+    await assert.rejects(h.source.chat.send("steward", { text: "x", clientId: "client-f9", files: [photo("one.png")] }), refusedWith("Not sent: files are not built on the server yet."), label);
+    assert.equal(h.calls.length, from, label);
+  }
+  const h = await filesThread();
+  assert.deepEqual((await h.source.chat.openThread("steward")).fileLimits, LIMITS);
+});
+
+test("with the files switch off or on, a send with no files makes today's requests: one token read and one POST whose body keys are bot, text, clientId and csrf", async () => {
+  for (const options of [{}, FILES_ON]) {
+    const h = serve(lib, options);
+    await h.boot();
+    await h.source.chat.listChats();
+    await h.source.chat.openThread("steward");
+    const from = h.calls.length;
+    const message = await h.source.chat.send("steward", { text: "hello", clientId: "client-f10" });
+    assert.deepEqual(h.requests(from), [TOKEN, POST]);
+    assert.equal(h.credits(from), 3);
+    assert.deepEqual(Object.keys(h.calls.at(-1).body), ["bot", "text", "clientId", "csrf"]);
+    assert.equal("attachments" in message, false);
+  }
+});
+
+const FILES_CURSOR = (body) => ({ ...body, features: ["cursor", "files"] });
+const spentBefore = (h, call) => h.calls.slice(0, h.calls.indexOf(call)).filter((one) => one.at > call.at - 60_000).reduce((total, one) => total + (one.method === "POST" ? 2 : 1), 0) + (call.at < 60_000 ? STREAM_OPEN : 0);
+const spentNow = (h) => {
+  const at = h.time.now() - NOW;
+  return h.calls.filter((one) => one.at > at - 60_000).reduce((total, one) => total + (one.method === "POST" ? 2 : 1), 0) + (at < 60_000 ? STREAM_OPEN : 0);
+};
+
+async function busyFilesThread() {
+  const s = afterReads(FILES_CURSOR);
+  const h = serve(lib, { read: s.read, thread: FILES_CURSOR, rows: FILES_ON.rows });
+  s.threads = h.threads;
+  await h.boot();
+  await h.source.chat.listChats();
+  await h.source.chat.openThread("steward");
+  await h.watchThread("steward");
+  await h.time.advance(6_000);
+  for (let n = 0; n < 40; n += 1) {
+    h.add("steward", "bot", "reply " + n);
+    await h.refresh();
+    await pass(h, 100);
+  }
+  return h;
+}
+
+test("with automatic work at twenty-one credits in the minute, a five-file send waits for credits instead of refusing: each request goes out only when the rolling twenty-nine allows it, the row stays on uploading while it waits, and the send lands within the minute", async () => {
+  const h = await busyFilesThread();
+  assert.equal(spentNow(h), 21);
+  const from = h.calls.length;
+  const phases = [];
+  const state = watchSend(h, h.source.chat.send("steward", { text: "five", clientId: "client-e1", files: five() }, (phase) => phases.push(phase)));
+  await pass(h, 1_000);
+  assert.equal(state.done, false);
+  assert.equal(uploads(h, from).length, 3);
+  assert.deepEqual(phases, ["uploading"]);
+  await pass(h, 60_000);
+  assert.equal(state.value?.clientId, "client-e1", String(state.error));
+  assert.ok(state.at <= 60_000, "landed at " + state.at);
+  const ups = uploads(h, from);
+  const sent = chatPosts(h, from);
+  assert.equal(ups.length, 5);
+  assert.equal(sent.length, 1);
+  assert.deepEqual([...ups.slice(1).map((call) => call.headers["x-qd-csrf"]), sent[0].body.csrf], ["up-1", "up-2", "up-3", "up-4", "up-5"]);
+  for (const call of [...ups, ...sent]) assert.ok(spentBefore(h, call) + 2 <= 29, call.path + " at " + call.at + " with " + spentBefore(h, call) + " credits in the minute before");
+  assert.ok(ups[3].at - ups[2].at >= 30_000, "the fourth upload went out " + (ups[3].at - ups[2].at) + " ms after the third");
+  assert.deepEqual(phases, ["uploading", "sending"]);
+});
+
+test("while a send with files waits for credits, a send with no files, a thread open and a card answer are refused as today, and a sign-out ends the wait at once with nothing sent after it", async () => {
+  const h = await busyFilesThread();
+  const from = h.calls.length;
+  const state = watchSend(h, h.source.chat.send("steward", { text: "five", clientId: "client-e2", files: five() }));
+  await pass(h, 1_000);
+  assert.equal(uploads(h, from).length, 3);
+  const before = h.calls.length;
+  await assert.rejects(h.source.chat.send("steward", { text: "plain", clientId: "client-e3" }), named("RateLimited"));
+  await assert.rejects(h.source.chat.openThread("steward"), named("RateLimited"));
+  await assert.rejects(h.source.answer(LISTED_CARD.id, { choice: { kind: "option", letter: "A" }, note: "", version: LISTED_CARD.rev }), named("RateLimited"));
+  assert.deepEqual(h.requests(before), [TOKEN]);
+  assert.equal(state.done, false);
+  await h.source.signOut();
+  await pass(h, 100);
+  assert.equal(state.error?.name, "SignInRequired");
+  await pass(h, 70_000);
+  assert.equal(uploads(h, from).length, 3);
+  assert.equal(chatPosts(h, from).length, 0);
 });
