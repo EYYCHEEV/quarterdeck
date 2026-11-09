@@ -87,8 +87,21 @@ const ready = async ({ mode, tapFirst }) => {
     "const box = arguments[0]; return { focused: document.activeElement === box, visible: Math.round(window.visualViewport ? window.visualViewport.height : -1), inner: window.innerHeight };",
     [{ [ELEMENT]: input }],
   );
+  const NAME = "const name = (el) => (el && el.tagName ? el.tagName.toLowerCase() + (el.getAttribute('data-testid') ? ' ' + el.getAttribute('data-testid') : '') : String(el));";
+  const where = () => run(
+    NAME + " const box = arguments[0]; const r = box.getBoundingClientRect(); const v = window.visualViewport; const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return 'box ' + Math.round(r.left) + ',' + Math.round(r.top) + ' ' + Math.round(r.width) + 'x' + Math.round(r.height) + ', centre hit ' + (hit ? name(hit) : 'nothing') + ', scale ' + (v ? v.scale : -1) + ', viewport top ' + (v ? Math.round(v.offsetTop) : -1) + ', scrollY ' + Math.round(window.scrollY) + ', dpr ' + window.devicePixelRatio + ', window ' + window.innerWidth + 'x' + window.innerHeight + ', page focus ' + document.hasFocus() + ', ' + document.visibilityState + ', box ' + (box.readOnly ? 'readonly' : 'editable') + (box.disabled ? ' disabled' : '') + ', inputmode ' + (box.getAttribute('inputmode') || '-');",
+    [{ [ELEMENT]: input }],
+  );
+  const listen = () => run(
+    "const seen = []; const keep = (event) => { if (seen.length < 16) seen.push(event); }; const types = ['touchstart', 'touchend', 'pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'focusin', 'focusout']; for (const type of types) window.addEventListener(type, keep, { capture: true, passive: true }); window.qdTapSeen = () => { for (const type of types) window.removeEventListener(type, keep, { capture: true }); window.qdTapSeen = null; return seen; }; return true;",
+  );
+  const heard = () => run(
+    NAME + " const at = (e) => { const p = e.changedTouches && e.changedTouches[0] ? e.changedTouches[0] : e; return typeof p.clientX === 'number' ? Math.round(p.clientX) + ',' + Math.round(p.clientY) : '-'; }; const seen = window.qdTapSeen ? window.qdTapSeen() : null; const events = seen === null ? 'recorder gone' : seen.length ? seen.map((e) => [e.type, e.isTrusted ? 'trusted' : 'untrusted', e.pointerType || '-', name(e.target), at(e), e.defaultPrevented ? 'prevented' : 'not prevented'].join(' ')).join('; ') : 'none'; return events + '; focus now on ' + name(document.activeElement);",
+  );
   const tap = async () => {
     const before = await state();
+    const place = await where();
+    await listen();
     await call("POST", S + "/actions", {
       actions: [{
         type: "pointer",
@@ -105,9 +118,12 @@ const ready = async ({ mode, tapFirst }) => {
     await call("DELETE", S + "/actions");
     const raised = await wait("window.qdProbe.keyboard(arguments[0]).then(arguments[1]);", [KEYBOARD_MS]);
     const after = await state();
+    const events = await heard();
     const seen = `box focused ${after.focused}, visible height ${before.visible} then ${after.visible} of ${after.inner}`;
     console.log("     tap: " + seen);
-    if (!raised) throw new Error(`no on-screen keyboard: the visible height did not drop within ${KEYBOARD_MS / 1000} s of tapping the box (${seen})`);
+    console.log("     tap where: " + place);
+    console.log("     tap events: " + events);
+    if (!raised) throw new Error(`no on-screen keyboard: the visible height did not drop within ${KEYBOARD_MS / 1000} s of tapping the box (${seen}; where: ${place}; events: ${events})`);
   };
   if (tapFirst) await tap();
   await run("window.qdProbe.toEnd(); return true;");
