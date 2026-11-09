@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type ReactNode, type RefObject } from "react";
 import type { ChatDraft } from "../../data/session";
+import { FILE_ACCEPT, PHOTO_ACCEPT } from "../../domain/files-r1";
 import { looksLikeSecret, SECRET_TEXT } from "../../domain/secrets";
 import type { World } from "../../domain/types";
 import { enterSends, pageKey, watchKeyboard, type KeyboardWatch } from "../../platform/keyboard";
@@ -64,8 +65,9 @@ const SOURCES: Source[] = [
   { id: "files", label: "Files", icon: "file" },
   { id: "secret", label: "Secret", icon: "lock" },
 ];
+const SERVER_SOURCES = SOURCES.filter((source) => source.id !== "secret");
 
-function PlusMenu({ onPick, onClose }: { onPick: (id: MenuId) => void; onClose: () => void }) {
+function PlusMenu({ sources, onPick, onClose }: { sources: Source[]; onPick: (id: MenuId) => void; onClose: () => void }) {
   const box = useRef<HTMLDivElement>(null);
   useOverlay(box, onClose);
   return (
@@ -79,7 +81,7 @@ function PlusMenu({ onPick, onClose }: { onPick: (id: MenuId) => void; onClose: 
         data-pop="plus"
         className="absolute bottom-[calc(100%+8px)] left-0 z-30 grid w-56 gap-0.5 rounded-panel border border-line-2 bg-control p-2 shadow-pop outline-none"
       >
-        {SOURCES.map((source, n) => (
+        {sources.map((source, n) => (
           <button
             key={source.id}
             type="button"
@@ -109,6 +111,7 @@ export function Composer({
   onAttach,
   onUnattach,
   notice,
+  filesOn,
   onDismissNotice,
   onSecret,
   onUseSecretBox,
@@ -124,13 +127,16 @@ export function Composer({
   onAttach: (files: File[]) => void;
   onUnattach: (id: string) => void;
   notice: string | null;
+  filesOn: boolean;
   onDismissNotice: () => void;
   onSecret: () => void;
   onUseSecretBox?: () => void;
 }) {
   const cite = useRef<HTMLButtonElement>(null);
   const caret = useRef<number | null>(null);
-  const picker = useFilePicker(onAttach);
+  const picker = useFilePicker(onAttach, __QD_SOURCE__ === "server" && __QD_CHAT__ === "on" ? { photos: PHOTO_ACCEPT, files: FILE_ACCEPT } : undefined);
+  const plus = !(__QD_SOURCE__ === "server" && __QD_CHAT__ === "on") || filesOn;
+  const plusLabel = __QD_SOURCE__ === "server" && __QD_CHAT__ === "on" ? "Add photos or files" : "Add photos, files or a secret";
   const [citing, setCiting] = useState(false);
   const [adding, setAdding] = useState(false);
   const [pasteBlocked, setPasteBlocked] = useState(false);
@@ -221,7 +227,7 @@ export function Composer({
       return;
     }
     if (text) return;
-    if (__QD_SOURCE__ === "server" && __QD_CHAT__ === "on") return;
+    if (__QD_SOURCE__ === "server" && __QD_CHAT__ === "on" && !filesOn) return;
     const list = [...event.clipboardData.files];
     if (list.length) {
       event.preventDefault();
@@ -292,12 +298,12 @@ export function Composer({
         >
           {draft.files.length > 0 && <DraftStrip files={draft.files} onRemove={onUnattach} />}
           <div className="chat-composer-row">
-            {!(__QD_SOURCE__ === "server" && __QD_CHAT__ === "on") && (
+            {plus && (
               <button
                 type="button"
                 aria-expanded={adding}
-                aria-label="Add photos, files or a secret"
-                title="Add photos, files or a secret"
+                aria-label={plusLabel}
+                title={plusLabel}
                 onClick={() => setAdding(!adding)}
                 className={cx(round, adding && "bg-raised text-ink")}
                 data-testid="plus-btn"
@@ -305,7 +311,7 @@ export function Composer({
                 <Icon name="plus" />
               </button>
             )}
-            {!(__QD_SOURCE__ === "server" && __QD_CHAT__ === "on") && adding && <PlusMenu onPick={pickSource} onClose={() => setAdding(false)} />}
+            {plus && adding && <PlusMenu sources={__QD_SOURCE__ === "server" && __QD_CHAT__ === "on" ? SERVER_SOURCES : SOURCES} onPick={pickSource} onClose={() => setAdding(false)} />}
             <button
               ref={cite}
               type="button"

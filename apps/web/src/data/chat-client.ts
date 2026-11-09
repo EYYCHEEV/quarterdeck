@@ -1,6 +1,6 @@
 import { avatarColor, avatarSlot } from "../domain/avatar";
 import { QUOTE_LIMIT, SEND_FAILED_TEXT, withinLimit } from "../domain/chat";
-import { claimedType, EXPIRED_TEXT, typeText, type FileLimits } from "../domain/files-r1";
+import { claimedType, EXPIRED_TEXT, FILES_OFF_TEXT, typeText, type FileLimits } from "../domain/files-r1";
 import { plainText } from "../domain/markdown";
 import type { Bot } from "../domain/types";
 import type { Attachment, ChatFeature, ChatMessage, ChatRow, ChatThread, SentQuote, ServerUploadVerdict, Working, WireOutgoing } from "./chat-types";
@@ -38,7 +38,7 @@ export const CHAT_WORDS = {
   bot: "This bot is not in your chat list.",
   text: "Message is empty or too long.",
   mail: SEND_FAILED_TEXT,
-  files: "Not sent: files are not built on the server yet.",
+  files: FILES_OFF_TEXT,
   quote: "Not sent: quotes are not built on the server yet.",
   quoteGone: "Not sent: that message is no longer in this chat.",
   clientId: "Not sent: the message id is not 1 to 80 letters, digits, _ or -.",

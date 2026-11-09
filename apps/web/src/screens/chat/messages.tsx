@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Attachment, ChatMessage, SentQuote, Working } from "../../data/chat-types";
 import { useQd } from "../../data/hooks";
 import { DELIVERED_TEXT, QUIET_TEXT, readableText, readText, resolveQuote, SEND_FAILED_TEXT, SEND_RETRY_TEXT, workingStatus } from "../../domain/chat";
+import { UPLOADING_TEXT } from "../../domain/files-r1";
 import { parseMarkdown } from "../../domain/markdown";
 import { referenceInfo } from "../../domain/references";
 import { href, linkedParts, referenceHref } from "../../domain/routes";
@@ -86,7 +87,7 @@ export function NewLine() {
   );
 }
 
-type Note = "delivered" | "read" | "sending" | "failed" | null;
+type Note = "delivered" | "read" | "uploading" | "sending" | "failed" | null;
 
 export function MyMessage({
   text,
@@ -135,12 +136,18 @@ export function MyMessage({
           <span className="block">{SEND_FAILED_TEXT}</span>
           {reason && <span className="block text-small text-ink-2">{reason}</span>}
         </ErrorLine>
-      ) : note === "sending" ? (
-        <p className={cx(STATUS_LINE, "self-stretch")} data-testid="chat-sending-bar">
+      ) : note === "sending" || note === "uploading" ? (
+        <p className={cx(STATUS_LINE, "self-stretch", note === "uploading" && "gap-2")} data-testid="chat-sending-bar">
           <span aria-hidden="true" data-progress="" className="relative h-0.5 w-full overflow-hidden rounded-full bg-line-2">
             <span className="sending-bar absolute inset-y-0 left-0 w-2/5 rounded-full bg-chat-accent" />
           </span>
-          <span className="sr-only">Sending...</span>
+          {note === "uploading" ? (
+            <span className="flex-none text-xs text-ink-2" data-testid="chat-uploading">
+              {UPLOADING_TEXT}
+            </span>
+          ) : (
+            <span className="sr-only">Sending...</span>
+          )}
         </p>
       ) : (
         <p className={cx(STATUS_LINE, "text-xs text-ink-3")}>

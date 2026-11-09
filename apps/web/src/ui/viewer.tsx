@@ -1,5 +1,5 @@
 import { useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
-import { IconButton } from "./button";
+import { Button, IconButton } from "./button";
 import { useOverlay } from "./overlay";
 
 export type ViewerItem = { id: string; kind: "image" | "video"; src: string; poster: string | null; type: string | null; caption: string };
@@ -27,6 +27,27 @@ function Video({ item }: { item: ViewerItem }) {
       </div>
     );
   return <video src={item.src} poster={item.poster || undefined} controls playsInline preload="metadata" aria-label={item.caption} className={FILL} onError={() => setFailed(true)} data-testid="viewer-video" />;
+}
+
+function Picture({ item }: { item: ViewerItem }) {
+  const [failed, setFailed] = useState(false);
+  const [tries, setTries] = useState(0);
+  if (failed)
+    return (
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-4" data-testid="viewer-failed">
+        <p className="text-meta text-ink-2">This picture did not load.</p>
+        <Button
+          onClick={() => {
+            setFailed(false);
+            setTries(tries + 1);
+          }}
+          data-testid="viewer-retry"
+        >
+          Try again
+        </Button>
+      </div>
+    );
+  return <img key={tries} src={item.src || undefined} alt={item.caption} className={FILL} draggable={false} onError={() => setFailed(true)} data-testid="viewer-image" />;
 }
 
 export function Viewer<T extends ViewerItem>({
@@ -93,7 +114,7 @@ export function Viewer<T extends ViewerItem>({
         <IconButton icon="x" label="Close" onClick={onClose} className="rounded-full" data-autofocus="" />
       </div>
       <div className="relative min-h-0 flex-1 touch-pan-y select-none" onPointerDown={onDown} onPointerUp={onUp} data-testid="viewer-stage">
-        {item.kind === "video" ? <Video key={item.id} item={item} /> : <img key={item.id} src={item.src || undefined} alt={item.caption} className={FILL} draggable={false} data-testid="viewer-image" />}
+        {item.kind === "video" ? <Video key={item.id} item={item} /> : <Picture key={item.id} item={item} />}
         <IconButton icon="back" label="Previous" onClick={() => step(-1)} aria-disabled={index === 0} className="absolute top-1/2 left-2 -translate-y-1/2 rounded-full bg-panel aria-disabled:cursor-default aria-disabled:opacity-40" />
         <IconButton icon="chevR" label="Next" onClick={() => step(1)} aria-disabled={index === items.length - 1} className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full bg-panel aria-disabled:cursor-default aria-disabled:opacity-40" />
       </div>

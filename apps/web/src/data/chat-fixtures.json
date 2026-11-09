@@ -455,6 +455,58 @@
       ]
     },
     {
+      "fixture": "CF-FILES a server photo, a file row and a blocked item, with the server's file limits",
+      "bot": "alba",
+      "using": "Each fixture replaces the example chat of the bot it names for that test only; it is never loaded beside the example chat. The file limits make the composer use the server's admission rules, so each refusal line can be shot.",
+      "fileLimits": { "fileBytes": 10485760, "messageBytes": 26214400, "count": 5 },
+      "message": {
+        "id": "fx-files-m1",
+        "from": "Alba",
+        "at": "2026-11-02T09:10:00-05:00",
+        "text": "The search sheet, the run log, and one file the server stopped.",
+        "attachments": [
+          {
+            "id": "att-files-photo",
+            "kind": "picture",
+            "server": "photo",
+            "name": "phone-search-1.png",
+            "mime": "image/png",
+            "file": "media/phone-search-1.png",
+            "width": 880,
+            "height": 1912,
+            "bytes": 150397,
+            "size": "147 KB",
+            "sha256": "58c5378da40080b039e3d7e1043ddbfee2dbaed9bcaf806425286d55779226cc",
+            "alt": "Search sheet on a phone with se typed. Chats, then nine Task Cards, then Projects cut off at the bottom; Lanes are off the screen."
+          },
+          {
+            "id": "att-files-log",
+            "kind": "file",
+            "server": "file",
+            "name": "search-run-with-a-very-long-file-name-that-has-to-stay-inside-its-row-2026-11-01-18-21-09.log",
+            "mime": "text/plain",
+            "bytes": 403,
+            "size": "0.4 KB",
+            "sha256": "657c0377e4fa6caab93feaffcacc3f2b6589c7aa4577e59566394782c0c02e5e",
+            "text": "18:20:41 open search sheet viewport=440x956\n18:20:42 type: se\n18:20:42 groups: Chats 3, Task Cards 9, Projects 2, Lanes 1, Mail 0\n18:20:42 rows drawn: 15 of 15, no limit\n18:20:43 first screen shows: Chats 3, Task Cards 9, Projects 2\n18:20:43 not on first screen: Lanes 1\n18:21:09 keyboard up: first screen shows Chats 3, Task Cards 6 of 9\n18:21:09 not on first screen: Task Cards 3, Projects 2, Lanes 1\n"
+          },
+          {
+            "id": "att-files-blocked",
+            "kind": "file",
+            "server": "blocked",
+            "name": "setup.exe",
+            "mime": "application/x-msdownload",
+            "bytes": 2355000,
+            "size": "2.2 MB"
+          }
+        ]
+      },
+      "expect": [
+        "The photo shows inline; the log is one row cut to one line with '...' that opens the file in a new tab; the blocked item reads 'This file was blocked: setup.exe' with nothing to open.",
+        "A pick or drop is checked by the server's rules: each refusal line names the file or the limit, and nothing is added."
+      ]
+    },
+    {
       "fixture": "CF-IDENTITY sender and quote provenance",
       "bot": "alba",
       "messages": [

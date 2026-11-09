@@ -6,6 +6,7 @@ export type FileLimits = { fileBytes: number; messageBytes: number; count: numbe
 export const HEIC_TEXT = "This picture is in Apple's format. Choose it from Photos, or save it as a JPEG first.";
 export const UPLOADING_TEXT = "Uploading...";
 export const EXPIRED_TEXT = "Your files expired. Tap Try Again to upload them again.";
+export const FILES_OFF_TEXT = "Not sent: files are not built on the server yet.";
 export const typeText = (name: string): string => "This file's type is not allowed: " + name;
 export const bigText = (name: string): string => "This file is too big: " + name;
 export const blockedText = (name: string): string => "This file was blocked: " + name;

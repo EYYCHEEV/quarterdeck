@@ -62,6 +62,6 @@ type ChatReads = {
   subscribe: (botId: string, onChange: (thread: ChatThread) => void) => () => void;
 };
 
-export type BrowserChatApi = ChatReads & { uploadBoundary: "browser-stand-in"; send: (botId: string, message: Outgoing) => Promise<SentChatMessage<BrowserUploadVerdict>> };
+export type BrowserChatApi = ChatReads & { uploadBoundary: "browser-stand-in"; send: (botId: string, message: Outgoing, onPhase?: (phase: SendPhase) => void) => Promise<SentChatMessage<BrowserUploadVerdict>> };
 export type ServerChatApi = ChatReads & { uploadBoundary: "server"; older: (botId: string) => Promise<ChatThread>; send: (botId: string, message: Outgoing, onPhase?: (phase: SendPhase) => void) => Promise<SentChatMessage<ServerUploadVerdict>> };
 export type ChatApi = BrowserChatApi | ServerChatApi;
