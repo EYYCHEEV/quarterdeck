@@ -83,9 +83,31 @@ const ready = async ({ mode, tapFirst }) => {
   await run(PROBE + "\nreturn true;");
   if (!(await wait("window.qdProbe.draft().then(arguments[0]);"))) throw new Error("the two-line draft did not reach the box");
   const input = (await call("POST", S + "/element", { using: "css selector", value: '[data-testid="chat-input"]' }))[ELEMENT];
+  const state = () => run(
+    "const box = arguments[0]; return { focused: document.activeElement === box, visible: Math.round(window.visualViewport ? window.visualViewport.height : -1), inner: window.innerHeight };",
+    [{ [ELEMENT]: input }],
+  );
   const tap = async () => {
-    await call("POST", S + "/element/" + input + "/click", {});
-    if (!(await wait("window.qdProbe.keyboard(arguments[0]).then(arguments[1]);", [KEYBOARD_MS]))) throw new Error(`no on-screen keyboard: the visible height did not drop within ${KEYBOARD_MS / 1000} s of tapping the box`);
+    const before = await state();
+    await call("POST", S + "/actions", {
+      actions: [{
+        type: "pointer",
+        id: "finger",
+        parameters: { pointerType: "touch" },
+        actions: [
+          { type: "pointerMove", duration: 0, origin: { [ELEMENT]: input }, x: 0, y: 0 },
+          { type: "pointerDown", button: 0 },
+          { type: "pause", duration: 80 },
+          { type: "pointerUp", button: 0 },
+        ],
+      }],
+    });
+    await call("DELETE", S + "/actions");
+    const raised = await wait("window.qdProbe.keyboard(arguments[0]).then(arguments[1]);", [KEYBOARD_MS]);
+    const after = await state();
+    const seen = `box focused ${after.focused}, visible height ${before.visible} then ${after.visible} of ${after.inner}`;
+    console.log("     tap: " + seen);
+    if (!raised) throw new Error(`no on-screen keyboard: the visible height did not drop within ${KEYBOARD_MS / 1000} s of tapping the box (${seen})`);
   };
   if (tapFirst) await tap();
   await run("window.qdProbe.toEnd(); return true;");
