@@ -4394,7 +4394,12 @@ it("Server Queue: a refused native event stream checks the list and removes the 
   equal(await p.evaluate(() => [localStorage.getItem("qd.seen"), localStorage.getItem("qd.settings")]), kept, "local storage kept");
 }, /401 \(Unauthorized\)/);
 
+const parallelCases = new WeakMap();
+const keepSharedApp = (p) => {
+  if (parallelCases.has(p.context())) throw new Error("rebuilds the shared app inside a parallel case: " + parallelCases.get(p.context()));
+};
 const serverBuild = async (p, list) => {
+  keepSharedApp(p);
   const built = spawnSync(process.execPath, ["tools/build-app.mjs", "--server"], { stdio: "inherit", timeout: 60_000 });
   if (built.status !== 0) throw new Error("server build failed: " + (built.error?.message ?? built.status));
   const body = readFileSync(new URL("./src/data/server-payloads/" + list, import.meta.url), "utf8");
@@ -5124,6 +5129,7 @@ const CHAT_LAST = "Answer 30: the export sheet is on its way.";
 const SEND_CAP = Number(/const SEND_CAP = ([\d_]+);/.exec(readFileSync(new URL("./src/data/server-chat.ts", import.meta.url), "utf8"))[1].replaceAll("_", ""));
 const sendSettles = (locator) => locator.waitFor({ timeout: SEND_CAP });
 const serverBuildChat = async (p, { post, older, rows, "iris": iris, shape, read, list = "list-fixed-only.json" } = {}) => {
+  keepSharedApp(p);
   const built = spawnSync(process.execPath, ["tools/build-app.mjs", "--server", "--chat"], { stdio: "inherit", timeout: 60_000 });
   if (built.status !== 0) throw new Error("server chat build failed: " + (built.error?.message ?? built.status));
   const listing = readFileSync(new URL("./src/data/server-payloads/" + list, import.meta.url), "utf8");
@@ -6968,8 +6974,9 @@ if (!selected.length) {
 
 const browser = await chromium.launch(chromeLaunchOptions({ args: ["--no-sandbox"] }));
 const failed = [];
-const runCase = async (item) => {
+const runCase = async (item, parallel = false) => {
   const context = await browser.newContext({ colorScheme: "dark", ...item.size, reducedMotion: "reduce" });
+  if (parallel) parallelCases.set(context, item.name);
   await context.route((url) => MAIL_PATH.test(url.pathname), (route) => route.fulfill({ status: 404, contentType: "application/json", body: '{"error":"not found"}' }));
   const page = await context.newPage();
   page.setDefaultTimeout(5000);
@@ -6990,12 +6997,12 @@ const runCase = async (item) => {
   await context.close();
 };
 const workers = Math.max(1, Number.parseInt(process.env.QD_APP_WORKERS ?? "", 10) || 1);
-const alone = selected.filter((item) => /clipboard|copiedByKey|serverBuild|build-app/.test(item.run.toString()));
+const alone = selected.filter((item) => /clipboard|copiedByKey|serverBuild|answerServer|build-app/.test(item.run.toString()));
 const together = workers > 1 ? selected.filter((item) => !alone.includes(item)) : [];
 if (workers > 1) console.log(`app: ${together.length} behaviours in ${workers} parallel contexts, then ${alone.length} one at a time: ${alone.map(({ name }) => name).join(" | ")}`);
 try {
   await Promise.all(Array.from({ length: workers }, async () => {
-    for (let item = together.shift(); item; item = together.shift()) await runCase(item);
+    for (let item = together.shift(); item; item = together.shift()) await runCase(item, true);
   }));
   for (const item of workers > 1 ? alone : selected) await runCase(item);
 } finally {
