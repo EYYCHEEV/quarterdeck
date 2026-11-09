@@ -26,6 +26,7 @@ const OFF_LINE = "Not sent: files are not built on the server yet.";
 const EXPIRED = "Your files expired. Tap Try Again to upload them again.";
 const RESOURCE = /Failed to load resource/;
 const FILES_PATH = "/captain/api/files/";
+const WEBKIT_VIEWPORT_LINE = 'Viewport argument key "interactive-widget" not recognized and ignored.';
 const SENT = 15_000;
 const MAIL_PATH = /^\/captain\/mail(?:\/MT-[1-9][0-9]{0,8})?$/;
 const mailRefusal = (message) => {
@@ -57,7 +58,7 @@ async function serve(p, { files = true, limits = true, extra = [], upload, post,
   asked.until = (label, check) =>
     new Promise((done, fail) => {
       if (check()) return done();
-      const stop = setTimeout(() => fail(new Error("waited 10 s for " + label)), 10_000);
+      const stop = setTimeout(() => fail(new Error("waited 10 s for " + label + "; uploads " + asked.uploads.length + ", posts " + asked.posts.length + ", downloads [" + asked.downloads.join() + "]")), 10_000);
       watchers.push({ check, done: () => { clearTimeout(stop); done(); } });
     });
   const thread = () => {
@@ -256,7 +257,7 @@ it("a file row is a link that opens the file in a new tab with rel noopener, and
   await serve(p, { extra: [botWith(1, [shared("f-9", "notes.pdf", "application/pdf", "file")])] });
   await opened(p);
   const link = p.locator('[data-message-id="iris-x1"] [data-testid="chat-file"]');
-  assert.deepEqual(await link.evaluate((el) => [el.tagName, el.getAttribute("href"), el.getAttribute("target"), el.relList.contains("noopener")]), ["A", FILES_PATH + "f-9", "_blank", true]);
+  assert.deepEqual(await link.evaluate((el) => [el.tagName, el.getAttribute("href"), el.getAttribute("target"), (el.getAttribute("rel") ?? "").split(" ").includes("noopener")]), ["A", FILES_PATH + "f-9", "_blank", true]);
   const before = p.url();
   const [tab] = await Promise.all([p.context().waitForEvent("page"), link.click()]);
   await tab.waitForLoadState("commit");
@@ -342,7 +343,7 @@ try {
     page.setDefaultTimeout(5000);
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    page.on("console", (message) => message.type() === "error" && !mailRefusal(message) && !(item.allow && item.allow.test(message.text())) && errors.push(message.text()));
+    page.on("console", (message) => message.type() === "error" && !(ENGINE === "webkit" && message.text() === WEBKIT_VIEWPORT_LINE) && !mailRefusal(message) && !(item.allow && item.allow.test(message.text())) && errors.push(message.text()));
     try {
       await item.run(page);
       assert.deepEqual(errors, [], "console errors");
