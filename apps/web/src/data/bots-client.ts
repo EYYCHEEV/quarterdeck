@@ -19,7 +19,7 @@ export type MadeListedInvite = Omit<ListedInvite, "by">;
 
 export type InviteReceipt = BotsReceipt & { invite: MadeListedInvite; code: string; prompt: string };
 
-export type BotsAction = "refuse" | "invite" | "cancel";
+export type BotsAction = "approve" | "refuse" | "invite" | "cancel";
 
 const CODE = /^[2-9A-HJ-NP-Z]{8}$/;
 const NAME_RULE = /^[a-z][a-z0-9-]{0,31}$/;
@@ -113,7 +113,7 @@ function sendable(csrf: unknown): string {
   return csrf;
 }
 
-export function refuseBody(code: string, csrf: string): string {
+export function codeBody(code: string, csrf: string): string {
   const bare = code.replace(" ", "");
   if (!CODE.test(bare)) throw new Refused(BOTS_WORDS.gone);
   return JSON.stringify({ code: bare, csrf: sendable(csrf) });
@@ -163,7 +163,7 @@ export function readAction(action: BotsAction, status: number, text: string): Bo
   if (status === 303) throw new FreshSignInRequired();
   if (status === 401 || status === 403) throw new SignInRequired();
   if (status === 429) throw new Refused(BOTS_WORDS.rate);
-  if (status === 404 && action !== "invite" && errorIs(text, "gone")) throw new Refused(action === "refuse" ? BOTS_WORDS.gone : BOTS_WORDS.inviteGone);
+  if (status === 404 && action !== "invite" && errorIs(text, "gone")) throw new Refused(action === "cancel" ? BOTS_WORDS.inviteGone : BOTS_WORDS.gone);
   if (status === 422 && action === "invite" && errorIs(text, "name")) throw new Refused(BOTS_WORDS.name);
   if (status !== 200) throw new NotConfirmed();
   const raw = parsed(text);

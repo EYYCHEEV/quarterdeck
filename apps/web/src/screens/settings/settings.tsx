@@ -126,7 +126,7 @@ function useNow(ticking: boolean): number {
 
 function PendingCard({ join, api, admin, now }: { join: PendingJoin; api: BotsApi; admin: BotsAdmin; now: number }) {
   const [typed, setTyped] = useState("");
-  const needsPassword = admin.password;
+  const needsPassword = __QD_SOURCE__ !== "server" && admin.password;
   return (
     <div className="grid gap-3 px-4 py-3.5" data-testid="pending-join">
       <div className="flex items-start gap-3">
@@ -146,10 +146,10 @@ function PendingCard({ join, api, admin, now }: { join: PendingJoin; api: BotsAp
         <>
           {needsPassword && <PasswordField value={typed} onText={setTyped} />}
           <div className="grid grid-cols-2 gap-3">
-            <Button kind="plain" className="min-h-11 py-0" onClick={() => void api.refuseJoin(join.id)} data-testid="pending-refuse">
+            <Button kind="plain" className="min-h-11 py-0" disabled={admin.busy} onClick={() => void api.refuseJoin(join.id)} data-testid="pending-refuse">
               Refuse
             </Button>
-            <Button kind="primary" className="min-h-11 py-0" disabled={needsPassword && typed.length === 0} onClick={() => api.approveJoin(join.id)} data-testid="pending-approve">
+            <Button kind="primary" className="min-h-11 py-0" disabled={admin.busy || (needsPassword && typed.length === 0)} onClick={() => void api.approveJoin(join.id)} data-testid="pending-approve">
               Approve
             </Button>
           </div>
@@ -262,7 +262,7 @@ function BotsBody({ wide }: { wide: boolean }) {
       )}
     </Group>
   );
-  const rules = admin.approveHere ? (
+  const rules = admin.approveHere && __QD_SOURCE__ !== "server" ? (
     <Group title="Joins" key="rules">
       <HistoryRows startOpen={wide} history={admin.history} />
       <div className="settings-row-md flex items-center gap-3 px-4">
@@ -539,7 +539,7 @@ function Overview({ wide, onPick, onSignedOut }: { wide: boolean; onPick: (appea
       <RowLink to={href.settings("bots")} label="Pending joins" value={admin?.pending.length} accent={Boolean(admin?.pending.length)} />
       <RowLink to={href.settings("bots")} label="Open invites" value={admin?.invites.length} />
       <RowLink to={href.settings("bots")} label="Joins history" />
-      <RowLink to={href.settings("bots")} label="Password to approve a bot" value={admin ? (admin.password ? "On" : "Off") : undefined} />
+      {__QD_SOURCE__ !== "server" && <RowLink to={href.settings("bots")} label="Password to approve a bot" value={admin ? (admin.password ? "On" : "Off") : undefined} />}
     </Group>
   );
   const look = wide ? (

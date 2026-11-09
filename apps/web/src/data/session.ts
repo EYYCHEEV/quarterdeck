@@ -99,3 +99,5 @@ export function clearSession(): Map<string, unknown> {
   for (const set of listeners.values()) for (const listener of [...set]) listener();
   return old;
 }
+
+export const sessionGeneration = (): number => generation;

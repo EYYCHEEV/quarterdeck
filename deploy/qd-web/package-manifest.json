@@ -4,7 +4,7 @@
     "appRecord": "12a06cdbd7111047da7dfd0ef4484b632f681a4e88b9b963369e840e4b973b6f"
   },
   "files": {
-    "README.md": "916c702b4aeb442efe7686f2b4a1b0c7cc7273039aef0b425c42f50d90188a0c",
+    "README.md": "83c6309cb9887f0426d045d20813e823c6782611e211616fa2c9253e8975e12b",
     "THIRD_PARTY_NOTICES.md": "b7e63f3006af64dbb8b6f02a45e2a84523ace112105b6a5c16fe6003321ad328",
     "application.py": "d0f255b270255e584715dbac8437b19e2257ef2686e5f502ba3678fcafcbafa8",
     "approval_app.py": "64087376ffcd5f2c9226e5f3184effb97fa43cc05895ef98eff83b2a0f5866b6",
@@ -12,7 +12,7 @@
     "auth_bridge.py": "8db17a4d92e7f33cabfa3b5e3c814e9e54abc3669e9c24e6bfeb90eee6893550",
     "bot_list.py": "fb258e296ed830ea2bbf5bbd999282c11f55f88b2b228e29ed3e5c46ed3604a8",
     "bundle.py": "c8194f4e2e0531dc28e4c7571879272392b2db7a65f1b3a2da6af4b2af67915f",
-    "cards.py": "5377191c8667bf2959522be6715b582de03c076d430436bd0f276a3965e91f69",
+    "cards.py": "19790b7c35088ac4cb0489139428a8d28074d77b3a9fe650e880cdd808e93cb7",
     "chat_api.py": "7ce82242378c1cd8dfc3463771764bf635c258da3758e20c22d8a7685469ea37",
     "checker_adapter.py": "cdfe31b63c432e631a0d51d8b4620b2fb11af4c913ad1a9a375b92700e92ec25",
     "compose-fragment.json": "4121ec16737c41c91d9dc762feca256752a424b3566c30cb311dca51426a86f4",
@@ -20,7 +20,7 @@
     "invite_prompt.py": "1eae9edfef7f7d6da9458ed6389bb6ba0217d15527e6324155438a569223f9e5",
     "live.py": "bd5d3d78649689159e95877307ad7f0d865fc3b5d0c3c3c2f5da782f5d130f2a",
     "mail_api.py": "8c429b9d9b67989b796cd145398783dc5a3f89e730da02774c74e698fda546b8",
-    "mail_gateway.py": "d8c6d17142487a8c9f76bddb97724771d052ba09900f43a3bcf3622638eca35a",
+    "mail_gateway.py": "731f9157c97bde8dc45629dd8e103383ddaacf913cfbdcf939580c64c7c7fffe",
     "mailstate.py": "4e2fb8d1c392aa085a101498a9d9411ab849c04a99bfa892d1630c367b1053ca",
     "mounts.py": "7d90afd193b64e6e4a3400200cad1fa0aded44ef6ccf7fbc13d38ed27b160eef",
     "package_plan.py": "58ff8d76f478f9649c95ad2e73b6fd86ba953041cf6f78ff82602be76ce0b367",

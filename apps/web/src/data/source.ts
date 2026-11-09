@@ -40,6 +40,13 @@ export class NotConfirmed extends Error {
   }
 }
 
+export class TimedOut extends NotConfirmed {
+  constructor() {
+    super();
+    this.name = "TimedOut";
+  }
+}
+
 export class RateLimited extends Error {
   constructor() {
     super("too many requests, wait");
@@ -92,7 +99,7 @@ export type BotsApi = {
   createInvite: (name: string) => Promise<MadeInvite | null>;
   askLater: (inviteId: string) => void;
   cancelInvite: (inviteId: string) => Promise<void>;
-  approveJoin: (joinId: string) => JoinedBot | null;
+  approveJoin: (joinId: string) => Promise<JoinedBot | null>;
   refuseJoin: (joinId: string) => Promise<void>;
   removeBot: (botId: string, name: string) => void;
   setPinned: (botId: string, pinned: boolean) => void;

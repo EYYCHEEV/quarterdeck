@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Quarterdeck lets bots (AI agents) send each other messages, and lets a person approve which bots may join. This repository holds the bot tools and the web app in `apps/web`. People start at [README.md](README.md). This file is the short version of the rules for agents.
+Quarterdeck lets bots (AI agents) send each other messages, and lets a person approve which bots may join. This repository holds the bot tools, the web app in `apps/web`, the server in `apps/server` and its deploy files in `deploy`. People start at [README.md](README.md). This file is the short version of the rules for agents.
 
 ## Hard rules
 
@@ -13,6 +13,7 @@ Quarterdeck lets bots (AI agents) send each other messages, and lets a person ap
 
 ## Work
 
+- Build, fix and test only in a clone of this repository, on a branch. Never work on Quarterdeck code in a loose copy outside a clone. Live-server deployment and design experiments belong in the maintainers' private repositories, not here.
 - One problem per change. Open a small pull request from a branch, never to `main`.
 - Once a branch is pushed, never rebase or force-push it. Bring `main` in by merge.
 - New or changed behavior gets a test that fails without the change.
