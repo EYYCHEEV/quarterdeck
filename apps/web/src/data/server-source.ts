@@ -202,6 +202,36 @@ export function createServerSource(client: ApiClient, clock: () => number = Date
     return now + 60_000;
   }
 
+  const waits = new Set<(error: Error) => void>();
+
+  function creditsBack(cost: number, automatic: boolean): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const end = (error: Error): void => {
+        cancel();
+        waits.delete(end);
+        reject(error);
+      };
+      waits.add(end);
+      const cancel = schedule(() => {
+        waits.delete(end);
+        resolve();
+      }, Math.max(0, budgetAt(cost, automatic) - clock()));
+    });
+  }
+
+  function endWaits(): void {
+    for (const end of [...waits]) end(new SignInRequired());
+  }
+
+  async function chatCredits(cost: number): Promise<void> {
+    const mine = generation;
+    if (paused) throw new SignInRequired();
+    while (budgetAt(cost, false) > clock()) {
+      await creditsBack(cost, false);
+      if (mine !== generation || paused) throw new SignInRequired();
+    }
+  }
+
   const spaced = (): number => (chatOn ? Math.max(lastListAt, lastMailAt, lastChatAt) : Math.max(lastListAt, lastMailAt)) + 5_000;
 
   function closeEvents(): void {
@@ -274,6 +304,7 @@ export function createServerSource(client: ApiClient, clock: () => number = Date
     clearPrivate();
     forgetSession();
     closeEvents();
+    endWaits();
     const error = new SignInRequired();
     pending?.reject(error);
     current?.reject(error);
@@ -501,7 +532,11 @@ export function createServerSource(client: ApiClient, clock: () => number = Date
       if (paused && !job?.probe) throw new SignInRequired();
       if (unconfirmed && meta.kind !== "list" && meta.kind !== "token") throw new SessionUnconfirmed();
       const cost = meta.kind === "post" ? 2 : 1;
-      if (budgetAt(cost, meta.automatic) > clock()) throw new RateLimited();
+      while (budgetAt(cost, meta.automatic) > clock()) {
+        if (!meta.wait) throw new RateLimited();
+        await creditsBack(cost, meta.automatic);
+        if (mine !== generation || paused) throw new SignInRequired();
+      }
       const sent = clock();
       meta.sent = sent;
       credits.push({ at: sent, cost });
@@ -768,7 +803,7 @@ export function createServerSource(client: ApiClient, clock: () => number = Date
       if (chatPart) return Promise.resolve(chatPart);
       chatLoad ??= import("./server-chat").then((lib) => {
         if (!client.chat) throw new Refused(NOT_BUILT);
-        const host: ChatHost = { chat: client.chat, clock, schedule, access, read, live: () => !paused && !unconfirmed && !away && listeners.size > 0, arm, republish, token: () => takeToken(generation, privateEpoch), generation: () => generation, epoch: () => privateEpoch };
+        const host: ChatHost = { chat: client.chat, clock, schedule, access, read, live: () => !paused && !unconfirmed && !away && listeners.size > 0, arm, republish, token: () => takeToken(generation, privateEpoch), generation: () => generation, epoch: () => privateEpoch, credits: chatCredits };
         chatPart = lib.createServerChat(host);
         return chatPart;
       });
@@ -791,7 +826,7 @@ export function createServerSource(client: ApiClient, clock: () => number = Date
       openThread: (bot) => loadChat().then((part) => part.api.openThread(bot)),
       subscribe: (bot, onChange) => watch((part) => part.api.subscribe(bot, onChange)),
       older: (bot) => loadChat().then((part) => part.api.older(bot)),
-      send: (bot, message) => loadChat().then((part) => part.api.send(bot, message)),
+      send: (bot, message, onPhase) => loadChat().then((part) => part.api.send(bot, message, onPhase)),
     };
   }
 
@@ -829,6 +864,7 @@ export function createServerSource(client: ApiClient, clock: () => number = Date
       cancelCheck?.();
       cancelCheck = null;
       generation += 1;
+      endWaits();
       pending?.reject(new SignInRequired());
       current?.reject(new SignInRequired());
       pending = null;
@@ -857,6 +893,7 @@ export function createServerSource(client: ApiClient, clock: () => number = Date
     async signOut() {
       const csrf = await client.signOutToken().catch(() => null);
       forgetLocal();
+      endWaits();
       if (csrf !== null) {
         pages.postForm(SIGN_OUT_PATH, { csrf });
         return new Promise<never>(() => undefined);
