@@ -18,11 +18,11 @@ The stdlib-only `tools/ci/workflow-contexts` checker runs through the CI tool te
 | web-browser | `test:app` and `test:chat` | Playwright 1.64.1 from the lock file, and the Chrome for Testing headless shell below | 25 min |
 | web-design | `design:check` as four parallel jobs, one per size: 390, 744x1133, 1133x744 and 1512. The 390 job also measures the first screen | As web-browser | 40 min each |
 | web-design-selftest | The design check at 390 with a planted spill. It must exit with code 1 and print a failure line, or the lane fails | As web-browser | 30 min |
-| ios-typing-26, ios-typing-27 | The typing test in iPhone Safari on a simulator, run twice: on the real app, and on a copy with the old typing code planted. See [The iOS typing lane](#the-ios-typing-lane) | Node 22.21.0 darwin-arm64 by checksum in `tools/ci/pins.json`, and the `macos-26` and `xcode-27` images | 40 min each |
+| ios-typing-26 (required), ios-typing-27 (reported) | The typing test in iPhone Safari on a simulator, run twice: on the real app, and on a copy with the old typing code planted. See [The iOS typing lane](#the-ios-typing-lane) | Node 22.21.0 darwin-arm64 by checksum in `tools/ci/pins.json`, and the `macos-26` and `xcode-27` images | 40 min each |
 | leaks | gitleaks 8.30.1: `dir` on the checkout and `git` on the pull request's own commits. It loads `tools/ci/gitleaks.toml`: the default rules plus three per-file exceptions for the named digest fields listed there, for `generic-api-key` only. Other keys, files and rules still fail, as do values in the six named fields that are not exactly 64 lowercase hex characters. A different 64-character hex value, or a repeated matching line for one of those six fields, passes this public scan. The maintainers' own scan before each push checks those fields with the default rules, without this file. Inline allow markers are not honored. gitleaks always reads a `.gitleaksignore` file at the top of the checkout, whatever its options say, so this repository keeps none, and the scan step fails right before it runs gitleaks if one is there. A pull request that changes `tools/ci/` or `.github/` can change what this job runs, so those changes are reviewed as code. Output is redacted: the rule id and the path only | The tarball and its checksums file, by sha256 in `tools/ci/pins.json` | 10 min |
 | no-comments | Python by its tokenizer; `.ts`, `.tsx`, `.js` and `.mjs` by a check for a line that starts with a comment; `.css`, `.html`, `.yml` and shell files by their own checks. The keep-list is empty. Inside `apps/web`, the web-static lane also runs the syntax-aware TypeScript scanner through `npm run lint`. The lane checks file kinds too: no symlinks or special files, and every binary file listed by sha256 in `tools/ci/binaries.txt` | Scripts in this repository | 5 min |
 | pr-title | The title is a conventional commit title | None | 2 min |
-| qd-check | The aggregate. It always runs. It fails if any lane failed or was skipped when it should not have been | None | 2 min |
+| qd-check | The aggregate. It always runs. It fails if any lane it waits for failed or was skipped when it should not have been. It does not wait for `ios-typing-27` | None | 2 min |
 
 Path filters only choose which lanes do real work. `qd-check` always runs, so a required check is never left unreported.
 
@@ -30,7 +30,7 @@ Path filters only choose which lanes do real work. `qd-check` always runs, so a 
 
 A pull request needs three checks green on its current head before it can be merged.
 
-- `qd-check`: the aggregate of every lane.
+- `qd-check`: the aggregate of every required lane. `ios-typing-27` is reported but is not part of it.
 - `qd-review`: posted by a maintainer once the review of the current head is done. For a sensitive path, the review includes a security review.
 - `pr-title`: the conventional title.
 
@@ -49,7 +49,7 @@ The repository allows exactly four actions, each pinned by full commit SHA:
 
 A workflow never refers to an action by tag or branch. Node and the browser come from `tools/ci/pins.json` through `tools/ci/fetch-pinned`, so they need no extra action. The `server` job runs in a container image pinned by digest in `.github/workflows/ci.yml`, the same image that the `approval-qd` service uses.
 
-The `ubuntu-24.04`, `macos-26` and `xcode-27` runner images themselves are updated by GitHub and cannot be pinned by digest. Every tool that matters is pinned inside them, except Xcode, Safari and the simulator runtimes, which come with the macOS images and are recorded in each iOS job's summary.
+The `ubuntu-24.04`, `macos-26` and `xcode-27` runner images themselves are updated by GitHub and cannot be pinned by digest. Every tool that matters is pinned inside them, except Xcode, Safari and the simulator runtimes, which come with the macOS images and are recorded in each iOS job's summary and log.
 
 ## The browser
 
@@ -63,7 +63,7 @@ Before first-screen loads, `design:check` calibrates the same browser in a fresh
 
 ## The iOS typing lane
 
-`ios-typing-26` runs on the `macos-26` image with the newest installed iOS 26 simulator, and `ios-typing-27` runs on the `xcode-27` image, a public preview label, with iOS 27.0. Both use the image's ready iPhone 17 and create no device. Each job records macOS, Xcode, safaridriver, the runtime and the device in its summary, serves the fixture build on a loopback port, and runs `apps/web/src/screens/chat/chat_typing_ios.mjs` through safaridriver with the on-screen keyboard up. It then serves a copy of `apps/web` with `src/screens/chat/pre-367.patch` applied and runs the same driver with `QD_EXPECT=shrink`. That run passes only if every case fails on the shrink rule, so a patch that no longer applies, or a test that stops seeing the bug, fails the job. The Safari Remote Automation preference in the simulator, `com.apple.WebInspector RemoteAutomationEnabled`, is not documented by Apple. The job writes it with `xcrun simctl spawn`, then a preflight opens and closes one WebDriver session. If the preflight is refused, the job fails with one plain line: `Remote Automation is not on in the simulator` or `safaridriver refused the session`. The jobs upload nothing. A simulator is not a phone: typing in the installed Home Screen web app on a real iPhone, which WebDriver cannot drive, stays the final check.
+`ios-typing-26` runs on the `macos-26` image with the newest installed iOS 26 simulator, and `ios-typing-27` runs on the `xcode-27` image, which is generally available, with iOS 27.0. Both use the image's ready iPhone 17 and create no device. Both run on every web change. `ios-typing-26` is required: `qd-check` waits for it. `ios-typing-27` is reported: it runs as its own check outside `qd-check`, so a red run stays visible but does not block a merge. It becomes required in a later pull request, after its first green run. Each job records macOS, Xcode and safaridriver in its summary and its log, and the runtime and the device in its summary. It boots the simulator once, starts Safari with `xcrun simctl launch`, serves the fixture build on a loopback port, and runs `apps/web/src/screens/chat/chat_typing_ios.mjs` through safaridriver with the on-screen keyboard up. It then serves a copy of `apps/web` with `src/screens/chat/pre-367.patch` applied and runs the same driver with `QD_EXPECT=shrink`. That run passes only if every case fails on the shrink rule, so a patch that no longer applies, or a test that stops seeing the bug, fails the job. Before the typing test, a preflight opens and closes one WebDriver session, and it fails at once with one plain line, `Remote Automation is not on in the simulator`, if the driver says so. The session check tries up to three times and prints the driver's whole message for each failed try, and a failed job prints diagnostics in its log: the Xcode path, the safaridriver version, the booted simulators, and the tails of the driver and app server logs. The jobs upload nothing. A simulator is not a phone: typing in the installed Home Screen web app on a real iPhone, which WebDriver cannot drive, stays the final check.
 
 ## Add a lane
 

@@ -11,13 +11,19 @@ import urllib.request
 LINE = "iOS typing lane: "
 RUNTIME_PREFIX = "com.apple.CoreSimulator.SimRuntime.iOS-"
 SESSION_SECONDS = 240
-MESSAGE_LIMIT = 200
+SESSION_TRIES = 3
+RETRY_PAUSE_SECONDS = 20
+NO_HOSTS = "could not find any session hosts"
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 USAGE = "usage: ios_simulator.py pick WANTED MODEL | port | wait NAME URL SECONDS | session URL UDID"
 
 
+def say(message):
+    print(LINE + message, file=sys.stderr, flush=True)
+
+
 def fail(message):
-    print(LINE + message, file=sys.stderr)
+    say(message)
     return 1
 
 
@@ -106,28 +112,58 @@ def command_wait(name, url, seconds):
         time.sleep(min(0.5, remaining))
 
 
-def command_session(base, udid):
-    capabilities = {"platformName": "iOS", "safari:useSimulator": True, "safari:deviceUDID": udid}
-    try:
-        status, payload = request("POST", base + "/session", {"capabilities": {"alwaysMatch": capabilities}})
-    except (OSError, http.client.HTTPException):
-        return fail("safaridriver did not answer the session request")
+def open_session(base, capabilities):
+    status, payload = request("POST", base + "/session", {"capabilities": {"alwaysMatch": capabilities}})
     value = payload.get("value") if isinstance(payload, dict) else None
     value = value if isinstance(value, dict) else {}
     session = value.get("sessionId")
-    if status != 200 or not session:
-        message = " ".join(str(value.get("message", "")).split())[:MESSAGE_LIMIT]
+    if status == 200 and session:
+        return str(session), "", ""
+    return None, str(value.get("error", status)), " ".join(str(value.get("message", "")).split())
+
+
+def close_session(base, session):
+    try:
+        closed = request("DELETE", base + "/session/" + urllib.parse.quote(session, safe=""))[0]
+    except (OSError, http.client.HTTPException):
+        return False
+    return closed == 200
+
+
+def probe_hosts(base):
+    try:
+        session, error, message = open_session(base, {"platformName": "iOS", "safari:useSimulator": True})
+    except (OSError, http.client.HTTPException) as problem:
+        session, message = None, " ".join(str(problem).split())
+    if session:
+        close_session(base, session)
+        say("probe: the driver opened a session on another simulator, so it sees simulators but not this one")
+    else:
+        say("probe: the driver sees no simulator host: " + message)
+
+
+def command_session(base, udid):
+    capabilities = {"platformName": "iOS", "safari:useSimulator": True, "safari:deviceUDID": udid}
+    for attempt in range(1, SESSION_TRIES + 1):
+        try:
+            session, error, message = open_session(base, capabilities)
+        except (OSError, http.client.HTTPException):
+            return fail("safaridriver did not answer the session request")
+        if session:
+            break
         if "remote automation" in message.lower():
             return fail("Remote Automation is not on in the simulator")
         detail = f": {message}" if message else ""
-        return fail(f"safaridriver refused the session ({value.get('error', status)}){detail}")
-    try:
-        closed, answer = request("DELETE", base + "/session/" + urllib.parse.quote(str(session), safe=""))
-    except (OSError, http.client.HTTPException):
-        closed = None
-    if closed != 200:
+        say(f"session try {attempt} of {SESSION_TRIES} failed ({error}){detail}")
+        if NO_HOSTS in message.lower():
+            probe_hosts(base)
+        if attempt == SESSION_TRIES:
+            return 1
+        time.sleep(RETRY_PAUSE_SECONDS)
+    if not close_session(base, session):
         return fail("safaridriver could not close the preflight session")
-    print(LINE + "one session was created and closed on the simulator")
+    after = f" on try {attempt} of {SESSION_TRIES}" if attempt > 1 else ""
+    print(f"{LINE}one session was created and closed on the simulator{after}")
     return 0
 
 
