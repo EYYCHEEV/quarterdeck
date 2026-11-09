@@ -1379,6 +1379,40 @@ class IosLaneWorkflowTest(unittest.TestCase):
                     self.assertNotIn(line + "\n", shown.stdout)
                 self.assertNotIn("none", shown.stdout.split("\n"))
 
+    def test_the_diagnostics_step_prints_every_section_when_a_log_cannot_be_read(self):
+        if os.geteuid() == 0:
+            self.skipTest("a file with mode 000 is still readable to the superuser")
+        for job, spec, block, steps in self.jobs():
+            with self.subTest(job=job):
+                run = step_value(steps[-1], "run")
+                stubs = {
+                    "xcode-select": "echo xcode-path-stand-in",
+                    "safaridriver": "echo safaridriver-version-stand-in",
+                    "xcrun": "echo booted-stand-in",
+                }
+                with tempfile.TemporaryDirectory() as folder:
+                    root = pathlib.Path(folder)
+                    logs = root / "Library" / "Logs" / "com.apple.WebDriver"
+                    logs.mkdir(parents=True)
+                    numbered(root / "safaridriver.log", "driver line", 300)
+                    numbered(logs / "a-locked.log", "locked log line", 5)
+                    numbered(logs / "b-open.log", "open log line", 250)
+                    numbered(root / "app-server.log", "app line", 150)
+                    numbered(root / "planted-server.log", "planted line", 120)
+                    (root / "safaridriver.log").chmod(0)
+                    (logs / "a-locked.log").chmod(0)
+                    shown = run_script(run, stubs, folder)
+                self.assertEqual(shown.returncode, 0)
+                places = [shown.stdout.index(heading + "\n") for heading in DIAGNOSTIC_HEADINGS]
+                self.assertEqual(places, sorted(places))
+                lines = shown.stdout.split("\n")
+                self.assertEqual(lines.count("unreadable"), 2)
+                self.assertEqual(lines.count("none"), 0)
+                self.assertIn("safaridriver.log, last 200 lines\nunreadable\nWebDriver diagnostic logs, last 200 lines of each file\n", shown.stdout)
+                self.assertIn("a-locked.log\nunreadable\nb-open.log\nopen log line 51\n", shown.stdout)
+                for line in ("open log line 250", "app line 51", "app line 150", "planted line 21", "planted line 120"):
+                    self.assertIn(line + "\n", shown.stdout)
+
     def test_the_diagnostics_step_prints_none_for_whatever_is_missing_and_never_fails(self):
         for job, spec, block, steps in self.jobs():
             with self.subTest(job=job):
