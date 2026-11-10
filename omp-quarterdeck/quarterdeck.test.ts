@@ -1469,6 +1469,124 @@ describe("0.1.3 the wake add-on never ends the host", () => {
     await expectChildrenGone(harness);
   }, 30_000);
 
+  test("case 5b: the unreadable notice interval runs from the notice that was admitted, not from the failed read", async () => {
+    const poison = { raw: "{not json\n", holdAfterMs: 3_000 };
+    const harness = await makeHarness([{ messages: [] }, { messages: [mail("ord-1")] }, poison]);
+    const clock = useClock(harness);
+    install(harness, { initialMs: 40, maximumMs: 80 }, 86_400_000);
+    await harness.pi.emit("session_start");
+    await pollRound(harness, clock, 0);
+    await pollRound(harness, clock, 250);
+    await pollRound(harness, clock, 119_750);
+    expect(noticeTexts(harness)).toEqual([newMail(1), unreadableNotice]);
+    await pollRound(harness, clock, 490_000);
+    expect(noticeTexts(harness)).toEqual([newMail(1), unreadableNotice]);
+    await pollRound(harness, clock, 120_000);
+    expect(noticeTexts(harness)).toEqual([newMail(1), unreadableNotice, unreadableNotice]);
+    const stamps = harness.pi.sent.map((entry) => entry.at);
+    expect(stamps[2] - stamps[1]).toBeGreaterThanOrEqual(600_000);
+    expect(hostFaults.map(String)).toEqual([]);
+    await expectChildrenGone(harness);
+  }, 30_000);
+
+  test("case 5c: the stalled notice interval runs from the notice that was admitted, not from the failed read", async () => {
+    const harness = await makeHarness([{ exitCode: 2, stderr: "qd failed\n" }]);
+    const clock = useClock(harness);
+    install(harness, { initialMs: 40, maximumMs: 80 }, 86_400_000);
+    await harness.pi.emit("session_start");
+    await pollRound(harness, clock, 0);
+    await pollRound(harness, clock, 1_790_000);
+    await harness.pi.emit("mcp_notification", notification([mail("mcp-1")]));
+    expect(noticeTexts(harness)).toEqual([newMail(1)]);
+    await pollRound(harness, clock, 10_000);
+    await pollRound(harness, clock, 110_000);
+    expect(noticeTexts(harness)).toEqual([newMail(1), stalledNotice]);
+    await pollRound(harness, clock, 3_500_000);
+    expect(noticeTexts(harness)).toEqual([newMail(1), stalledNotice]);
+    await pollRound(harness, clock, 200_000);
+    expect(noticeTexts(harness)).toEqual([newMail(1), stalledNotice, stalledNotice]);
+    const stamps = harness.pi.sent.map((entry) => entry.at);
+    expect(stamps[2] - stamps[1]).toBeGreaterThanOrEqual(3_600_000);
+    expect(hostFaults.map(String)).toEqual([]);
+    await expectChildrenGone(harness);
+  }, 30_000);
+
+  test("case 6c: a reconcile whose notice is refused still moves its next time forward and the cursor wait runs in the same round", async () => {
+    const harness = await makeHarness([
+      { messages: [mail("rec-1")] },
+      { messages: [mail("fresh-1")] },
+      { holdMs: 10_000 },
+    ]);
+    harness.pi.receiptOutcomes.push("refused");
+    const clock = useClock(harness);
+    install(harness, { initialMs: 40, maximumMs: 80 }, 86_400_000);
+    await harness.pi.emit("session_start");
+    await pollRound(harness, clock, 0);
+    const first = await readState(harness);
+    expect(first.calls).toBe(2);
+    expect(reconcileCalls(first)).toHaveLength(1);
+    expect(noticeTexts(harness)).toEqual([]);
+    expect(harness.pi.attempts).toHaveLength(1);
+    await pollRound(harness, clock, 120_000);
+    expect(noticeTexts(harness)).toEqual([newMail(2)]);
+    expect(await readCursor(harness)).toBe("fresh-1");
+    expect(reconcileCalls(await readState(harness))).toHaveLength(1);
+    expect(hostFaults.map(String)).toEqual([]);
+    await expectChildrenGone(harness);
+  }, 30_000);
+
+  test("case 9a: an ordinary stop with a throwing clearTimer still stops the wait child, frees the lock and lets the next session poll", async () => {
+    const harness = await makeHarness([{ messages: [] }, { holdMs: 20_000 }]);
+    const clearTimer = harness.pi.context.clearTimer.bind(harness.pi.context);
+    let clearAttempts = 0;
+    harness.pi.context.clearTimer = () => {
+      clearAttempts += 1;
+      throw new Error("clear-timer-detail");
+    };
+    const lines = recordStderr();
+    install(harness, { initialMs: 40, maximumMs: 80 }, 86_400_000);
+    await harness.pi.emit("session_start");
+    await waitFor(async () => (await readState(harness)).calls === 2);
+    const waitPid = (await readState(harness)).invocations[1].pid;
+    await harness.pi.emit("mcp_notification", notification([mail("push-1")]));
+    await harness.pi.emit("mcp_notification", notification([mail("push-2")]));
+    await waitFor(() => harness.pi.context.scheduledDelays.some((delay) => delay > 100_000));
+    try {
+      await expect(harness.pi.emit("session_shutdown")).resolves.toBeUndefined();
+      expect(clearAttempts).toBeGreaterThan(0);
+      await waitFor(() => processGone(waitPid), 4_000);
+    } finally {
+      harness.pi.context.clearTimer = clearTimer;
+      if (!(await processGone(waitPid))) process.kill(waitPid, "SIGKILL");
+    }
+    expect(lines).toEqual([]);
+    expect(hostFaults.map(String)).toEqual([]);
+    await expectNextSessionTakesTheLock(harness);
+  }, 30_000);
+
+  test("case 9b: an ordinary stop with a throwing clearTimer and a poll timer pending still frees the lock and lets the next session poll", async () => {
+    const harness = await makeHarness([{ messages: [] }, { messages: [] }, { holdMs: 20_000 }]);
+    const clearTimer = harness.pi.context.clearTimer.bind(harness.pi.context);
+    let clearAttempts = 0;
+    harness.pi.context.clearTimer = () => {
+      clearAttempts += 1;
+      throw new Error("clear-timer-detail");
+    };
+    const lines = recordStderr();
+    install(harness, { initialMs: 40, maximumMs: 80, successMs: 60_000 }, 86_400_000);
+    await harness.pi.emit("session_start");
+    await waitFor(() => harness.pi.context.scheduledDelays.includes(60_000));
+    try {
+      await expect(harness.pi.emit("session_shutdown")).resolves.toBeUndefined();
+      expect(clearAttempts).toBeGreaterThan(0);
+    } finally {
+      harness.pi.context.clearTimer = clearTimer;
+    }
+    expect(lines).toEqual([]);
+    expect(hostFaults.map(String)).toEqual([]);
+    await expectNextSessionTakesTheLock(harness);
+  }, 30_000);
+
   const configBreaks: Array<[string, (harness: Harness) => Promise<void>]> = [
     ["a missing client file", (harness) => rm(harness.scenarioPath)],
     ["a client file with no bot", (harness) => patchScenario(harness, { adapter: {} })],
@@ -1611,14 +1729,68 @@ describe("0.1.3 the wake add-on never ends the host", () => {
     await expectChildrenGone(harness);
   }, 30_000);
 
-  test("source check: every void promise in quarterdeck.ts has a catch and only the host timers are used", async () => {
+  test("source gate: quarterdeck.ts has no unawaited promise call and no raw timer (not a type-aware lint)", async () => {
     const source = await readFile(join(import.meta.dir, "quarterdeck.ts"), "utf8");
-    const voidWithoutCatch = [...source.matchAll(/^\s*void\s[^;]*;/gm)].map((match) => match[0].trim()).filter((statement) => !statement.includes(".catch("));
-    const bareTimers = [...source.matchAll(/(?<![.\w])(?:setTimeout|setInterval)\((?!callback:)/g)].map((match) => match[0]);
-    expect(voidWithoutCatch).toEqual([]);
-    expect(bareTimers).toEqual([]);
+    expect(sourceGateFindings(source)).toEqual([]);
   });
+
+  const gateFlagged: Array<[string, string]> = [
+    ["a bare call of a promise function", "this.pollOnce();"],
+    ["a raw timer reached by an alias", "const timer = setTimeout;"],
+    ["a raw timer reached as a property of the global object", "globalThis.setTimeout(callback, 1);"],
+    ["a promise stored and never awaited", "const pending = this.reconcile();"],
+    ["a void statement with then and no catch", "void pending.then(callback);"],
+    ["process.nextTick", "process.nextTick(callback);"],
+    ["Bun.write called without await", "Bun.write(path, text);"],
+    ["a cursor store write called without await", "this.state.cursorStore.write(text);"],
+  ];
+  const gateAccepted: Array<[string, string]> = [
+    ["an awaited call", "await this.reconcile();"],
+    ["a void then with both handlers and a catch", ["void exited.then(", "  () => callback(),", "  () => callback(),", ").catch(() => undefined);"].join("\n")],
+    ["an awaited race of two then calls", ["await Promise.race([", "  reader.read().then((result) => result),", "  holder.exited.then((code) => code),", "]);"].join("\n")],
+    ["a synchronous write on the process object", "process.stderr.write(text);"],
+  ];
+  for (const [name, statement] of gateFlagged) {
+    test(`source gate fixture: ${name} is flagged (not a type-aware lint)`, () => {
+      expect(sourceGateFindings(gateFixtureSource(statement))).not.toEqual([]);
+    });
+  }
+  for (const [name, statement] of gateAccepted) {
+    test(`source gate fixture: ${name} passes (not a type-aware lint)`, () => {
+      expect(sourceGateFindings(gateFixtureSource(statement))).toEqual([]);
+    });
+  }
 });
+
+function sourceGateFindings(source: string) {
+  const voidWithoutCatch = [...source.matchAll(/^\s*void\s[^;]*;/gm)].map((match) => match[0].trim()).filter((statement) => !statement.includes(".catch("));
+  const bareTimers = [...source.matchAll(/(?<![.\w])(?:setTimeout|setInterval)\((?!callback:)/g)].map((match) => match[0]);
+  return [...voidWithoutCatch, ...bareTimers];
+}
+
+function gateFixtureSource(statement: string) {
+  return [
+    "class Fixture {",
+    "  async pollOnce() {}",
+    "  async reconcile() {}",
+    "  async write(text: string) {}",
+    "  async run() {",
+    ...statement.split("\n").map((line) => `    ${line}`),
+    "  }",
+    "}",
+  ].join("\n");
+}
+
+async function expectNextSessionTakesTheLock(harness: Harness) {
+  await waitFor(async () => (await flockExit(join(harness.config.cursorRoot, harness.bot, "wake-poller.lock"))) === 0, 4_000);
+  await patchScenario(harness, { mailbox: [mail("new-1")] });
+  const next = await makeHarness([], { shared: harness });
+  install(next);
+  await next.pi.emit("session_start");
+  await waitFor(() => next.pi.sent.length === 1);
+  expect(noticeTexts(next)).toEqual([newMail(1)]);
+  await expectChildrenGone(next);
+}
 
 async function writeHolder(harness: Harness, waitStatement: string) {
   const holderPath = join(harness.root, "test-holder.ts");
