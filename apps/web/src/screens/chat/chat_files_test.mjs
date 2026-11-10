@@ -207,6 +207,22 @@ it("a blocked item in a thread shows only This file was blocked: and its name, w
   assert.equal(await message.locator('a, img, [data-testid="chat-file"], [data-testid="chat-picture-open"]').count(), 0);
 });
 
+it("at 390 a blocked row shows This file was blocked: and the whole name, setup.exe or a long name with no spaces, wrapped inside the bubble with nothing cut", PHONE, async (p) => {
+  const long = "quarterly-search-results-for-every-lane-final-copy.exe";
+  await serve(p, { extra: [botWith(1, [shared("f-8", "setup.exe", "application/x-msdownload", "blocked"), shared("f-9", long, "application/x-msdownload", "blocked")])] });
+  await opened(p);
+  const rows = p.locator('[data-message-id="iris-x1"] [data-testid="chat-file-blocked"]');
+  for (const name of ["setup.exe", long]) await rows.getByText("This file was blocked: " + name, { exact: true }).waitFor();
+  const shown = await rows.evaluateAll((list) =>
+    list.map((row) => {
+      const bubble = row.closest(".chat-bot-bubble");
+      const edge = bubble.getBoundingClientRect().right - parseFloat(getComputedStyle(bubble).paddingRight);
+      return [row.textContent, [row, ...row.children].some((el) => el.scrollWidth > el.clientWidth), row.getBoundingClientRect().right <= edge + 0.5];
+    }),
+  );
+  assert.deepEqual(shown, [["This file was blocked: setup.exe", false, true], ["This file was blocked: " + long, false, true]]);
+});
+
 it("each refusal before an upload shows its line under the composer, and nothing uploads", PHONE, async (p) => {
   const asked = await serve(p);
   const tries = [
@@ -222,6 +238,24 @@ it("each refusal before an upload shows its line under the composer, and nothing
     await T(p, "pick-files").setInputFiles(files);
     await p.getByText(line, { exact: true }).waitFor();
   }
+  assert.equal(asked.uploads.length, 0);
+});
+
+it("at 390 three refusals in one pick show as three lines under the composer, in order, each whole on its own line, and nothing uploads", PHONE, async (p) => {
+  const asked = await serve(p);
+  await opened(p);
+  await T(p, "pick-files").setInputFiles([
+    photo("big-screenshot.png", LIMITS.fileBytes),
+    { name: "setup.exe", mimeType: "application/x-msdownload", buffer: Buffer.from("MZ") },
+    { name: "IMG_0001.HEIC", mimeType: "image/heic", buffer: Buffer.from("0000ftypheic") },
+  ]);
+  const notice = p.getByRole("alert").filter({ hasText: "setup.exe" });
+  await notice.waitFor();
+  assert.deepEqual((await notice.locator("p").innerText()).split("\n"), [
+    "This file is too big: big-screenshot.png",
+    "This file's type is not allowed: setup.exe",
+    "This picture is in Apple's format. Choose it from Photos, or save it as a JPEG first.",
+  ]);
   assert.equal(asked.uploads.length, 0);
 });
 
