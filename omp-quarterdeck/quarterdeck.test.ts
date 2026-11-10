@@ -1762,10 +1762,48 @@ describe("0.1.3 the wake add-on never ends the host", () => {
   }
 });
 
+const gateExemptDeclarations = [
+  "setTimeout(callback: () => void, delay: number): unknown;",
+  "clearTimer(handle: unknown): void;",
+];
+const gateAuditedStatement = "const delivery = this.deliveryTail.then(operation);";
+const gateNamedPromiseFunctions = ["deliver", "queueDelivery", "stop", "release"];
+
 function sourceGateFindings(source: string) {
-  const voidWithoutCatch = [...source.matchAll(/^\s*void\s[^;]*;/gm)].map((match) => match[0].trim()).filter((statement) => !statement.includes(".catch("));
-  const bareTimers = [...source.matchAll(/(?<![.\w])(?:setTimeout|setInterval)\((?!callback:)/g)].map((match) => match[0]);
-  return [...voidWithoutCatch, ...bareTimers];
+  const lines = source.split("\n");
+  const promiseFunctions = new Set([
+    ...gateNamedPromiseFunctions,
+    ...[...source.matchAll(/\basync\s+(?:function\s+)?([A-Za-z_$][\w$]*)\s*\(/g)].map((match) => match[1]),
+  ]);
+  const statementAt = (index: number) => {
+    let start = index;
+    while (start > 0 && lines[start - 1].trim() !== "" && !/[;{}]$/.test(lines[start - 1].trimEnd())) start -= 1;
+    let end = index;
+    while (end < lines.length - 1 && !/[;{}]$/.test(lines[end].trimEnd())) end += 1;
+    return lines.slice(start, end + 1).join("\n");
+  };
+  const handled = (statement: string) => /\b(?:await|return)\b|\.catch\(/.test(statement);
+  const findings: string[] = [];
+  lines.forEach((line, index) => {
+    const text = line.trim();
+    for (const match of line.matchAll(/(?<![\w$])(?:setTimeout|setInterval|setImmediate|queueMicrotask|nextTick)(?![\w$])/g)) {
+      if (line.slice(0, match.index).endsWith("context.") || gateExemptDeclarations.includes(text)) continue;
+      findings.push(text);
+    }
+    for (const match of line.matchAll(/(?<![\w$])([A-Za-z_$][\w$]*)\s*\(/g)) {
+      if (!promiseFunctions.has(match[1])) continue;
+      const before = line.slice(0, match.index);
+      const declaration = /^\s*(?:(?:private|public|protected|static|async|readonly|export|function)\s+)*$/.test(before) && /\)\s*(?::\s*[^{;]*)?\{\}?$/.test(line.trimEnd());
+      const receiver = /(?<![\w$.])(?:[A-Za-z_$][\w$]*\??\.)+$/.exec(before)?.[0] ?? "";
+      if (declaration || receiver.startsWith("process.") || handled(statementAt(index))) continue;
+      findings.push(text);
+    }
+    if (/^void\s/.test(text) || line.includes(".then(")) {
+      const statement = statementAt(index);
+      if (!handled(statement) && statement.trim() !== gateAuditedStatement) findings.push(text);
+    }
+  });
+  return findings;
 }
 
 function gateFixtureSource(statement: string) {
