@@ -1555,3 +1555,75 @@ describe("0.1.3 the wake add-on never ends the host", () => {
     await expectChildrenGone(harness);
   }, 30_000);
 });
+
+const hostSource = [
+  `import { appendFileSync } from "node:fs";`,
+  `import extension from ${JSON.stringify(join(import.meta.dir, "index.ts"))};`,
+  `const sentPath = process.argv[2];`,
+  `const handlers = new Map();`,
+  `const context = { setTimeout: (callback, delay) => setTimeout(callback, delay), clearTimer: (handle) => clearTimeout(handle) };`,
+  `extension({`,
+  `  on: (name, handler) => handlers.set(name, handler),`,
+  `  sendMessage: (message) => appendFileSync(sentPath, message.content + "\\n"),`,
+  `});`,
+  `const call = (name) => Promise.resolve().then(() => handlers.get(name)?.({}, context)).catch(() => undefined);`,
+  `process.on("SIGTERM", async () => {`,
+  `  await call("session_shutdown");`,
+  `  process.exit(0);`,
+  `});`,
+  `await call("session_start");`,
+  `setInterval(() => undefined, 1000);`,
+].join("\n");
+
+async function runHost(harness: Harness, runMs: number) {
+  const hostPath = join(harness.root, "host.ts");
+  const sentPath = join(harness.root, "host-sent.txt");
+  await writeFile(hostPath, hostSource, { mode: 0o600 });
+  await writeFile(sentPath, "", { mode: 0o600 });
+  const child = Bun.spawn([realExecPath, hostPath, sentPath], {
+    env: {
+      HOME: process.env.HOME ?? "/",
+      PATH: process.env.PATH ?? "/usr/bin:/bin",
+      QUARTERDECK_CONFIG: harness.scenarioPath,
+      QUARTERDECK_CURSOR_ROOT: harness.config.cursorRoot,
+      QUARTERDECK_QD: harness.config.qdExecutable,
+    },
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const stderr = new Response(child.stderr).text();
+  const outcome = await Promise.race([child.exited.then(() => "exited" as const), Bun.sleep(runMs).then(() => "running" as const)]);
+  const stillRunning = outcome === "running";
+  if (stillRunning) child.kill("SIGTERM");
+  await child.exited;
+  const sent = (await readFile(sentPath, "utf8")).split("\n").filter((line) => line.length > 0);
+  return { stillRunning, stderr: await stderr, sent };
+}
+
+describe("0.1.3 the host process survives the add-on", () => {
+  test("host process: over 256 KiB of valid mail leaves the host running and the mail arrives in pages", async () => {
+    const mailbox = Array.from({ length: 130 }, (_, index) => mail(`big-${String(index).padStart(5, "0")}`, { body: "b".repeat(3_000) }));
+    const lineBytes = Buffer.byteLength(`${JSON.stringify(mailbox[0])}\n`);
+    const perPage = Math.floor(pageBytesLimit / lineBytes);
+    expect(lineBytes * mailbox.length).toBeGreaterThan(256 * 1024);
+    const harness = await makeHarness([]);
+    await patchScenario(harness, { mailbox });
+    const result = await runHost(harness, 5_000);
+    expect(result.stderr).not.toContain("Quarterdeck wait output is too large");
+    expect(result.stderr).not.toContain("Unhandled");
+    expect(result.stillRunning).toBe(true);
+    expect(result.sent).toEqual([newMail(perPage)]);
+    expect(afterArguments(await readState(harness))).toContain(`big-${String(perPage - 1).padStart(5, "0")}`);
+  }, 30_000);
+
+  test("host process: invalid JSON mid-stream leaves the host running and the wake keeps working", async () => {
+    const raw = `${[JSON.stringify(mail("early-1")), "{not json", JSON.stringify(mail("late-1"))].join("\n")}\n`;
+    const harness = await makeHarness([{ raw, holdAfterMs: 8_000 }]);
+    const result = await runHost(harness, 5_000);
+    expect(result.stderr).not.toContain("Quarterdeck wait returned invalid JSON");
+    expect(result.stderr).not.toContain("Unhandled");
+    expect(result.stillRunning).toBe(true);
+    expect(result.sent).toEqual([unreadableNotice]);
+  }, 30_000);
+});
