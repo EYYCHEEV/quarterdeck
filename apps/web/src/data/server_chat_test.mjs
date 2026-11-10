@@ -2051,3 +2051,64 @@ test("while a send with files waits for credits, a send with no files, a thread 
   assert.equal(uploads(h, from).length, 3);
   assert.equal(chatPosts(h, from).length, 0);
 });
+
+function lateList() {
+  const gate = { armed: false, release: () => {} };
+  gate.cards = () => {
+    if (!gate.armed) return null;
+    gate.armed = false;
+    const { promise, resolve } = Promise.withResolvers();
+    gate.release = resolve;
+    return promise.then(() => json({ ...structuredClone(LISTING), csrf: "token-late" }));
+  };
+  return gate;
+}
+
+async function lapseWhileSending(files, clientId) {
+  const late = lateList();
+  const h = await filesThread({ cards: late.cards });
+  const failures = [];
+  h.source.watch((failure) => {
+    if (failure) failures.push(failure.name);
+  });
+  late.armed = true;
+  h.source.load().catch(() => undefined);
+  const lapseAt = h.time.now() + 61_000;
+  await pass(h, 2_000);
+  for (let n = 0; ; n += 1) {
+    const filled = await h.source.chat.send("steward", { text: "fill " + n, clientId: "client-fill-" + n }).then(() => true, (error) => {
+      if (error?.name !== "RateLimited") throw error;
+      return false;
+    });
+    if (!filled) break;
+  }
+  const from = h.calls.length;
+  const state = watchSend(h, h.source.chat.send("steward", { text: "files", clientId, files }));
+  await pass(h, lapseAt - 100 - h.time.now());
+  const waiting = { uploads: uploads(h, from).length, posts: chatPosts(h, from).length, done: state.done, unconfirmed: failures.includes("SessionUnconfirmed") };
+  await pass(h, 100);
+  const lapse = h.calls.length;
+  late.release();
+  for (let n = 0; n < 4; n += 1) await tick();
+  const shown = [...failures];
+  await pass(h, 10_000);
+  return { h, state, lapse, waiting, shown };
+}
+
+test("a send with files whose next upload waits for credits when a list answer comes back 61 seconds late and the session lapses uploads nothing more, posts nothing and fails as unconfirmed", async () => {
+  const { h, state, lapse, waiting, shown } = await lapseWhileSending(five(), "client-m1");
+  assert.deepEqual(waiting, { uploads: 3, posts: 0, done: false, unconfirmed: false });
+  assert.ok(shown.includes("SessionUnconfirmed"), "the app shows the lapse: " + shown.join(", "));
+  assert.equal(uploads(h, lapse).length, 0, "an upload went out after the session lapsed");
+  assert.equal(chatPosts(h, lapse).length, 0, "the send posted after the session lapsed");
+  assert.equal(state.error?.name, "SessionUnconfirmed");
+});
+
+test("a send with files whose uploads are done and whose post waits for credits when a list answer comes back 61 seconds late and the session lapses posts nothing and fails as unconfirmed", async () => {
+  const { h, state, lapse, waiting, shown } = await lapseWhileSending([photo("one.png"), doc("two.txt"), photo("three.png")], "client-m2");
+  assert.deepEqual(waiting, { uploads: 3, posts: 0, done: false, unconfirmed: false });
+  assert.ok(shown.includes("SessionUnconfirmed"), "the app shows the lapse: " + shown.join(", "));
+  assert.equal(chatPosts(h, lapse).length, 0, "the send posted after the session lapsed");
+  assert.equal(uploads(h, lapse).length, 0, "an upload went out after the session lapsed");
+  assert.equal(state.error?.name, "SessionUnconfirmed");
+});
