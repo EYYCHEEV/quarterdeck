@@ -9,6 +9,7 @@ type Response = {
   messages?: unknown[];
   raw?: string;
   stderr?: string;
+  trickle?: boolean;
 };
 
 type Scenario = {
@@ -100,5 +101,12 @@ if (response.stderr) process.stderr.write(response.stderr);
 if (response.holdMs) await Bun.sleep(response.holdMs);
 for (const message of response.messages ?? []) process.stdout.write(`${JSON.stringify(message)}\n`);
 if (response.raw) await writeChunks(response.raw);
+if (response.trickle) {
+  await Bun.sleep(300);
+  for (let step = 0; step < 40; step += 1) {
+    await writeOut("z".repeat(1_024));
+    await Bun.sleep(50);
+  }
+}
 if (response.holdAfterMs) await Bun.sleep(response.holdAfterMs);
 process.exit(response.exitCode ?? 0);

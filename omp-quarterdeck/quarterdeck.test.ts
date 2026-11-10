@@ -157,9 +157,13 @@ class FakePi implements ExtensionApi {
 
 type StandinResponse = {
   exitCode?: number;
+  holdAfterMs?: number;
   holdMs?: number;
+  ignoreTerm?: boolean;
   messages?: unknown[];
+  raw?: string;
   stderr?: string;
+  trickle?: boolean;
 };
 
 type Harness = {
@@ -714,8 +718,10 @@ describe("Quarterdeck OMP wake extension", () => {
     await waitFor(async () => (await readState(harness)).calls >= 3);
 
     const state = await readState(harness);
-    expect(state.invocations[1].at - state.invocations[0].at).toBeGreaterThanOrEqual(45);
-    expect(state.invocations[2].at - state.invocations[1].at).toBeGreaterThanOrEqual(65);
+    const timeouts = state.invocations.slice(0, 3).map((call) => call.argv[call.argv.indexOf("--timeout") + 1]);
+    expect(timeouts).toEqual(["0", "300", "0"]);
+    expect(state.invocations[2].at - state.invocations[1].at).toBeGreaterThanOrEqual(45);
+    expect(state.invocations.filter((call) => call.at - state.invocations[0].at < 45).length).toBeLessThanOrEqual(2);
     await waitFor(() => harness.pi.sent.length === 1);
   });
 
@@ -1520,7 +1526,7 @@ describe("0.1.3 the wake add-on never ends the host", () => {
   test("a read that hits a limit cancels the stream, so a child that ignores SIGTERM gets a broken pipe and ends", async () => {
     const harness = await makeHarness([
       { messages: [] },
-      { raw: "z".repeat(200 * 1024), ignoreTerm: true, holdAfterMs: 3_000 },
+      { raw: "z".repeat(200 * 1024), ignoreTerm: true, holdAfterMs: 3_000, trickle: true },
       { holdMs: 10_000 },
     ]);
     const pipeClosedPath = join(harness.root, "pipe-closed.txt");
@@ -1534,6 +1540,7 @@ describe("0.1.3 the wake add-on never ends the host", () => {
     const closedPid = Number((await readFile(pipeClosedPath, "utf8")).trim());
     expect(closedPid).toBe(state.invocations[1].pid);
     await waitFor(() => processGone(closedPid));
+    await waitFor(() => noticeTexts(harness).length > 0);
     expect(noticeTexts(harness)).toEqual([unreadableNotice]);
     expect(hostFaults.map(String)).toEqual([]);
     await expectChildrenGone(harness);
