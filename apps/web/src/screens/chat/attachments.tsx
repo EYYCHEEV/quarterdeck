@@ -13,7 +13,7 @@ import { Empty, ErrorLine, LoadingBars } from "../../ui/states";
 
 type Open = (file: Attachment, from: HTMLElement) => void;
 
-const SERVER_ROW = "flex min-h-11 w-[min(100%,320px)] items-center gap-2.5 rounded-small border border-line-2 bg-panel px-3 py-2 text-left";
+const SERVER_ROW = "flex min-h-11 w-[min(100%,320px)] min-w-0 items-center gap-2.5 rounded-small border border-line-2 bg-panel px-3 py-2 text-left";
 
 export const isPicture = (item: Attachment): boolean => (item.kind ? item.kind === "photo" : kindOf(item) === "image");
 
@@ -101,12 +101,12 @@ export function AttachmentList({ items, align, onOpen }: { items: Attachment[]; 
         file.kind === "blocked" ? (
           <p key={file.id} className={cx(SERVER_ROW, "text-ink-2")} data-testid="chat-file-blocked">
             <Icon name="alert" size="sm" className="flex-none text-ink-3" />
-            <span className="min-w-0 flex-1 truncate text-prose">{blockedText(file.name)}</span>
+            <span className="min-w-0 flex-1 truncate text-prose" data-truncates="">{blockedText(file.name)}</span>
           </p>
         ) : file.kind === "file" ? (
           <a key={file.id} {...outsideLink(file.url)} className={cx(SERVER_ROW, "cursor-pointer hover:border-line-3")} data-testid="chat-file">
             <Icon name="file" size="sm" className="flex-none text-ink-3" />
-            <span className="min-w-0 flex-1 truncate text-prose">{file.name}</span>
+            <span className="min-w-0 flex-1 truncate text-prose" data-truncates="">{file.name}</span>
             <span className="flex-none text-small text-ink-3">{sizeText(file.size)}</span>
           </a>
         ) : (
