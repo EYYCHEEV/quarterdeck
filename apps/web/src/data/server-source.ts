@@ -3,7 +3,7 @@ import { goTo, postForm, type Pages } from "../platform/navigate";
 import { readJson, writeJson } from "../platform/storage";
 import { schedule as later, type Schedule } from "../platform/timer";
 import { pageVisibility, type Visibility } from "../platform/visibility";
-import { NotFound, SIGN_IN_PATH, SIGN_OUT_PATH, type AnswerSent, type ApiClient, type CardEvent, type CardListing, type CardRead, type ListedCard, type TokenList } from "./api-client";
+import { NotFound, SIGN_IN_PATH, SIGN_OUT_PATH, type AnswerSent, type ApiClient, type CardEvent, type CardListing, type CardRead, type ListedCard, type SessionRequest, type TokenList } from "./api-client";
 import type * as MailModule from "./mail-client";
 import type { MailListed, MailRead } from "./mail-client";
 import type { ChatApi, ServerChatApi } from "./chat-types";
@@ -223,12 +223,18 @@ export function createServerSource(client: ApiClient, clock: () => number = Date
     for (const end of [...waits]) end(new SignInRequired());
   }
 
+  function afterWait(mine: number, kind: SessionRequest["kind"]): void {
+    expire();
+    if (mine !== generation || paused) throw new SignInRequired();
+    if (unconfirmed && kind !== "list" && kind !== "token") throw new SessionUnconfirmed();
+  }
+
   async function chatCredits(cost: number): Promise<void> {
     const mine = generation;
     if (paused) throw new SignInRequired();
     while (budgetAt(cost, false) > clock()) {
       await creditsBack(cost, false);
-      if (mine !== generation || paused) throw new SignInRequired();
+      afterWait(mine, "post");
     }
   }
 
@@ -535,7 +541,7 @@ export function createServerSource(client: ApiClient, clock: () => number = Date
       while (budgetAt(cost, meta.automatic) > clock()) {
         if (!meta.wait) throw new RateLimited();
         await creditsBack(cost, meta.automatic);
-        if (mine !== generation || paused) throw new SignInRequired();
+        afterWait(mine, meta.kind);
       }
       const sent = clock();
       meta.sent = sent;
