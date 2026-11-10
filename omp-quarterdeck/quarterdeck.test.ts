@@ -1554,7 +1554,71 @@ describe("0.1.3 the wake add-on never ends the host", () => {
     expect(afterArguments(await readState(harness))).toEqual(["desc-900", "desc-800"]);
     await expectChildrenGone(harness);
   }, 30_000);
+
+  test("lock loss: a holder that ends while clearTimer throws leaves the host running and polling stops", async () => {
+    const harness = await makeHarness([{ messages: [] }]);
+    const clock = useClock(harness);
+    const endPath = join(harness.root, "holder-end");
+    const lockHolderPath = await writeHolder(harness, `while (!existsSync(${JSON.stringify(endPath)})) await Bun.sleep(20);`);
+    const clearTimer = harness.pi.context.clearTimer.bind(harness.pi.context);
+    let clearAttempts = 0;
+    harness.pi.context.clearTimer = () => {
+      clearAttempts += 1;
+      throw new Error("clear-timer-detail");
+    };
+    createQuarterdeckExtension({ config: harness.config, retry: { initialMs: 40, maximumMs: 80 }, reconcileIntervalMs: 86_400_000, lockHolderPath })(harness.pi);
+    await harness.pi.emit("session_start");
+    await pollRound(harness, clock, 0);
+    const callsBefore = (await readState(harness)).calls;
+    await writeFile(endPath, "");
+    try {
+      await waitFor(() => clearAttempts > 0);
+      await clock.advance(1_000);
+      await settle(harness, clock);
+      expect((await readState(harness)).calls).toBe(callsBefore);
+      expect(hostFaults.map(String)).toEqual([]);
+    } finally {
+      harness.pi.context.clearTimer = clearTimer;
+    }
+    await expectChildrenGone(harness);
+  }, 30_000);
+
+  test("lock loss: a holder that ends while a wait is in flight stops the wait child and nothing escapes", async () => {
+    const harness = await makeHarness([{ messages: [] }, { holdMs: 20_000 }]);
+    const clock = useClock(harness);
+    const endPath = join(harness.root, "holder-end");
+    const lockHolderPath = await writeHolder(harness, `while (!existsSync(${JSON.stringify(endPath)})) await Bun.sleep(20);`);
+    createQuarterdeckExtension({ config: harness.config, retry: { initialMs: 40, maximumMs: 80 }, reconcileIntervalMs: 86_400_000, lockHolderPath })(harness.pi);
+    await harness.pi.emit("session_start");
+    await pollRound(harness, clock, 0);
+    await waitFor(async () => (await readState(harness)).calls === 2);
+    const waitPid = (await readState(harness)).invocations[1].pid;
+    await writeFile(endPath, "");
+    await waitFor(async () => (await readFile(harness.stoppedPath, "utf8").catch(() => "")).split("\n").includes(String(waitPid)));
+    await waitFor(() => processGone(waitPid), 4_000);
+    await clock.advance(1_000);
+    await settle(harness, clock);
+    expect((await readState(harness)).calls).toBe(2);
+    expect(noticeTexts(harness)).toEqual([]);
+    expect(hostFaults.map(String)).toEqual([]);
+    await expectChildrenGone(harness);
+  }, 30_000);
+
+  test("source check: every void promise in quarterdeck.ts has a catch and only the host timers are used", async () => {
+    const source = await readFile(join(import.meta.dir, "quarterdeck.ts"), "utf8");
+    const voidWithoutCatch = [...source.matchAll(/^\s*void\s[^;]*;/gm)].map((match) => match[0].trim()).filter((statement) => !statement.includes(".catch("));
+    const bareTimers = [...source.matchAll(/(?<![.\w])(?:setTimeout|setInterval)\((?!callback:)/g)].map((match) => match[0]);
+    expect(voidWithoutCatch).toEqual([]);
+    expect(bareTimers).toEqual([]);
+  });
 });
+
+async function writeHolder(harness: Harness, waitStatement: string) {
+  const holderPath = join(harness.root, "test-holder.ts");
+  const source = [`import { existsSync } from "node:fs";`, `process.stdout.write("locked\\n");`, waitStatement, `process.exit(0);`].join("\n");
+  await writeFile(holderPath, source, { mode: 0o600 });
+  return holderPath;
+}
 
 const hostSource = [
   `import { appendFileSync } from "node:fs";`,
@@ -1575,10 +1639,10 @@ const hostSource = [
   `setInterval(() => undefined, 1000);`,
 ].join("\n");
 
-async function runHost(harness: Harness, runMs: number) {
+async function runHost(harness: Harness, runMs: number, source = hostSource) {
   const hostPath = join(harness.root, "host.ts");
   const sentPath = join(harness.root, "host-sent.txt");
-  await writeFile(hostPath, hostSource, { mode: 0o600 });
+  await writeFile(hostPath, source, { mode: 0o600 });
   await writeFile(sentPath, "", { mode: 0o600 });
   const child = Bun.spawn([realExecPath, hostPath, sentPath], {
     env: {
@@ -1601,6 +1665,39 @@ async function runHost(harness: Harness, runMs: number) {
   return { stillRunning, stderr: await stderr, sent };
 }
 
+const lossHostSource = (holderPath: string, clearPath: string, throwingClear: boolean) => [
+  `import { appendFileSync } from "node:fs";`,
+  `import { createQuarterdeckExtension } from ${JSON.stringify(join(import.meta.dir, "quarterdeck.ts"))};`,
+  `let shuttingDown = false;`,
+  `const handlers = new Map();`,
+  `const context = {`,
+  `  setTimeout: (callback, delay) => setTimeout(callback, delay),`,
+  `  clearTimer: (handle) => {`,
+  `    if (${throwingClear}) {`,
+  `      appendFileSync(${JSON.stringify(clearPath)}, shuttingDown ? "stop\\n" : "loss\\n");`,
+  `      throw new Error("clear-timer-detail");`,
+  `    }`,
+  `    clearTimeout(handle);`,
+  `  },`,
+  `};`,
+  `createQuarterdeckExtension({`,
+  `  retry: { initialMs: 1000, maximumMs: 2000, successMs: 600000 },`,
+  `  reconcileIntervalMs: 86400000,`,
+  `  lockHolderPath: ${JSON.stringify(holderPath)},`,
+  `})({`,
+  `  on: (name, handler) => handlers.set(name, handler),`,
+  `  sendMessage: () => undefined,`,
+  `});`,
+  `const call = (name) => Promise.resolve().then(() => handlers.get(name)?.({}, context)).catch(() => undefined);`,
+  `process.on("SIGTERM", async () => {`,
+  `  shuttingDown = true;`,
+  `  await call("session_shutdown");`,
+  `  process.exit(0);`,
+  `});`,
+  `await call("session_start");`,
+  `setInterval(() => undefined, 1000);`,
+].join("\n");
+
 describe("0.1.3 the host process survives the add-on", () => {
   test("host process: over 256 KiB of valid mail leaves the host running and the mail arrives in pages", async () => {
     const mailbox = Array.from({ length: 130 }, (_, index) => mail(`big-${String(index).padStart(5, "0")}`, { body: "b".repeat(3_000) }));
@@ -1610,9 +1707,9 @@ describe("0.1.3 the host process survives the add-on", () => {
     const harness = await makeHarness([]);
     await patchScenario(harness, { mailbox });
     const result = await runHost(harness, 5_000);
+    expect(result.stillRunning).toBe(true);
     expect(result.stderr).not.toContain("Quarterdeck wait output is too large");
     expect(result.stderr).not.toContain("Unhandled");
-    expect(result.stillRunning).toBe(true);
     expect(result.sent).toEqual([newMail(perPage)]);
     expect(afterArguments(await readState(harness))).toContain(`big-${String(perPage - 1).padStart(5, "0")}`);
   }, 30_000);
@@ -1621,9 +1718,29 @@ describe("0.1.3 the host process survives the add-on", () => {
     const raw = `${[JSON.stringify(mail("early-1")), "{not json", JSON.stringify(mail("late-1"))].join("\n")}\n`;
     const harness = await makeHarness([{ raw, holdAfterMs: 8_000 }]);
     const result = await runHost(harness, 5_000);
+    expect(result.stillRunning).toBe(true);
     expect(result.stderr).not.toContain("Quarterdeck wait returned invalid JSON");
     expect(result.stderr).not.toContain("Unhandled");
-    expect(result.stillRunning).toBe(true);
     expect(result.sent).toEqual([unreadableNotice]);
+  }, 30_000);
+
+  test("host process: a holder that ends while clearTimer throws leaves the host running", async () => {
+    const harness = await makeHarness([{ messages: [] }]);
+    const holderPath = await writeHolder(harness, "await Bun.sleep(1500);");
+    const clearPath = join(harness.root, "host-clear.txt");
+    const result = await runHost(harness, 5_000, lossHostSource(holderPath, clearPath, true));
+    expect(result.stillRunning).toBe(true);
+    expect(result.stderr).not.toContain("clear-timer-detail");
+    expect(result.stderr).not.toContain("Unhandled");
+    expect((await readFile(clearPath, "utf8")).split("\n")).toContain("loss");
+  }, 30_000);
+
+  test("host process: a holder that ends while a wait is in flight leaves the host running and polling stops", async () => {
+    const harness = await makeHarness([{ messages: [] }, { holdMs: 20_000 }]);
+    const holderPath = await writeHolder(harness, "await Bun.sleep(1500);");
+    const result = await runHost(harness, 5_000, lossHostSource(holderPath, join(harness.root, "host-clear.txt"), false));
+    expect(result.stillRunning).toBe(true);
+    expect(result.stderr).not.toContain("Unhandled");
+    expect((await readState(harness)).calls).toBe(2);
   }, 30_000);
 });
