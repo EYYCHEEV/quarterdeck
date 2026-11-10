@@ -241,7 +241,7 @@ export function Composer({
     <div className="chat-composer-dock">
       <div className="chat-composer-inner">
         {notice && (
-          <ErrorLine onRetry={onDismissNotice} retryLabel="Dismiss">
+          <ErrorLine onRetry={onDismissNotice} retryLabel="Dismiss" className="whitespace-pre-line">
             {notice}
           </ErrorLine>
         )}

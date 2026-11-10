@@ -100,8 +100,12 @@ export function AttachmentList({ items, align, onOpen }: { items: Attachment[]; 
       {files.map((file) =>
         file.kind === "blocked" ? (
           <p key={file.id} className={cx(SERVER_ROW, "text-ink-2")} data-testid="chat-file-blocked">
-            <Icon name="alert" size="sm" className="flex-none text-ink-3" />
-            <span className="min-w-0 flex-1 truncate text-prose" data-truncates="">{blockedText(file.name)}</span>
+            <span className="flex min-w-0 flex-1 items-start gap-2.5 text-prose">
+              <span className="flex h-[1lh] flex-none items-center">
+                <Icon name="alert" size="sm" className="text-ink-3" />
+              </span>
+              <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{blockedText(file.name)}</span>
+            </span>
           </p>
         ) : file.kind === "file" ? (
           <a key={file.id} {...outsideLink(file.url)} className={cx(SERVER_ROW, "cursor-pointer hover:border-line-3")} data-testid="chat-file">

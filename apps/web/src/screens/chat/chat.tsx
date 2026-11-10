@@ -440,7 +440,7 @@ export function ChatScreen({ botId }: { botId: string }) {
         inputRef={input}
         onAttach={attach}
         onUnattach={unattach}
-        notice={refused.length ? refused.join(" ") : null}
+        notice={refused.length ? refused.join("\n") : null}
         filesOn={limits !== null}
         onDismissNotice={() => setRefused([])}
         onSecret={() => setBoxOpen(true)}
