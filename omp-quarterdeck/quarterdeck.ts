@@ -225,12 +225,24 @@ class WakeSession {
   async stop() {
     if (this.stopped) return;
     this.stopped = true;
-    if (this.timer !== undefined) this.state.context.clearTimer(this.timer);
+    try {
+      if (this.timer !== undefined) this.state.context.clearTimer(this.timer);
+    } catch {
+    }
     this.timer = undefined;
-    if (this.noticeTimer !== undefined) this.state.context.clearTimer(this.noticeTimer);
+    try {
+      if (this.noticeTimer !== undefined) this.state.context.clearTimer(this.noticeTimer);
+    } catch {
+    }
     this.noticeTimer = undefined;
-    await this.waiter?.stop();
-    await this.state.lease?.release();
+    try {
+      await this.waiter?.stop();
+    } catch {
+    }
+    try {
+      await this.state.lease?.release();
+    } catch {
+    }
     await this.deliveryTail.catch(() => undefined);
   }
 
@@ -285,11 +297,9 @@ class WakeSession {
     const now = Date.now();
     if (error instanceof UnreadableMail) {
       if (now - this.lastUnreadableAt < UNREADABLE_NOTICE_INTERVAL_MS) return;
-      this.lastUnreadableAt = now;
       this.unreadablePending = true;
     } else {
       if (now - this.lastWaitSuccessAt < STALLED_AFTER_MS || now - this.lastStalledAt < STALLED_NOTICE_INTERVAL_MS) return;
-      this.lastStalledAt = now;
       this.stalledPending = true;
     }
     void this.queueDelivery(() => this.flushNotice()).catch(() => undefined);
@@ -309,13 +319,13 @@ class WakeSession {
     }
     if (this.stopped || this.pollerLost) return;
     this.noteSuccess();
+    this.reconcileBackoffMs = this.state.retry.initialMs;
+    this.nextReconcileAt = Date.now() + this.state.reconcileIntervalMs;
     await this.queueDelivery(async () => {
       this.addToNotice(page.messages.map((message) => message.id), false);
       this.remindNow(page.messages);
       await this.flushNotice();
-    });
-    this.reconcileBackoffMs = this.state.retry.initialMs;
-    this.nextReconcileAt = Date.now() + this.state.reconcileIntervalMs;
+    }).catch(() => undefined);
   }
 
   private queueDelivery(operation: () => void | Promise<void>) {
@@ -379,8 +389,10 @@ class WakeSession {
       }
       const now = Date.now();
       if (special === UNREADABLE_NOTICE) {
+        this.lastUnreadableAt = now;
         this.unreadablePending = false;
       } else if (special === STALLED_NOTICE) {
+        this.lastStalledAt = now;
         this.stalledPending = false;
       } else {
         for (const id of fresh) {
@@ -461,9 +473,8 @@ class QdCliWaiter {
     };
     this.stopCurrent = stop;
     try {
-      const reading = readPage(child.stdout);
       const exited = child.exited.catch(() => -1);
-      const page = await reading;
+      const page = await readPage(child.stdout);
       if (page.more) {
         await stop();
         return page;
