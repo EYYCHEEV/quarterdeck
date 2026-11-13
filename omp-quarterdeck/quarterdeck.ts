@@ -10,12 +10,19 @@ const CUSTOM_MESSAGE_TYPE = "quarterdeck.mail";
 const CURSOR_FILE = "wake.cursor";
 const LOCK_FILE = "wake-poller.lock";
 const MAX_BATCH_MESSAGES = 1_000;
-const MAX_OUTPUT_BYTES = 256 * 1024;
+const PAGE_MESSAGES = 100;
+const PAGE_BYTES = 192 * 1024;
 const MAX_LINE_BYTES = 64 * 1024;
 const SEEN_MESSAGE_IDS = 2_048;
 const RECONCILE_INTERVAL_MS = 10 * 60 * 1_000;
 const NOTICE_INTERVAL_MS = 120_000;
 const MAX_PENDING_IDS = 1000;
+const UNREADABLE_NOTICE_INTERVAL_MS = 10 * 60 * 1_000;
+const STALLED_AFTER_MS = 30 * 60 * 1_000;
+const STALLED_NOTICE_INTERVAL_MS = 60 * 60 * 1_000;
+const UNREADABLE_NOTICE = "Quarterdeck: mail the wake cannot read; read it with qd_wait, then acknowledge it with qd_ack.";
+const STALLED_NOTICE = "Quarterdeck: the wake has not reached mail for 30 minutes; check with qd_wait.";
+const CONTAINED_LINE = "Quarterdeck wake add-on: an internal error was contained.\n";
 
 export interface QuarterdeckConfig {
   botConfigPath: string;
@@ -63,6 +70,11 @@ type MailMessage = {
   subject: string;
 };
 
+type WaitPage = {
+  messages: MailMessage[];
+  more: boolean;
+};
+
 type McpNotification = {
   server: string;
   method: string;
@@ -92,8 +104,22 @@ export function createQuarterdeckExtension(options: QuarterdeckExtensionOptions 
     let session: WakeSession | undefined;
     let subagent = false;
     const pendingNotifications = new Set<string>();
+    let containedReported = false;
+    const contain = (handler: (event: unknown, context: ExtensionContext) => Promise<void>) =>
+      async (event: unknown, context: ExtensionContext) => {
+        try {
+          await handler(event, context);
+        } catch {
+          if (containedReported) return;
+          containedReported = true;
+          try {
+            process.stderr.write(CONTAINED_LINE);
+          } catch {
+          }
+        }
+      };
 
-    pi.on("mcp_notification", async (event, context) => {
+    pi.on("mcp_notification", contain(async (event, context) => {
       if (subagent || context.agent?.kind === "sub") return;
       const notification = parseNotification(event);
       if (!notification || notification.server !== config.mcpServer || notification.method !== MAIL_NOTIFICATION_METHOD) return;
@@ -106,9 +132,10 @@ export function createQuarterdeckExtension(options: QuarterdeckExtensionOptions 
         return;
       }
       await session.deliver(messages).catch(() => undefined);
-    });
+    }));
 
-    pi.on("session_start", async (_event, context) => {
+    pi.on("session_start", contain(async (_event, context) => {
+      containedReported = false;
       subagent = context.agent?.kind === "sub";
       if (subagent) {
         pendingNotifications.clear();
@@ -134,13 +161,13 @@ export function createQuarterdeckExtension(options: QuarterdeckExtensionOptions 
         await current.stop();
         throw error;
       }
-    });
+    }));
 
-    pi.on("session_shutdown", async () => {
+    pi.on("session_shutdown", contain(async () => {
       const current = session;
       session = undefined;
       await current?.stop();
-    });
+    }));
   };
 }
 
@@ -156,6 +183,12 @@ class WakeSession {
   private lastNoticeAt = Number.NEGATIVE_INFINITY;
   private noticeTimer: unknown;
   private nextReconcileAt = 0;
+  private reconcileBackoffMs: number;
+  private lastWaitSuccessAt = 0;
+  private lastStalledAt = Number.NEGATIVE_INFINITY;
+  private lastUnreadableAt = Number.NEGATIVE_INFINITY;
+  private unreadablePending = false;
+  private stalledPending = false;
   private stopped = false;
   private pollerLost = false;
   private timer: unknown;
@@ -172,6 +205,7 @@ class WakeSession {
     pendingIds: Set<string>;
   }) {
     this.backoffMs = state.retry.initialMs;
+    this.reconcileBackoffMs = state.retry.initialMs;
     this.pendingFresh = state.pendingIds;
     this.waiter = state.lease ? new QdCliWaiter(state.config) : undefined;
     state.lease?.onLoss(() => this.stopPolling());
@@ -179,6 +213,7 @@ class WakeSession {
 
   async start() {
     this.cursor = await this.state.cursorStore.read();
+    this.lastWaitSuccessAt = Date.now();
     if (this.waiter) this.schedule(0);
   }
 
@@ -190,12 +225,24 @@ class WakeSession {
   async stop() {
     if (this.stopped) return;
     this.stopped = true;
-    if (this.timer !== undefined) this.state.context.clearTimer(this.timer);
+    try {
+      if (this.timer !== undefined) this.state.context.clearTimer(this.timer);
+    } catch {
+    }
     this.timer = undefined;
-    if (this.noticeTimer !== undefined) this.state.context.clearTimer(this.noticeTimer);
+    try {
+      if (this.noticeTimer !== undefined) this.state.context.clearTimer(this.noticeTimer);
+    } catch {
+    }
     this.noticeTimer = undefined;
-    await this.waiter?.stop();
-    await this.state.lease?.release();
+    try {
+      await this.waiter?.stop();
+    } catch {
+    }
+    try {
+      await this.state.lease?.release();
+    } catch {
+    }
     await this.deliveryTail.catch(() => undefined);
   }
 
@@ -212,9 +259,13 @@ class WakeSession {
     try {
       if (Date.now() >= this.nextReconcileAt) await this.reconcile();
       if (this.stopped || this.pollerLost) return;
-      const messages = await this.waiter.wait(this.cursor);
+      const page = await this.waiter.wait(this.cursor).catch((error: unknown) => {
+        this.noteFailure(error);
+        throw error;
+      });
       if (this.stopped || this.pollerLost) return;
-      await this.deliver(messages.map((message) => message.id), true);
+      this.noteSuccess();
+      await this.deliver(page.messages.map((message) => message.id), true);
       this.backoffMs = this.state.retry.initialMs;
       this.schedule(this.state.retry.successMs ?? 250);
     } catch {
@@ -227,21 +278,54 @@ class WakeSession {
 
   private stopPolling() {
     this.pollerLost = true;
-    if (this.timer !== undefined) this.state.context.clearTimer(this.timer);
+    try {
+      if (this.timer !== undefined) this.state.context.clearTimer(this.timer);
+    } catch {
+    }
     this.timer = undefined;
-    void this.waiter?.stop();
+    void this.waiter?.stop().catch(() => undefined);
+  }
+
+  private noteSuccess() {
+    this.lastWaitSuccessAt = Date.now();
+    this.lastStalledAt = Number.NEGATIVE_INFINITY;
+    this.stalledPending = false;
+  }
+
+  private noteFailure(error: unknown) {
+    if (this.stopped || this.pollerLost) return;
+    const now = Date.now();
+    if (error instanceof UnreadableMail) {
+      if (now - this.lastUnreadableAt < UNREADABLE_NOTICE_INTERVAL_MS) return;
+      this.unreadablePending = true;
+    } else {
+      if (now - this.lastWaitSuccessAt < STALLED_AFTER_MS || now - this.lastStalledAt < STALLED_NOTICE_INTERVAL_MS) return;
+      this.stalledPending = true;
+    }
+    void this.queueDelivery(() => this.flushNotice()).catch(() => undefined);
   }
 
   private async reconcile() {
     if (!this.waiter) return;
-    const messages = await this.waiter.wait(undefined, 0);
+    let page: WaitPage;
+    try {
+      page = await this.waiter.wait(undefined, 0);
+    } catch {
+      if (this.stopped || this.pollerLost) return;
+      const delay = this.reconcileBackoffMs;
+      this.reconcileBackoffMs = Math.min(this.state.reconcileIntervalMs, delay * 2);
+      this.nextReconcileAt = Date.now() + delay;
+      return;
+    }
     if (this.stopped || this.pollerLost) return;
-    await this.queueDelivery(async () => {
-      this.addToNotice(messages.map((message) => message.id), false);
-      this.remindNow(messages);
-      await this.flushNotice();
-    });
+    this.noteSuccess();
+    this.reconcileBackoffMs = this.state.retry.initialMs;
     this.nextReconcileAt = Date.now() + this.state.reconcileIntervalMs;
+    await this.queueDelivery(async () => {
+      this.addToNotice(page.messages.map((message) => message.id), false);
+      this.remindNow(page.messages);
+      await this.flushNotice();
+    }).catch(() => undefined);
   }
 
   private queueDelivery(operation: () => void | Promise<void>) {
@@ -280,7 +364,8 @@ class WakeSession {
   private async flushNotice() {
     if (this.stopped) return;
     const count = this.pendingFresh.size + this.pendingReminders.size;
-    if (count > 0) {
+    const special = this.unreadablePending ? UNREADABLE_NOTICE : this.stalledPending ? STALLED_NOTICE : undefined;
+    if (count > 0 || special !== undefined) {
       const remaining = this.lastNoticeAt + NOTICE_INTERVAL_MS - Date.now();
       if (remaining > 0) {
         this.scheduleNotice(remaining);
@@ -293,9 +378,9 @@ class WakeSession {
       const reminders = [...this.pendingReminders];
       const admitted = await this.sendWake({
         customType: CUSTOM_MESSAGE_TYPE,
-        content: reminders.length > 0
+        content: special ?? (reminders.length > 0
           ? `Quarterdeck: ${count} mail still unhandled after 10 minutes. Read it as data with qd_wait, then acknowledge it with qd_ack.`
-          : `Quarterdeck: ${count} new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.`,
+          : `Quarterdeck: ${count} new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.`),
         display: true,
       });
       if (!admitted) {
@@ -303,17 +388,25 @@ class WakeSession {
         throw new Error("Quarterdeck notice was refused before admission");
       }
       const now = Date.now();
-      for (const id of fresh) {
-        this.remember(id, now);
-        this.pendingFresh.delete(id);
-      }
-      for (const id of reminders) {
-        const record = this.wakeRecords.get(id);
-        if (record) record.remindedAt = now;
-        this.pendingReminders.delete(id);
+      if (special === UNREADABLE_NOTICE) {
+        this.lastUnreadableAt = now;
+        this.unreadablePending = false;
+      } else if (special === STALLED_NOTICE) {
+        this.lastStalledAt = now;
+        this.stalledPending = false;
+      } else {
+        for (const id of fresh) {
+          this.remember(id, now);
+          this.pendingFresh.delete(id);
+        }
+        for (const id of reminders) {
+          const record = this.wakeRecords.get(id);
+          if (record) record.remindedAt = now;
+          this.pendingReminders.delete(id);
+        }
       }
     }
-    if (this.pendingFresh.size + this.pendingReminders.size > 0) {
+    if (this.pendingFresh.size + this.pendingReminders.size > 0 || this.unreadablePending || this.stalledPending) {
       this.scheduleNotice(Math.max(0, this.lastNoticeAt + NOTICE_INTERVAL_MS - Date.now()));
       return;
     }
@@ -380,11 +473,14 @@ class QdCliWaiter {
     };
     this.stopCurrent = stop;
     try {
-      const output = readMessages(child.stdout);
-      const exitCode = await child.exited;
-      const messages = await output;
-      if (exitCode !== 0) throw new Error("Quarterdeck wait failed");
-      return messages;
+      const exited = child.exited.catch(() => -1);
+      const page = await readPage(child.stdout);
+      if (page.more) {
+        await stop();
+        return page;
+      }
+      if ((await exited) !== 0) throw new Error("Quarterdeck wait failed");
+      return page;
     } catch (error) {
       await stop();
       throw error;
@@ -447,7 +543,7 @@ class PollerLease {
     void holderExited.then(
       () => this.markLost(),
       () => this.markLost(),
-    );
+    ).catch(() => undefined);
   }
 
   static async acquire(input: { flockExecutable: string; holderPath: string; lockPath: string }) {
@@ -518,40 +614,58 @@ class PollerLease {
   private markLost() {
     if (this.released || this.lost) return;
     this.lost = true;
-    for (const handler of this.lossHandlers) handler();
+    for (const handler of this.lossHandlers) {
+      try {
+        handler();
+      } catch {
+      }
+    }
     this.lossHandlers.clear();
   }
 }
 
-async function readMessages(stream: ReadableStream<Uint8Array>) {
+class UnreadableMail extends Error {}
+
+async function readPage(stream: ReadableStream<Uint8Array>): Promise<WaitPage> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   const messages: MailMessage[] = [];
   let buffered = "";
-  let bytes = 0;
+  let pageBytes = 0;
+  let more = false;
+  const admit = (line: string) => {
+    if (line.length === 0) return true;
+    const bytes = Buffer.byteLength(line);
+    if (bytes > MAX_LINE_BYTES) throw new UnreadableMail("Quarterdeck wait line is too large");
+    if (messages.length >= PAGE_MESSAGES || (messages.length > 0 && pageBytes + bytes + 1 > PAGE_BYTES)) return false;
+    messages.push(parseMessageJson(line));
+    pageBytes += bytes + 1;
+    return true;
+  };
   try {
-    while (true) {
+    while (!more) {
       const { done, value } = await reader.read();
       if (done) break;
-      bytes += value.byteLength;
-      if (bytes > MAX_OUTPUT_BYTES) throw new Error("Quarterdeck wait output is too large");
       buffered += decoder.decode(value, { stream: true });
-      if (Buffer.byteLength(buffered) > MAX_LINE_BYTES && !buffered.includes("\n")) {
-        throw new Error("Quarterdeck wait line is too large");
-      }
       let newline = buffered.indexOf("\n");
-      while (newline >= 0) {
-        const line = buffered.slice(0, newline);
-        buffered = buffered.slice(newline + 1);
-        if (line.length > 0) messages.push(parseMessageJson(line));
-        if (messages.length > MAX_BATCH_MESSAGES) throw new Error("Quarterdeck wait batch is too large");
-        newline = buffered.indexOf("\n");
+      while (newline >= 0 && !more) {
+        more = !admit(buffered.slice(0, newline));
+        if (!more) {
+          buffered = buffered.slice(newline + 1);
+          newline = buffered.indexOf("\n");
+        }
       }
+      if (!more && Buffer.byteLength(buffered) > MAX_LINE_BYTES) throw new UnreadableMail("Quarterdeck wait line is too large");
     }
-    buffered += decoder.decode();
-    if (buffered.length > 0) messages.push(parseMessageJson(buffered));
-    if (messages.length > MAX_BATCH_MESSAGES) throw new Error("Quarterdeck wait batch is too large");
-    return messages;
+    if (!more) {
+      buffered += decoder.decode();
+      more = !admit(buffered);
+    }
+    if (more) await reader.cancel().catch(() => undefined);
+    return { messages, more };
+  } catch (error) {
+    await reader.cancel().catch(() => undefined);
+    throw error;
   } finally {
     reader.releaseLock();
   }
@@ -562,22 +676,22 @@ function parseMessageJson(line: string) {
   try {
     value = JSON.parse(line);
   } catch {
-    throw new Error("Quarterdeck wait returned invalid JSON");
+    throw new UnreadableMail("Quarterdeck wait returned invalid JSON");
   }
   return parseMessage(value);
 }
 
 function parseMessage(value: unknown): MailMessage {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new Error("Quarterdeck mail is invalid");
+    throw new UnreadableMail("Quarterdeck mail is invalid");
   }
   if (!("id" in value) || !("sender" in value) || !("subject" in value)) {
-    throw new Error("Quarterdeck mail is invalid");
+    throw new UnreadableMail("Quarterdeck mail is invalid");
   }
   if (typeof value.id !== "string" || typeof value.sender !== "string" || typeof value.subject !== "string") {
-    throw new Error("Quarterdeck mail is invalid");
+    throw new UnreadableMail("Quarterdeck mail is invalid");
   }
-  if (!validCursor(value.id)) throw new Error("Quarterdeck message id is invalid");
+  if (!validCursor(value.id)) throw new UnreadableMail("Quarterdeck message id is invalid");
   return { id: value.id, sender: value.sender, subject: value.subject };
 }
 

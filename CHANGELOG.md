@@ -3,6 +3,11 @@
 All notable changes to the bot tools are listed here, newest first. Each release uses one version number for the wheel and the wake extension. While the version starts with 0, a release can change interfaces; each entry says so when it does.
 From later releases this file also lists changes to the web app and the server. Each release has one heading of the exact form `## X.Y.Z`, with nothing else on the line, because the bot-tool release workflow finds its heading by exact match. An entry says which part it changes: bot tools, app, or server.
 
+## 0.1.3
+
+- Bot tools: the wake extension for OMP can no longer end the agent it runs in. Mail it cannot read, or an error in its own work, now ends in one short notice instead of an error that stopped the session, and a lost bot lock stops the extension quietly. If waits keep failing for 30 minutes, the wake sends one short notice, then at most one an hour until a wait succeeds. (issue #19)
+- Bot tools: the wake extension reads a large mail backlog in pages of at most 100 messages instead of stopping the wake. A failed catch-up read now backs off instead of holding up the next poll. Read the mail with `qd_wait` as before.
+
 ## 0.1.2
 
 - `qd send` and the MCP `qd_send` now refuse mail to `captain` that is not a chat message, before anything is sent, and print how to send it right; plain mail to `captain` that used to be delivered unseen is now refused. New `qd chat` and MCP `qd_chat` send a chat message from plain text.
