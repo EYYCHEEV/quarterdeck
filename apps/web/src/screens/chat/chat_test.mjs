@@ -2533,6 +2533,69 @@ it("Chat motion: when his send is confirmed during its rise, the row that was Se
   }),
 );
 
+it("Chat motion: when he sends again, the Read line under his older message folds away at the standard speed, the space under that message closes by less than half a line in any one frame, and with Reduce Motion the line is gone at once", PHONE, (p) =>
+  motionPair(p, PHONE, async (page, m) => {
+    await page.clock.install({ time: new Date("2026-11-02T15:00:00Z") });
+    await open(page, "/chat/dale");
+    await T(page, "chat-bot-message").first().waitFor();
+    await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
+    const replies = await T(page, "chat-bot-message").count();
+    const reply = (n) => T(page, "chat-bot-message").nth(replies + n);
+    await T(page, "chat-input").fill("Fold check one");
+    await T(page, "chat-send").tap();
+    await page.clock.runFor(3600);
+    await reply(0).getByText("Seen. I will check it and come back with the details.").waitFor();
+    const older = mine(page, "Fold check one");
+    const line = older.locator('[data-testid="chat-seen"]');
+    await line.waitFor();
+    await page.clock.resume();
+    await settle(page);
+    const height = await line.evaluate((el) => el.getBoundingClientRect().height);
+    await older.evaluate((row) => {
+      const bubble = row.querySelector("[data-message-text]");
+      const next = row.nextElementSibling;
+      window.qdFold = [];
+      const step = () => {
+        window.qdFold.push({
+          space: next.getBoundingClientRect().top - bubble.getBoundingClientRect().bottom,
+          top: next.getBoundingClientRect().top,
+          rows: row.parentElement.children.length,
+          moving: row.getAnimations({ subtree: true }).map((one) => one.effect.getComputedTiming().duration + " " + one.animationName),
+        });
+        window.qdFoldFrame = requestAnimationFrame(step);
+      };
+      window.qdFoldFrame = requestAnimationFrame(step);
+    });
+    await T(page, "chat-input").fill("Fold check two");
+    await T(page, "chat-send").tap();
+    await reply(1).waitFor({ timeout: 10_000 });
+    const frames = await page.evaluate(() => {
+      cancelAnimationFrame(window.qdFoldFrame);
+      return window.qdFold;
+    });
+    assert.deepEqual(
+      [await T(page, "chat-seen").count(), await older.locator('[data-testid="chat-seen"]').count(), await mine(page, "Fold check two").locator('[data-testid="chat-seen"]').count(), await page.locator('[data-row="out"]').count()],
+      [1, 0, 1, 0],
+      "at the end: Read lines in the thread, under the older message, under the newest, and lines still folding",
+    );
+    const spaces = frames.map((frame) => frame.space);
+    const closed = spaces[0] - spaces.at(-1);
+    assert.ok(closed >= height, `the space under the older message closed by its Read line (${closed} px of a ${height} px line)`);
+    if (m.still) {
+      assert.deepEqual([...new Set(frames.flatMap((frame) => frame.moving))], [], "with Reduce Motion nothing in the older message moves");
+      assert.ok(new Set(spaces.map(Math.round)).size <= 2, "with Reduce Motion the space closes in one step: " + [...new Set(spaces.map(Math.round))].join(", "));
+      return;
+    }
+    const steps = spaces.slice(1).map((space, at) => Math.abs(space - spaces[at]));
+    const quiet = frames.slice(1).flatMap((frame, at) => (frame.rows === frames[at].rows ? [Math.abs(frame.top - frames[at].top)] : []));
+    assert.ok(
+      Math.max(...steps) <= height / 2,
+      `no frame closes the space by more than half a line (${height / 2} px); the steps over 1 px were ${steps.filter((step) => step > 1).map((step) => step.toFixed(1)).join(", ")}; for the record, with no row added or removed the row under it moved by up to ${Math.max(0, ...quiet).toFixed(1)} px in one frame`,
+    );
+    assert.ok(frames.some((frame) => frame.moving.includes(STANDARD + " fold")), "the line folds at the standard speed; seen moving: " + [...new Set(frames.flatMap((frame) => frame.moving))].join(", "));
+  }),
+);
+
 it("Chat on a phone: Menu, the bot's name and role, and More float over the page in one row", PHONE, async (p) => {
   await open(p, "/chat/iris");
   const label = p.locator('[data-float="label"]');
