@@ -2592,10 +2592,10 @@ it("Chat on the Mac: Search from the three dots menu opens, and closing it puts 
   assert.equal(await focusedTestId(p), "chat-more");
 });
 
-for (const [name, size] of [["a phone", PHONE], ["an iPad upright", IPAD_UPRIGHT]]) {
+for (const [name, size, dots] of [["a phone", PHONE, "float-more"], ["an iPad upright", IPAD_UPRIGHT, "chat-more"]]) {
   it("Chat on " + name + ": the three dots open the More sheet with a handle, its title and a Close key", size, async (p) => {
     await open(p, "/chat/iris");
-    await T(p, "float-more").tap();
+    await T(p, dots).tap();
     const sheet = moreList(p);
     await sheet.waitFor();
     assert.equal(await sheet.getAttribute("aria-modal"), "true");
@@ -2612,26 +2612,26 @@ for (const [name, size] of [["a phone", PHONE], ["an iPad upright", IPAD_UPRIGHT
   for (const shut of ["Close", "outside", "Escape"]) {
     it("Chat on " + name + ": " + shut + " closes the More sheet with focus back on the three dots", size, async (p) => {
       await open(p, "/chat/iris");
-      await T(p, "float-more").tap();
+      await T(p, dots).tap();
       const sheet = moreList(p);
       await sheet.waitFor();
       if (shut === "Close") await sheet.getByRole("button", { name: "Close", exact: true }).tap();
       else if (shut === "outside") await p.touchscreen.tap(8, 8);
       else await p.keyboard.press("Escape");
       await sheet.waitFor({ state: "detached" });
-      assert.equal(await focusedTestId(p), "float-more");
+      assert.equal(await focusedTestId(p), dots);
     });
   }
 }
 
 it("Chat on an iPad upright: Search from More opens, and closing it puts focus back on More", IPAD_UPRIGHT, async (p) => {
   await open(p, "/chat/iris");
-  await T(p, "float-more").tap();
+  await T(p, "chat-more").tap();
   await moreList(p).getByRole("button", { name: "Search", exact: true }).tap();
   await p.locator('[data-pop="search"]').waitFor();
   await p.keyboard.press("Escape");
   await p.locator('[data-pop="search"]').waitFor({ state: "detached" });
-  assert.equal(await focusedTestId(p), "float-more");
+  assert.equal(await focusedTestId(p), "chat-more");
 });
 
 it("Chat: the message box is solid in both looks, so nothing shows through it", PHONE, async (p) => {
