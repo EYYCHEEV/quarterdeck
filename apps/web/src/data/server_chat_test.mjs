@@ -2034,7 +2034,6 @@ for (const [label, reply, check] of UPLOAD_REFUSALS) {
 }
 
 const LOST_UPLOADS = [
-  ["502 mail with retryAfter", () => json({ error: "mail", retryAfter: 3 }, 502)],
   ["502 mail without retryAfter", () => json({ error: "mail" }, 502)],
   ["504 and no body, a lost answer", () => new Response("", { status: 504 })],
   ["a 200 whose answer cannot be read", () => json({ ok: true })],
@@ -2060,6 +2059,63 @@ for (const [label, reply] of LOST_UPLOADS) {
     assert.equal(h.calls.at(-1).body.csrf, "up-3");
   });
 }
+
+test("an upload answered busy waits the named time, then reads a fresh token and uploads that file once more, then sends, and the first file is not uploaded again", async () => {
+  const h = await filesThread({ upload: (init, n) => (n === 2 ? busy(8) : null) });
+  const phases = [];
+  const from = h.calls.length;
+  const state = watchSend(h, h.source.chat.send("steward", { text: "two", clientId: "client-f20", files: [photo("one.png"), doc("two.txt")] }, (phase, seconds) => phases.push(seconds === undefined ? phase : phase + " " + seconds)));
+  await pass(h, 7_800);
+  assert.equal(state.done, false);
+  assert.deepEqual(h.requests(from), [TOKEN, UPLOAD, UPLOAD]);
+  assert.deepEqual(phases, ["uploading", "busy 8"]);
+  await pass(h, 500);
+  assert.equal(state.value?.clientId, "client-f20", String(state.error));
+  assert.deepEqual(h.requests(from), [TOKEN, UPLOAD, UPLOAD, TOKEN, UPLOAD, POST]);
+  const ups = uploads(h, from);
+  assert.deepEqual(ups.map((call) => call.headers["x-qd-file-name"]), ["one.png", "two.txt", "two.txt"]);
+  assert.equal(ups[2].headers["x-qd-csrf"], tokenBefore(h, ups[2]));
+  assert.deepEqual(h.calls.at(-1).body.files, ["f-1", "f-3"]);
+  assert.deepEqual(phases, ["uploading", "busy 8", "uploading", "sending"]);
+});
+
+test("an upload answered busy a second time ends as Not Delivered after the one wait, with no send, and Try Again uploads only that file", async () => {
+  let left = 2;
+  const upload = (init, n) => {
+    if (n < 2 || left === 0) return null;
+    left -= 1;
+    return busy(2);
+  };
+  const h = await filesThread({ upload });
+  const outgoing = { text: "two", clientId: "client-f21", files: [photo("one.png"), doc("two.txt")] };
+  const from = h.calls.length;
+  const state = watchSend(h, h.source.chat.send("steward", outgoing));
+  await pass(h, 3_000);
+  assert.ok(refusedWith("Not Delivered")(state.error), String(state.error));
+  assert.ok(state.at >= 2_000, "settled at " + state.at + ", after the 2 s the server named");
+  assert.deepEqual(h.requests(from), [TOKEN, UPLOAD, UPLOAD, TOKEN, UPLOAD]);
+  const again = h.calls.length;
+  const message = await h.source.chat.send("steward", outgoing);
+  assert.equal(message.clientId, "client-f21");
+  assert.deepEqual(uploads(h, again).map((call) => call.headers["x-qd-file-name"]), ["two.txt"]);
+  assert.deepEqual(chatPosts(h, again).map((call) => call.body.files), [["f-1", "f-4"]]);
+});
+
+test("a send waits for a busy answer once: after a busy upload, a busy answer to the POST ends as Not Delivered with that one POST", async () => {
+  let first = true;
+  const upload = (init, n) => {
+    if (n !== 2 || !first) return null;
+    first = false;
+    return busy(2);
+  };
+  const h = await filesThread({ upload, post: () => busy(2) });
+  const from = h.calls.length;
+  const state = watchSend(h, h.source.chat.send("steward", { text: "two", clientId: "client-f22", files: [photo("one.png"), doc("two.txt")] }));
+  await pass(h, 3_000);
+  assert.ok(refusedWith("Not Delivered")(state.error), String(state.error));
+  await pass(h, 30_000);
+  assert.deepEqual(chatPosts(h, from).map((call) => call.body.clientId), ["client-f22"]);
+});
 
 for (const [label, reply] of [["400", () => json({ error: "body" }, 400)], ["502 mail", () => json({ error: "mail", retryAfter: 3 }, 502)]]) {
   test("an upload answered " + label + " twice ends as Not Delivered after one fresh token read and one new upload, eight credits, and Try Again resumes from the kept ids", async () => {
