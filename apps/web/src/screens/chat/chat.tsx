@@ -5,7 +5,7 @@ import { useQd, useWorld } from "../../data/hooks";
 import { useSecrets } from "../../data/secret-hooks";
 import { attachChatFiles, updatePendingSends, useChatDraft, usePendingSends, type PendingSend } from "../../data/session";
 import { RateLimited, Refused } from "../../data/source";
-import { fitsSend, isCardQuote, messageQuote, SEND_FAILED_TEXT, SEND_LONG_TEXT, SEND_RATE_TEXT, withCardLine } from "../../domain/chat";
+import { fitsSend, messageQuote, quoteAsText, SEND_FAILED_TEXT, SEND_LONG_TEXT, SEND_RATE_TEXT } from "../../domain/chat";
 import { admit, pictureCaption } from "../../domain/chat-files";
 import { EXPIRED_TEXT, FILES_OFF_TEXT, serverAdmit } from "../../domain/files-r1";
 import { dayKey, dayLabel } from "../../domain/time";
@@ -183,9 +183,9 @@ export function ChatScreen({ botId }: { botId: string }) {
 
   if (__QD_SOURCE__ === "server" && __QD_CHAT__ === "on")
     useEffect(() => {
-      if (!draft.quote || !thread.value || canReply) return;
-      const text = isCardQuote(draft.quote) ? withCardLine(draft.text, draft.quote) : draft.text;
-      setDraft({ text, quote: null, files: [] });
+      if (!draft.quote || !thread.value) return;
+      const text = quoteAsText(draft.text, draft.quote, canReply);
+      if (text !== null) setDraft({ ...draft, text, quote: null });
     }, [draft.quote, !thread.value, canReply]);
 
   useEffect(() => {
