@@ -270,20 +270,16 @@
   border-top: var(--line-w) solid var(--color-line-3);
 }
 
-.chat-sound,
 .chat-notifications {
   display: flex;
   align-items: center;
   min-height: var(--spacing-hit);
+  margin-left: auto;
   gap: var(--spacing-s2);
+  color: var(--color-ink-2);
   font-size: var(--text-label);
   font-weight: var(--font-weight-regular);
   cursor: pointer;
-}
-
-.chat-notifications {
-  margin-left: auto;
-  color: var(--color-ink-2);
 }
 
 .chat-switch {

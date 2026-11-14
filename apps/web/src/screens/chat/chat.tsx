@@ -13,7 +13,7 @@ import { Button } from "../../ui/button";
 import { useShown } from "../../ui/motion";
 import { Empty, ErrorLine, LoadingBars } from "../../ui/states";
 import { Viewer } from "../../ui/viewer";
-import { AlertChoices, Arrival, useArrival, useSound } from "./alerts";
+import { AlertSwitch, Arrival, NotificationChoice, useArrival } from "./alerts";
 import { FileViewer, isPicture, PhotoTurn, usePhotoTurn } from "./attachments";
 import { Composer } from "./composer";
 import { ChatHeader } from "./header";
@@ -64,7 +64,7 @@ function OlderRow({ botId, oldest, pane }: { botId: string; oldest: string | und
   );
 }
 
-export function ChatScreen({ botId }: { botId: string }) {
+export function ChatScreen({ botId, wide }: { botId: string; wide: boolean }) {
   const qd = useQd();
   const { world } = useWorld();
   const thread = useThread(botId);
@@ -93,9 +93,15 @@ export function ChatScreen({ botId }: { botId: string }) {
   const secretsReady = !secrets.loading && !secrets.failed;
   const [boxOpen, setBoxOpen] = useState(false);
   const bot = world?.bots.find((b) => b.id === botId) ?? (__QD_SOURCE__ === "server" && __QD_CHAT__ === "on" ? (thread.value?.bot ?? null) : null);
-  const [sound, toggleSound] = useSound();
   const [arrival, dismissArrival] = useArrival(bot);
-  const choices = <AlertChoices sound={sound} onSound={toggleSound} />;
+  const choices = (
+    <>
+      <AlertSwitch botId={botId} />
+      <div className="px-s3">
+        <NotificationChoice />
+      </div>
+    </>
+  );
   const messages = thread.value?.messages ?? [];
   if (thread.value && firstNew.current?.botId !== botId) firstNew.current = { botId, id: thread.value.firstUnread };
   const newId = firstNew.current?.botId === botId ? firstNew.current.id : null;
@@ -261,7 +267,7 @@ export function ChatScreen({ botId }: { botId: string }) {
   const head = (
     <>
       <link rel="stylesheet" href="/chat.css" precedence="chat" />
-      <ChatHeader botId={botId} bot={bot} choices={choices} />
+      <ChatHeader botId={botId} bot={bot} wide={wide} choices={choices} />
     </>
   );
 
@@ -449,7 +455,7 @@ export function ChatScreen({ botId }: { botId: string }) {
           <div ref={cards} className="chat-dock-cards">
             {arrival && (
               <Arrival from={arrival} onDismiss={dismissArrival}>
-                {choices}
+                <NotificationChoice />
               </Arrival>
             )}
             {canReply && draft.quote && (

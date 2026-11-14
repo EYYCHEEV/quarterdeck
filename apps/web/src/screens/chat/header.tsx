@@ -9,7 +9,7 @@ import { Head, useFrame } from "../../ui/head";
 import { MoreSheet } from "../../ui/more-sheet";
 import { usePhone } from "../../ui/phone";
 
-export function ChatHeader({ botId, bot, choices }: { botId: string; bot: Bot | null; choices: ReactNode }) {
+export function ChatHeader({ botId, bot, wide, choices }: { botId: string; bot: Bot | null; wide: boolean; choices: ReactNode }) {
   const frame = useFrame();
   const phone = usePhone();
   const dot = useNewActivity(botId);
@@ -19,13 +19,16 @@ export function ChatHeader({ botId, bot, choices }: { botId: string; bot: Bot | 
     <MoreSheet
       items={[
         { icon: "search", label: "Search", onPick: frame.openSearch },
-        ...(__QD_SOURCE__ === "server" ? [] : [{ icon: "plus", label: "Add bot", onPick: frame.openAddBot } as const]),
         { icon: "settings", label: "Settings", onPick: frame.openSettings },
+        ...(__QD_SOURCE__ === "server" ? [] : [{ icon: "plus", label: "Add bot", onPick: frame.openAddBot } as const]),
       ]}
       from={more}
       onClose={() => setOpen(false)}
+      menu={wide}
+      handle={!wide}
+      closeLabel={wide ? undefined : "Close"}
     >
-      <div className="px-s3 pb-s2">{choices}</div>
+      {choices}
     </MoreSheet>
   );
 
@@ -63,9 +66,12 @@ export function ChatHeader({ botId, bot, choices }: { botId: string; bot: Bot | 
             </span>
           </span>
         )}
-        <IconButton ref={more} icon="more" label="More" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)} className="chat-more ml-auto" data-testid="chat-more" />
+        <span className="relative ml-auto flex flex-none">
+          <IconButton ref={more} icon="more" label="More" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)} className="chat-more" data-testid="chat-more" />
+          {wide && sheet}
+        </span>
       </Head>
-      {sheet}
+      {!wide && sheet}
     </>
   );
 }

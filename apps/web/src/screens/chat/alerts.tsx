@@ -8,43 +8,46 @@ import { Avatar } from "../../ui/avatar";
 import { IconButton } from "../../ui/button";
 import { Icon } from "../../ui/icon";
 import { Link } from "../../ui/link";
+import { MENU_ROW } from "../../ui/more-sheet";
 
-const SOUND_KEY = "quarterdeck-chat-sound";
+const OFF_KEY = "quarterdeck-chat-alerts-off";
 
-export function useSound(): [boolean, () => void] {
-  const [sound, setSound] = useState(() => readJson(SOUND_KEY) === true);
-  useEffect(() => {
-    const enable = (event: PointerEvent) => {
-      if (readJson(SOUND_KEY) !== null || (event.target instanceof Element && event.target.closest("[data-sound]"))) return;
-      writeJson(SOUND_KEY, true);
-      setSound(true);
-    };
-    window.addEventListener("pointerdown", enable);
-    return () => window.removeEventListener("pointerdown", enable);
-  }, []);
-  const toggle = () => {
-    writeJson(SOUND_KEY, !sound);
-    setSound(!sound);
-  };
-  return [sound, toggle];
+function alertsOff(): string[] {
+  const stored = readJson(OFF_KEY);
+  return Array.isArray(stored) ? stored.filter((id): id is string => typeof id === "string") : [];
 }
 
-export function AlertChoices({ sound, onSound }: { sound: boolean; onSound: () => void }) {
+export function AlertSwitch({ botId }: { botId: string }) {
+  const [on, setOn] = useState(() => !alertsOff().includes(botId));
+  const toggle = () => {
+    const others = alertsOff().filter((id) => id !== botId);
+    writeJson(OFF_KEY, on ? [...others, botId] : others);
+    setOn(!on);
+  };
+  return (
+    <button type="button" role="switch" aria-checked={on} className={MENU_ROW} onClick={toggle} data-testid="chat-alerts">
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span>Alerts for this chat</span>
+        <small className="text-label font-regular text-ink-3" aria-hidden="true">
+          {on ? "On" : "Off"}
+        </small>
+      </span>
+      <span className="chat-switch" data-on={on}>
+        <span />
+      </span>
+    </button>
+  );
+}
+
+export function NotificationChoice() {
   const [note, setNote] = useState(false);
+  if (!canPush()) return null;
   return (
     <div className="chat-alert-preferences">
-      <button type="button" role="switch" aria-checked={sound} className="chat-sound" onClick={onSound} data-sound="" data-testid="chat-sound">
-        <span className="chat-switch" data-on={sound}>
-          <span />
-        </span>
-        Sound {sound ? "on" : "off"}
+      <button type="button" className="chat-notifications" onClick={() => setNote(true)} data-testid="chat-notifications">
+        Turn on notifications
+        <Icon name="chevR" size="sm" />
       </button>
-      {canPush() && (
-        <button type="button" className="chat-notifications" onClick={() => setNote(true)} data-testid="chat-notifications">
-          Turn on notifications
-          <Icon name="chevR" size="sm" />
-        </button>
-      )}
       {note && (
         <p className="w-full text-meta text-ink-2" role="status">
           Notifications will be available when connected to Quarterdeck.
