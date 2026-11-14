@@ -74,7 +74,7 @@ export function attachChatFiles(botId: string, files: File[], prepare: PrepareFi
   return queued;
 }
 
-export type PendingSend = { clientId: string; text: string; quote: Quote | null; files: InspectedFile[]; previews: Attachment[]; failed: boolean; at: string; after: string | null; reason?: string | null; retry?: boolean; phase?: SendPhase };
+export type PendingSend = { clientId: string; text: string; quote: Quote | null; files: InspectedFile[]; previews: Attachment[]; failed: boolean; at: string; after: string | null; reason?: string | null; retry?: boolean; phase?: SendPhase; busyUntil?: number };
 
 const NO_PENDING: PendingSend[] = [];
 

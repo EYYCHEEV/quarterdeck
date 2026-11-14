@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Attachment, ChatMessage, SentQuote, Working } from "../../data/chat-types";
 import { useQd } from "../../data/hooks";
-import { DELIVERED_TEXT, QUIET_TEXT, readableText, readText, resolveQuote, SEND_FAILED_TEXT, SEND_RETRY_TEXT, workingStatus } from "../../domain/chat";
+import { busyText, DELIVERED_TEXT, QUIET_TEXT, readableText, readText, resolveQuote, SEND_FAILED_TEXT, SEND_RETRY_TEXT, workingStatus } from "../../domain/chat";
 import { UPLOADING_TEXT } from "../../domain/files-r1";
 import { parseMarkdown } from "../../domain/markdown";
 import { referenceInfo } from "../../domain/references";
@@ -22,6 +22,7 @@ import { Actionable } from "./message-actions";
 import { QuoteBlock } from "./quote";
 
 const TICK_MS = 15_000;
+const SECOND_MS = 1_000;
 
 const RETRY_UNDER = "max-upright:grid max-upright:grid-cols-[auto_minmax(0,1fr)] max-upright:[&>button]:col-span-2 max-upright:[&>button]:justify-self-end";
 
@@ -87,7 +88,23 @@ export function NewLine() {
   );
 }
 
-type Note = "delivered" | "read" | "uploading" | "sending" | "failed" | null;
+type Note = "delivered" | "read" | "uploading" | "sending" | "busy" | "failed" | null;
+
+function BusyLine({ until }: { until: number }) {
+  const qd = useQd();
+  const [now, setNow] = useState(() => qd.now());
+  useEffect(() => {
+    const left = until - now;
+    if (left <= 0) return;
+    const id = window.setTimeout(() => setNow(qd.now()), left % SECOND_MS || SECOND_MS);
+    return () => window.clearTimeout(id);
+  }, [qd, until, now]);
+  return (
+    <p className={cx(STATUS_LINE, "text-label text-ink-2")} data-testid="chat-busy">
+      <span>{busyText(Math.max(1, Math.ceil((until - now) / SECOND_MS)))}</span>
+    </p>
+  );
+}
 
 export function MyMessage({
   text,
@@ -95,6 +112,7 @@ export function MyMessage({
   attachments,
   at,
   note,
+  busyUntil,
   seenAt,
   onRetry,
   reason,
@@ -110,6 +128,7 @@ export function MyMessage({
   attachments?: Attachment[];
   at: string;
   note: Note;
+  busyUntil?: number;
   seenAt?: string | null;
   onRetry?: () => void;
   reason?: string | null;
@@ -136,7 +155,9 @@ export function MyMessage({
           <span className="block">{SEND_FAILED_TEXT}</span>
           {reason && <span className="block text-meta text-ink-2">{reason}</span>}
         </ErrorLine>
-      ) : note === "sending" || note === "uploading" ? (
+      ) : note === "busy" && busyUntil !== undefined ? (
+        <BusyLine until={busyUntil} />
+      ) : note === "sending" || note === "uploading" || note === "busy" ? (
         <p className={cx(STATUS_LINE, "self-stretch", note === "uploading" && "gap-s2")} data-testid="chat-sending-bar">
           <span aria-hidden="true" data-progress="" className="relative h-hair w-full overflow-hidden rounded-round bg-line">
             <span className="sending-bar absolute inset-y-0 left-0 w-2/5 rounded-round bg-hand" />

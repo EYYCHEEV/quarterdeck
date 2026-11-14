@@ -203,8 +203,9 @@ export function ChatScreen({ botId, wide }: { botId: string; wide: boolean }) {
 
   const deliver = (item: PendingSend) => {
     const phase = __QD_SOURCE__ === "server" && __QD_CHAT__ === "on" && item.files.length ? "uploading" : undefined;
-    setPending((list) => (list.some((p) => p.clientId === item.clientId) ? list.map((p) => (p.clientId === item.clientId ? { ...item, failed: false, phase } : p)) : [...list, { ...item, failed: false, phase }]));
-    const onPhase = (next: SendPhase) => setPending((list) => list.map((p) => (p.clientId === item.clientId ? { ...p, phase: next } : p)));
+    setPending((list) => (list.some((p) => p.clientId === item.clientId) ? list.map((p) => (p.clientId === item.clientId ? { ...item, failed: false, phase, busyUntil: undefined } : p)) : [...list, { ...item, failed: false, phase, busyUntil: undefined }]));
+    const onPhase = (next: SendPhase, seconds?: number) =>
+      setPending((list) => list.map((p) => (p.clientId === item.clientId ? { ...p, phase: next, busyUntil: next === "busy" && seconds !== undefined ? qd.now() + seconds * 1_000 : undefined } : p)));
     thread.send({ text: item.text, clientId: item.clientId, quote: item.quote ?? undefined, files: item.files }, onPhase).catch((error: unknown) => {
       const refused = __QD_SOURCE__ === "server" && __QD_CHAT__ === "on" ? refusal(error) : {};
       setPending((list) => list.map((p) => (p.clientId === item.clientId ? { ...p, failed: true, ...refused } : p)));
@@ -296,7 +297,7 @@ export function ChatScreen({ botId, wide }: { botId: string; wide: boolean }) {
   const waitingRows = (items: PendingSend[]) =>
     items.flatMap((item) => [
       ...dayRow(item.at),
-      <MyMessage key={"send-" + item.clientId} text={item.text} quote={item.quote} attachments={item.previews} at={item.at} note={item.failed ? "failed" : item.phase === "uploading" ? "uploading" : "sending"} reason={item.reason} onRetry={item.retry === false ? undefined : () => deliver(item)} onOpen={open} world={world} rise />,
+      <MyMessage key={"send-" + item.clientId} text={item.text} quote={item.quote} attachments={item.previews} at={item.at} note={item.failed ? "failed" : item.phase === "uploading" ? "uploading" : item.phase === "busy" && item.busyUntil !== undefined ? "busy" : "sending"} busyUntil={item.busyUntil} reason={item.reason} onRetry={item.retry === false ? undefined : () => deliver(item)} onOpen={open} world={world} rise />,
     ]);
   const known = new Map(messages.flatMap((message, n): [string, number][] => (message.clientId ? [[message.id, n], [message.clientId, n]] : [[message.id, n]])));
   const out = new Map(waiting.map((item) => [item.clientId, item]));
