@@ -129,7 +129,7 @@ function harness(options = {}) {
     streams.push(stream);
     return stream;
   };
-  const client = createApiClient({ send, openEvents });
+  const client = createApiClient({ send, openEvents, schedule: () => () => undefined });
   const source = createServerSource(client, time.now, time.schedule, undefined, visibility);
   const loader = createLoader(() => source.load(), (notify) => source.watch(notify));
   const stop = loader.subscribe(() => {});

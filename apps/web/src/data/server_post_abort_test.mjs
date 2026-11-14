@@ -297,8 +297,9 @@ test("a card list read that never answers is cut after twenty seconds and frees 
   await h.time.advance(1_500);
   assert.equal(h.calls.slice(from).find((call) => call.path === "/captain/cards").signal?.aborted, true, "the hung read was aborted at twenty seconds");
   stuck = false;
-  await h.time.advance(11_000);
-  assert.ok(h.lists(from) >= 2, "a new list read went out after the cut, " + h.lists(from) + " in all");
+  await h.refresh({ cards: true, mail: false });
+  await h.time.advance(6_000);
+  assert.ok(h.lists(from) >= 2, "the next event starts a new list read after the cut, " + h.lists(from) + " in all");
   const world = await h.source.load();
   assert.ok(world.cards.length > 0, "and the list is shown again");
 });
