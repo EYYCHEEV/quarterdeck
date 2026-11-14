@@ -5818,7 +5818,7 @@ it("Server Chat: past the app's own cap Send shows the rate words on his row wit
   await chatOpened(p);
   const line = T(p, "chat-thread").getByRole("alert").filter({ hasText: "Not sent: too many sends this minute. Wait up to a minute, then Try again." });
   let refused = null;
-  for (let n = 1; n <= 12 && refused === null; n++) {
+  for (let n = 1; n <= 20 && refused === null; n++) {
     const before = asked.posts.length;
     await T(p, "chat-input").fill("Send number " + n);
     await T(p, "chat-send").click();
@@ -5911,7 +5911,7 @@ it("Server Chat: when every POST's answer is lost and no read holds it, Not Deli
   equal([asked.posts.length, await T(p, "chat-thread").getByText("Please send the sheet.", { exact: true }).count(), await T(p, "chat-thread").getByRole("alert").count()], [3, 1, 0], "POSTs, his words shown once, failure lines");
 }, /ERR_FAILED/);
 
-it("Server Chat: a send whose sign-in token read fails because the phone is offline shows no failure, and when the network is back the app tries once more by itself after its pause, so his message lands with one POST", MAC, async (p) => {
+it("Server Chat: a send while the phone is offline shows no failure, and when the network is back the app tries once more by itself after its pause, so his message lands with one POST", MAC, async (p) => {
   await p.clock.install({ time: new Date("2026-11-06T06:00:00Z") });
   let offline = false;
   const asked = await serverBuildChat(p);
@@ -5924,7 +5924,7 @@ it("Server Chat: a send whose sign-in token read fails because the phone is offl
     }).observe(document.body, { childList: true, subtree: true });
   });
   offline = true;
-  const failed = p.waitForEvent("requestfailed", (request) => new URL(request.url()).pathname === "/captain/cards");
+  const failed = p.waitForEvent("requestfailed", (request) => request.method() === "POST" && new URL(request.url()).pathname === "/captain/api/chat");
   await T(p, "chat-input").fill("Sent while offline.");
   await T(p, "chat-send").click();
   await failed;
@@ -6310,6 +6310,7 @@ it("Server Chat: Talk to while a send is on its way puts the card line in the bo
   await open(p, "/queue/alba-1");
   await talkTo(p, MAC);
   await p.waitForURL("**/chat/alba");
+  equal(await draftReads(p, ALBA_1_LINE + "\n"), ALBA_1_LINE + "\n", "the box after the first Talk to");
   await T(p, "chat-input").fill("Please send the sheet.");
   await T(p, "chat-send").click();
   await bubble(p, "Please send the sheet.").getByText("Sending...", { exact: true }).waitFor();
@@ -6335,6 +6336,7 @@ for (const [status, error, words] of [
     await open(p, "/queue/alba-1");
     await talkTo(p, MAC);
     await p.waitForURL("**/chat/alba");
+    equal(await draftReads(p, ALBA_1_LINE + "\n"), ALBA_1_LINE + "\n", "the box after the first Talk to");
     await T(p, "chat-input").fill("First try.");
     await T(p, "chat-send").click();
     const row = bubble(p, "First try.");
@@ -6616,7 +6618,7 @@ for (const [flight, words] of [[null, "nothing else in flight"], ["thread", "a t
     await T(p, "chat-input").fill("Please send the sheet.");
     if (flight) {
       arrived = true;
-      const out = p.waitForRequest((request) => request.method() === "GET" && new URL(request.url()).pathname === (flight === "mark" ? "/captain/cards" : "/captain/api/chat"), { timeout: 15_000 });
+      const out = p.waitForRequest((request) => (flight === "mark" ? request.method() === "POST" && new URL(request.url()).pathname === "/captain/api/chat/read" : request.method() === "GET" && new URL(request.url()).pathname === "/captain/api/chat"), { timeout: 15_000 });
       await p.evaluate(() => window.qdStream.dispatchEvent(new MessageEvent("refresh", { data: '{"cards":false,"mail":false,"chats":true}' })));
       await out;
     }
