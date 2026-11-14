@@ -6576,14 +6576,14 @@ it("Server Chat on a phone: with cursor listed, a bot reply that arrives one sec
 });
 
 const SEND_ROUND = 300;
-for (const flight of [false, true])
-  it("Server Chat timing, numbers only: the time from the Send press to the POST and to the Sent mark with each answer " + SEND_ROUND + " ms away, " + (flight ? "with a thread read in flight" : "with nothing else in flight"), MAC, async (p) => {
+for (const [flight, words] of [[null, "nothing else in flight"], ["thread", "a thread read in flight"], ["mark", "a mark-read in flight"]])
+  it("Server Chat timing, numbers only: the time from the Send press to the POST and to the Sent mark with each answer " + SEND_ROUND + " ms away, with " + words, MAC, async (p) => {
     const REPLY = { id: "iris-reply", from: "bot", text: "A reply while he sends.", at: "2026-11-06T00:35:00-05:00", refs: [] };
     let arrived = false;
     await serverBuildChat(p, {
       rows: () => chatPayload("rows.json").map((row) => (row.bot.id === "iris" && arrived ? { ...row, last: REPLY.id, at: REPLY.at, preview: REPLY.text } : row)),
       "iris": (messages) => (arrived ? [...messages, REPLY] : messages),
-      shape: (body) => ({ ...body, features: ["cursor"] }),
+      shape: (body) => (flight === "mark" ? { ...body, firstUnread: arrived ? REPLY.id : null, features: ["cursor", "read"] } : { ...body, features: ["cursor"] }),
     });
     await p.addInitScript(() => {
       const Quiet = window.EventSource;
@@ -6616,19 +6616,19 @@ for (const flight of [false, true])
     await T(p, "chat-input").fill("Please send the sheet.");
     if (flight) {
       arrived = true;
-      const reading = p.waitForRequest((request) => request.method() === "GET" && new URL(request.url()).pathname === "/captain/api/chat", { timeout: 15_000 });
+      const out = p.waitForRequest((request) => request.method() === "GET" && new URL(request.url()).pathname === (flight === "mark" ? "/captain/cards" : "/captain/api/chat"), { timeout: 15_000 });
       await p.evaluate(() => window.qdStream.dispatchEvent(new MessageEvent("refresh", { data: '{"cards":false,"mail":false,"chats":true}' })));
-      await reading;
+      await out;
     }
     await T(p, "chat-send").click();
     await sendSettles(p.locator('[data-message-id="iris-m31"]'));
     const timing = await p.evaluate(() => window.qdTiming);
-    const after = timing.calls.filter(([, , at]) => at >= timing.press);
-    const post = after.find(([method, path]) => method === "POST" && path === "/captain/api/chat");
+    const shown = timing.calls.filter(([, , at]) => at >= timing.press - SEND_ROUND);
+    const post = shown.find(([method, path, at]) => at >= timing.press && method === "POST" && path === "/captain/api/chat");
     equal([typeof timing.press, typeof timing.sent, post !== undefined], ["number", "number", true], "the press, the Sent mark and the POST were all timed");
     console.log(
-      "info Server Chat timing, each answer " + SEND_ROUND + " ms away, " + (flight ? "a thread read in flight" : "nothing else in flight") + ": the POST started " + Math.round(post[2] - timing.press) + " ms after the Send press and the Sent mark showed " + Math.round(timing.sent - timing.press) + " ms after it; requests after the press: " +
-        after.map(([method, path, at]) => method + " " + path + " at " + Math.round(at - timing.press)).join(", "),
+      "info Server Chat timing, each answer " + SEND_ROUND + " ms away, " + words + ": the POST started " + Math.round(post[2] - timing.press) + " ms after the Send press and the Sent mark showed " + Math.round(timing.sent - timing.press) + " ms after it; requests from " + SEND_ROUND + " ms before the press: " +
+        shown.map(([method, path, at]) => method + " " + path + " at " + Math.round(at - timing.press)).join(", "),
     );
   });
 
