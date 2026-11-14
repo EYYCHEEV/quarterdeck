@@ -41,6 +41,8 @@ const equal = (got, want, what) => {
   if (JSON.stringify(got) !== JSON.stringify(want)) throw new Error(what + ": got " + JSON.stringify(got) + ", want " + JSON.stringify(want));
 };
 const titles = (p) => T(p, "card-row").locator("a").allInnerTexts();
+const nameOf = (key) => key.evaluate((el) => el.getAttribute("aria-label") ?? el.textContent.replace(/\s+/g, " ").trim());
+const namesOf = (keys) => keys.evaluateAll((list) => list.map((el) => el.getAttribute("aria-label") ?? el.textContent.replace(/\s+/g, " ").trim()));
 const open = async (p, route) => {
   await p.goto(origin + route);
   await p.locator("#stage").waitFor();
@@ -156,7 +158,7 @@ it("Queue: the Filter sheet has Show, six filters and a button that counts the c
   await T(p, "filter-btn").tap();
   await T(p, "filter-show-row").waitFor();
   for (const key of ["project", "lane", "bot", "priority", "label", "due"]) await T(p, "filter-" + key).waitFor();
-  equal(await T(p, "filter-result").innerText(), "Show 10 Task Cards", "footer button");
+  equal(await nameOf(T(p, "filter-result")), "Show 10 Task Cards", "footer button");
 });
 
 const recordHeights = (p, pop) =>
@@ -1447,7 +1449,7 @@ it("Lane: a Done Lane is a read-only record with its done line, all its activity
   equal(await T(p, "lane").getAttribute("data-status"), "Done", "status");
   equal(await T(p, "done-line").innerText(), "Done Sun 8:41 PM. Checked by Dr. Kivo. Signed off by you.", "done line");
   equal([await T(p, "tracker-blockers").count(), await p.getByText(/^Earlier activity/).count()], [0, 0], "no blockers, nothing folded");
-  equal(await T(p, "talk-to").innerText(), "Talk to Dale", "button");
+  equal(await nameOf(T(p, "talk-to")), "Talk to Dale", "button");
   await T(p, "talk-to").tap();
   await p.waitForURL((url) => url.pathname.startsWith("/chat/"));
 });
@@ -3000,7 +3002,7 @@ it("Settings: Light applies at once with a toast and turns the screen light", MA
 });
 
 const ACCOUNT = "Account: Captain";
-const SIGNED_OUT = ["Signed out", "This device only.", "Sign in with Google"];
+const SIGNED_OUT = ["Signed out", "This device only.", "SIGN IN WITH GOOGLE"];
 const accountMenu = (p) => p.locator('[data-pop="account-menu"]');
 const signOutBox = (p) => p.locator('[data-pop="sign-out-confirm"]');
 const focusedId = (p) => p.evaluate(() => document.activeElement?.getAttribute("data-testid"));
@@ -3149,18 +3151,20 @@ it("Sign out: when Sign out fails the confirm stays open with its line, and Sign
 });
 
 for (const [name, size, phone] of SIGN_OUT_SIZES)
-  it("Sign out on " + name + ": every new target is at least 44 by 44 px", size, async (p) => {
-    const small = async (locator) =>
-      locator.evaluateAll((items) => items.filter((item) => item.getBoundingClientRect().width < 44 || item.getBoundingClientRect().height < 44).map((item) => item.textContent));
+  it("Sign out on " + name + ": every new target is at least 44 by 44 px, and a key is as tall as the theme's key height", size, async (p) => {
+    const small = async (locator, tall = 44) =>
+      locator.evaluateAll((items, least) => items.filter((item) => item.getBoundingClientRect().width < 44 || item.getBoundingClientRect().height < least).map((item) => item.textContent), tall);
     await open(p, "/queue");
+    const keyHeight = await p.evaluate(() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--spacing-key-h")));
+    equal(keyHeight, phone ? 44 : 34, "the theme's key height: 34 px with a mouse from 1400 px wide, 44 px elsewhere");
     await openAccountMenu(p, phone);
     const found = [...(await small(p.getByRole("button", { name: ACCOUNT }))), ...(await small(accountMenu(p).getByRole("button")))];
     await accountMenu(p).getByRole("button", { name: "Sign out" }).click();
-    found.push(...(await small(signOutBox(p).getByRole("button"))));
+    found.push(...(await small(signOutBox(p).getByRole("button"), keyHeight)));
     await signOutBox(p).getByRole("button", { name: "Sign out" }).click();
     await T(p, "signed-out").waitFor();
-    found.push(...(await small(T(p, "signed-out").getByRole("button"))));
-    equal(found, [], "targets under 44 px");
+    found.push(...(await small(T(p, "signed-out").getByRole("button"), keyHeight)));
+    equal(found, [], "targets under their least size");
   });
 
 it("Hand: the answer path is the lit key, solid in the hand colour, and its ink reads at least 4.5 to 1", PHONE, async (p) => {
@@ -3196,6 +3200,67 @@ it("Signals: the focus ring is the hand colour and the unread mark is the new co
   await p.keyboard.press("Tab");
   equal(await p.evaluate(() => getComputedStyle(document.activeElement).outlineColor), hand, "focus ring");
 });
+
+const FONT_FILES = ["ibm-plex-mono-latin-400-normal.woff2", "ibm-plex-mono-latin-600-normal.woff2", "ibm-plex-sans-latin-400-normal.woff2", "ibm-plex-sans-latin-600-normal.woff2"];
+const FONT_FACES = [
+  ["Plex Mono", "400", "normal", "swap"],
+  ["Plex Mono", "600", "normal", "swap"],
+  ["Plex Sans", "400", "normal", "swap"],
+  ["Plex Sans", "600", "normal", "swap"],
+];
+const fontFaces = (p) =>
+  p.evaluate(async () => {
+    await Promise.allSettled([...document.fonts].map((face) => face.load()));
+    return [...document.fonts].map((face) => [face.family.replace(/["']/g, ""), face.weight, face.style, face.display, face.status]).sort();
+  });
+const drawnFace = async (p, part) => {
+  const named = await part.evaluate((el) => {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, { acceptNode: (node) => (node.data.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP) });
+    const holder = walker.nextNode().parentElement;
+    holder.setAttribute("data-face-probe", "");
+    return getComputedStyle(holder).fontFamily.split(",")[0].replace(/["']/g, "").trim();
+  });
+  const cdp = await p.context().newCDPSession(p);
+  try {
+    await cdp.send("DOM.enable");
+    await cdp.send("CSS.enable");
+    const { root } = await cdp.send("DOM.getDocument", { depth: 0 });
+    const { nodeId } = await cdp.send("DOM.querySelector", { nodeId: root.nodeId, selector: "[data-face-probe]" });
+    const { fonts } = await cdp.send("CSS.getPlatformFontsForNode", { nodeId });
+    return [named, fonts.map((font) => font.isCustomFont)];
+  } finally {
+    await cdp.detach();
+    await p.locator("[data-face-probe]").evaluate((el) => el.removeAttribute("data-face-probe"));
+  }
+};
+
+for (const [name, size] of [["a phone", PHONE], ["the Mac", MAC]])
+  it("Fonts drawn on " + name + ": the Task Card's title is drawn in Plex Sans and its Send key in Plex Mono, from the four font files the app ships", size, async (p) => {
+    const fetched = [];
+    p.on("response", (response) => {
+      const [folder, file] = new URL(response.url()).pathname.split("/").slice(-2);
+      if (file.endsWith(".woff2")) fetched.push([folder, file, response.status()]);
+    });
+    await open(p, "/queue/alba-1");
+    await T(p, "send").waitFor();
+    equal(await fontFaces(p), FONT_FACES.map((face) => [...face, "loaded"]), "the four faces, each loaded");
+    equal(fetched.sort(), FONT_FILES.map((file) => ["fonts", file, 200]), "font files fetched");
+    equal([await drawnFace(p, T(p, "card-title").first()), await drawnFace(p, T(p, "send"))], [["Plex Sans", [true]], ["Plex Mono", [true]]], "the first face named and a shipped font drawn, for the title and for Send");
+  });
+
+it("Fonts blocked: with the four font files refused the Task Card keeps its words in a device face, with no sideways scroll and Send's words not cut", PHONE, async (p) => {
+  await p.route("**/*.woff2", (route) => route.abort("blockedbyclient"));
+  await open(p, "/queue/alba-1");
+  await T(p, "send").waitFor();
+  equal(await fontFaces(p), FONT_FACES.map((face) => [...face, "error"]), "the four faces, none loaded");
+  await shown(p, "How many results should each Search group show?");
+  equal([await drawnFace(p, T(p, "card-title").first()), await drawnFace(p, T(p, "send"))], [["Plex Sans", [false]], ["Plex Mono", [false]]], "a device face drawn, for the title and for Send");
+  const fit = await p.evaluate(() => {
+    const send = document.querySelector('[data-testid="send"]');
+    return [document.documentElement.scrollWidth <= document.documentElement.clientWidth, send.scrollWidth <= send.clientWidth];
+  });
+  equal(fit, [true, true], "no sideways scroll, Send's words not cut");
+}, /^Failed to load resource: net::ERR_/);
 
 const look = (p) => p.evaluate(() => document.documentElement.getAttribute("data-appearance"));
 
@@ -3499,7 +3564,7 @@ it("Add bot: Approve says the bot joined and offers Chat with it", MAC, async (p
   await joinAsked(p, "Finch");
   await T(p, "join-approve").click();
   equal(await addBot(p).getByRole("heading").innerText(), "Finch joined.", "title");
-  equal(await T(p, "joined-chat").innerText(), "Chat with Finch", "chat link");
+  equal(await nameOf(T(p, "joined-chat")), "Chat with Finch", "chat link");
   await T(p, "chat-row").and(p.locator('[data-id="finch"]')).waitFor();
 });
 
@@ -4943,13 +5008,13 @@ const sendPick = async (p, door) => {
 };
 const keptOnCard = async (p) => {
   const pick = p.locator('[data-testid="option"][data-letter="B"] [role="radio"]');
-  return [await T(p, "note").inputValue(), await pick.getAttribute("aria-checked"), await pick.isDisabled(), await T(p, "send").isDisabled(), await T(p, "send").innerText()];
+  return [await T(p, "note").inputValue(), await pick.getAttribute("aria-checked"), await pick.isDisabled(), await T(p, "send").isDisabled(), await nameOf(T(p, "send"))];
 };
 const failedLine = async (p, words, tryAgain) => {
   const line = T(p, "send-failed");
   await line.waitFor().catch(() => undefined);
   const said = (await line.count()) ? await line.innerText() : null;
-  equal([await line.getByText(words, { exact: true }).count(), await line.getByRole("button", { name: "Try again", exact: true }).count()], [1, tryAgain ? 1 : 0], "the words " + JSON.stringify(words) + " and Try again on the failed line, which says " + JSON.stringify(said) + " beside Send " + JSON.stringify(await T(p, "send").innerText()));
+  equal([await line.getByText(words, { exact: true }).count(), await line.getByRole("button", { name: "Try again", exact: true }).count()], [1, tryAgain ? 1 : 0], "the words " + JSON.stringify(words) + " and Try again on the failed line, which says " + JSON.stringify(said) + " beside Send " + JSON.stringify(await nameOf(T(p, "send"))));
 };
 const pickNearBottom = async (p, letter) => {
   const row = p.locator('[data-testid="option"][data-letter="' + letter + '"]');
@@ -5032,7 +5097,7 @@ for (const [door, what] of SEND_DOORS) {
     server.lists = "hold";
     await sendPick(p, door);
     await p.clock.runFor(44_000);
-    equal(await T(p, "send").innerText(), "Sending B ...", "Send before 45 seconds");
+    equal(await nameOf(T(p, "send")), "Sending B ...", "Send before 45 seconds");
     await p.clock.runFor(1_000);
     await failedLine(p, NOT_SURE, false);
     equal([await keptOnCard(p), server.posts.length], [SEND_KEPT, 0], "his pick and note on the card, and posts");
@@ -5292,7 +5357,7 @@ it("Server Chat on a phone: no + button, a held message offers Copy and no Quote
   });
   const sheet = p.locator('[data-pop="message-actions"]');
   await sheet.waitFor();
-  equal(await sheet.getByRole("button").allInnerTexts(), ["Done", "Copy"], "held message actions");
+  equal(await namesOf(sheet.getByRole("button")), ["Done", "Copy"], "held message actions");
   await sheet.getByRole("button", { name: "Done" }).tap();
   await sheet.waitFor({ state: "detached" });
   const before = p.url();
@@ -5331,7 +5396,7 @@ for (const [name, features, rows] of [["lists quote", ["quote"], ["Reply", "Copy
     await holdBubble(p, "iris-m30");
     const sheet = p.locator('[data-pop="message-actions"]');
     await sheet.waitFor();
-    equal(await sheet.getByRole("button").allInnerTexts(), ["Done", ...rows], "the menu's buttons in order");
+    equal(await namesOf(sheet.getByRole("button")), ["Done", ...rows], "the menu's buttons in order");
     const shown = await sheet.getByRole("button").evaluateAll((list) => list.filter((el) => el.textContent !== "Done").map((el) => [el.textContent, el.querySelector("svg") !== null, el.getBoundingClientRect().height >= 48]));
     equal(shown, rows.map((row) => [row, true, true]), "each row: its words, an icon, at least 48 px tall");
   });

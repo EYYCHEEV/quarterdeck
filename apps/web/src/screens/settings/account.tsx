@@ -8,7 +8,7 @@ import { useOverlay } from "../../ui/overlay";
 import { SheetDialog } from "../../ui/sheet-dialog";
 import { ErrorLine } from "../../ui/states";
 
-const ITEM = "min-h-hit w-full justify-start border-transparent py-0";
+const ITEM = "flex min-h-hit w-full cursor-pointer items-center rounded-key px-s4 text-left text-body font-strong hover:bg-raised";
 
 type Opener = RefObject<HTMLElement | null>;
 
@@ -33,12 +33,12 @@ function Menu({ onSettings, onSignOut, onClose, returnTo }: { onSettings: () => 
         style={row && (row.top < window.innerHeight / 2 ? { left: row.left, top: row.bottom + 8 } : { left: row.left, bottom: window.innerHeight - row.top + 8 })}
         className="fixed z-50 grid w-[320px] gap-s1 rounded-panel border border-line bg-control p-s1 shadow-lift outline-none"
       >
-        <Button kind="ghost" className={ITEM} onClick={settings} data-autofocus="" data-testid="account-settings">
+        <button type="button" className={ITEM} onClick={settings} data-autofocus="" data-testid="account-settings">
           Settings
-        </Button>
-        <Button kind="ghost" className={ITEM} onClick={onSignOut} data-testid="account-sign-out">
+        </button>
+        <button type="button" className={ITEM} onClick={onSignOut} data-testid="account-sign-out">
           Sign out
-        </Button>
+        </button>
       </div>
     </>
   );
