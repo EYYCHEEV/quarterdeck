@@ -55,6 +55,7 @@ const stamp = (n) => "2026-11-06T00:" + String(Math.floor(n / 60) % 60).padStart
 function serve(chatLib = lib, { post, rows, read, thread, cards, upload } = {}) {
   const time = fakeClock();
   let hidden = false;
+  let aged = 0;
   const watchers = new Set();
   const visibility = { hidden: () => hidden, watch: (run) => { watchers.add(run); return () => watchers.delete(run); } };
   const calls = [];
@@ -130,7 +131,7 @@ function serve(chatLib = lib, { post, rows, read, thread, cards, upload } = {}) 
     streams.push(stream);
     return stream;
   };
-  const source = chatLib.createServerSource(chatLib.createApiClient({ send, openEvents, schedule: time.schedule, now: time.now }), time.now, time.schedule, pages, visibility);
+  const source = chatLib.createServerSource(chatLib.createApiClient({ send, openEvents, schedule: time.schedule, now: () => time.now() + aged }), time.now, time.schedule, pages, visibility);
   const worlds = [];
   source.watch((failure) => {
     if (!failure) void source.load().then((world) => worlds.push(world)).catch(() => undefined);
@@ -139,6 +140,7 @@ function serve(chatLib = lib, { post, rows, read, thread, cards, upload } = {}) 
     source, calls, time, worlds, threads, add, uploaded, navigations,
     hide() { hidden = true; for (const run of [...watchers]) run(); },
     show() { hidden = false; for (const run of [...watchers]) run(); },
+    ageToken() { aged += 240_000; },
     requests: (from = 0) => calls.slice(from).map((call) => call.method + " " + call.path),
     chatRequests: (from = 0) => calls.slice(from).filter((call) => call.path.startsWith("/captain/api/chat")).map((call) => call.method + " " + call.path),
     credits: (from = 0) => calls.slice(from).reduce((total, call) => total + (call.method === "POST" ? 2 : 1), 0),
@@ -571,6 +573,7 @@ test("a send whose token read fails in the network, as when the phone is offline
   const { net, h } = offlineServe();
   await h.boot();
   await h.source.chat.openThread("steward");
+  h.ageToken();
   const from = h.calls.length;
   net.offline = true;
   const state = watchSend(h, h.source.chat.send("steward", { text: "sent offline", clientId: "client-off-1" }));
@@ -589,6 +592,7 @@ test("a send whose token reads all fail in the network ends only after its two a
   const { net, h } = offlineServe();
   await h.boot();
   await h.source.chat.openThread("steward");
+  h.ageToken();
   const from = h.calls.length;
   net.offline = true;
   const state = watchSend(h, h.source.chat.send("steward", { text: "never out", clientId: "client-off-2" }));
@@ -606,6 +610,7 @@ test("a send whose token read is refused with 403 ends at once as sign in again,
   const h = serve(lib, { cards: () => (refuse ? json({ error: "session" }, 403) : null) });
   await h.boot();
   await h.source.chat.openThread("steward");
+  h.ageToken();
   const from = h.calls.length;
   refuse = true;
   const state = watchSend(h, h.source.chat.send("steward", { text: "no", clientId: "client-off-3" }));
@@ -920,16 +925,16 @@ test("a re-read that never answers counts as not found and the retry still goes 
   settledNear(state, 10_000);
 });
 
-test("when no token is stored and every token read and thread read hangs, Not sent comes at the fifty-five second cap, under a minute from the tap", async () => {
+test("when every token read and thread read hangs, Not sent comes at the fifty-five second cap, under a minute from the tap", async () => {
   let stuck = false;
   const h = serve(lib, {
-    post: (body, init) => (stuck ? hang(init) : json({ error: "text" }, 400)),
+    post: (body, init) => hang(init),
     cards: () => (stuck ? never() : null),
     read: (path) => (stuck && path.startsWith("/captain/api/chat?") ? never() : null),
   });
   await h.boot();
   await h.source.chat.openThread("steward");
-  await assert.rejects(h.source.chat.send("steward", { text: "spends the stored token", clientId: "client-16a" }), refusedWith("Message is empty or too long."));
+  h.ageToken();
   stuck = true;
   const from = h.calls.length;
   const state = watchSend(h, h.source.chat.send("steward", { text: "hello", clientId: "client-16" }));
@@ -1959,7 +1964,7 @@ test("rows and threads without a rev read nothing extra, whatever else changes",
   assert.deepEqual(h.chatRequests(from), [LIST]);
 });
 
-test("one busy minute with read on and each reply unread costs eighteen credits, and the last list read waits for the automatic budget of twenty-one", async () => {
+test("one busy minute with read on and each reply unread costs sixteen credits, and the last list read waits for the automatic budget of twenty-one", async () => {
   const state = marking({ features: ["read"], firstUnread: null, unread: [] });
   const h = serve(lib, v2(state));
   await h.boot();
@@ -1986,7 +1991,7 @@ test("one busy minute with read on and each reply unread costs eighteen credits,
   assert.equal(marks(h).length, 2);
   const own = () => h.calls.slice(from).filter((call) => call.path.startsWith("/captain/api/chat") || call.path === "/captain/cards");
   const total = () => own().reduce((sum, call) => sum + (call.method === "POST" ? 2 : 1), 0);
-  assert.equal(total(), 18, own().map((call) => call.method + " " + call.path).join(", "));
+  assert.equal(total(), 16, own().map((call) => call.method + " " + call.path).join(", "));
   assert.ok(total() <= 29);
   const lists = () => h.chatRequests(from).filter((one) => one === LIST).length;
   const before = lists();
@@ -2343,7 +2348,7 @@ test("with automatic work at twenty-one credits in the minute, a five-file send 
   assert.deepEqual(phases, ["uploading", "sending"]);
 });
 
-test("while a send with files waits for credits, a send with no files, a thread open and a card answer are refused as today, and a sign-out ends the wait at once with nothing sent after it", async () => {
+test("while a send with files waits for credits, a send with no files is refused with no request, a thread open takes the one credit left, and after it a thread open and a card answer are refused; a sign-out ends the wait at once with nothing sent after it", async () => {
   const h = await busyFilesThread();
   const from = h.calls.length;
   const state = watchSend(h, h.source.chat.send("steward", { text: "five", clientId: "client-e2", files: five() }));
@@ -2351,9 +2356,11 @@ test("while a send with files waits for credits, a send with no files, a thread 
   assert.equal(uploads(h, from).length, 3);
   const before = h.calls.length;
   await assert.rejects(h.source.chat.send("steward", { text: "plain", clientId: "client-e3" }), named("RateLimited"));
+  assert.deepEqual(h.requests(before), [], "the refused send spent no credit on a token read");
+  await h.source.chat.openThread("iris");
   await assert.rejects(h.source.chat.openThread("steward"), named("RateLimited"));
   await assert.rejects(h.source.answer(LISTED_CARD.id, { choice: { kind: "option", letter: "A" }, note: "", version: LISTED_CARD.rev }), named("RateLimited"));
-  assert.deepEqual(h.requests(before), [TOKEN]);
+  assert.deepEqual(h.requests(before), [THREAD("iris")]);
   assert.equal(state.done, false);
   await h.source.signOut();
   await pass(h, 100);
@@ -2429,7 +2436,7 @@ function tokenServer() {
   const kept = [];
   const calls = [];
   const landed = [];
-  const server = { notModified: false, hold: null, answer: null };
+  const server = { notModified: false, hold: null, holdList: null, answer: null };
   let serial = 0;
   const issue = () => {
     serial += 1;
@@ -2449,6 +2456,7 @@ function tokenServer() {
     const call = { line: init.method + " " + path, csrf: body?.csrf ?? headers.get("X-QD-Csrf"), clientId: body?.clientId ?? null, conditional: headers.has("If-None-Match") };
     calls.push(call);
     if (path === "/captain/cards") {
+      await server.holdList?.(call);
       if (call.conditional && server.notModified) return new Response(null, { status: 304 });
       return json({ ...structuredClone(LISTING), csrf: issue() }, 200, { ETag: '"list-' + serial + '"' });
     }
@@ -2460,6 +2468,7 @@ function tokenServer() {
     landed.push(call);
     const next = { csrf: issue(), freshUntil: Math.floor(NOW / 1000) + 1800 };
     if (path === "/captain/api/files") return json({ id: "f-" + serial, name: decodeURIComponent(headers.get("X-QD-File-Name") ?? "file"), type: headers.get("Content-Type") ?? "", size: new Blob([init.body]).size, sha256: "0".repeat(64), kind: "photo", ...next });
+    if (path.endsWith("/answer")) return json({ ...JSON.parse(text("answer/answer-200-current.json")), ...next });
     return path === "/captain/api/chat/read" ? json(next) : json({ id: "m" + serial, from: "captain", text: body.text, at: stamp(serial), refs: [], clientId: body.clientId, uploadVerdicts: [], ...next });
   };
   const client = lib.createApiClient({ send, openEvents: () => ({ readyState: 0, addEventListener() {}, close() {} }), schedule: () => () => undefined, now: () => clock.at });
@@ -2584,4 +2593,76 @@ test("the token an upload's answer gives stays with that send's chain: two plain
   assert.equal(chained.csrf, up.csrf);
   assert.ok(one.csrf !== up.csrf && two.csrf !== up.csrf, [one.csrf, two.csrf, up.csrf].join(", "));
   assert.deepEqual(s.landed, [upload, one, two, chained]);
+});
+
+const heldList = (s) => {
+  const gate = { release: () => {} };
+  s.server.holdList = () => new Promise((resolve) => { gate.release = resolve; });
+  return gate;
+};
+
+test("a send pressed while a card answer's token read is in flight spends the stored token, and the answer then posts the token its own read gave", async () => {
+  const s = tokenServer();
+  await s.client.cards();
+  const gate = heldList(s);
+  const answering = s.client.answer("alba-1", { rev: 3, pick: "A", note: "Yes." });
+  for (let n = 0; n < 10; n += 1) await tick();
+  s.server.holdList = null;
+  await hello(s.client);
+  gate.release();
+  await answering;
+  const [read, sent, answered] = s.calls.slice(1);
+  assert.deepEqual([read.line, sent.line, answered.line], [TOKEN, POST, "POST /captain/cards/alba-1/answer"]);
+  assert.deepEqual([sent.csrf, answered.csrf], ["t-1", "t-3"]);
+  assert.deepEqual(s.landed, [sent, answered]);
+});
+
+test("a send pressed while an upload chain's first token read is in flight spends the stored token, and the upload then carries the token its own read gave", async () => {
+  const s = tokenServer();
+  await s.client.cards();
+  const gate = heldList(s);
+  const reading = s.client.chat.token();
+  for (let n = 0; n < 10; n += 1) await tick();
+  s.server.holdList = null;
+  await hello(s.client);
+  gate.release();
+  const first = await reading;
+  await s.client.chat.upload(photo("one.png"), first);
+  const [read, sent, upload] = s.calls.slice(1);
+  assert.deepEqual([read.line, sent.line, upload.line], [TOKEN, POST, UPLOAD]);
+  assert.deepEqual([sent.csrf, first, upload.csrf], ["t-1", "t-3", "t-3"]);
+  assert.deepEqual(s.landed, [sent, upload]);
+});
+
+test("a refused stored token does not end the session: the send reads one token list, posts once more with the same clientId and lands, and nothing tells the app to sign in", async () => {
+  let refusals = 1;
+  const post = (body, init, server) => {
+    if (refusals === 0) return store(body, server);
+    refusals -= 1;
+    return json({ error: "request refused" }, 403);
+  };
+  const h = serve(lib, { post });
+  await h.boot();
+  await h.source.chat.openThread("steward");
+  const failures = [];
+  h.source.watch((failure) => {
+    if (failure) failures.push(failure.name);
+  });
+  const from = h.calls.length;
+  const message = await h.source.chat.send("steward", { text: "hello", clientId: "client-r1" });
+  assert.equal(message.clientId, "client-r1");
+  assert.deepEqual(h.requests(from), [POST, TOKEN, POST]);
+  assert.deepEqual(POSTS(h, from), ["client-r1", "client-r1"]);
+  assert.deepEqual(failures, []);
+  await h.source.chat.openThread("iris");
+});
+
+test("a 403 that is not a token refusal, to a send's POST with a stored token, ends the session as before: no retry, and the next read says sign in again", async () => {
+  const h = serve(lib, { post: () => json({ error: "session" }, 403) });
+  await h.boot();
+  await h.source.chat.openThread("steward");
+  const from = h.calls.length;
+  await assert.rejects(h.source.chat.send("steward", { text: "hello", clientId: "client-r2" }), named("SignInRequired"));
+  assert.deepEqual(h.requests(from), [POST]);
+  await assert.rejects(h.source.chat.openThread("iris"), named("SignInRequired"));
 });
