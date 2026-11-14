@@ -471,7 +471,7 @@ class ServerConfigTests(unittest.TestCase):
 
 class BodyLimitTests(unittest.TestCase):
     @staticmethod
-    def framed(length, command="POST", path="/captain/api/chat"):
+    def framed(length, command="POST", path="/captain/api/chat?bot=bot-a"):
         headers = Message()
         headers["Content-Length"] = str(length)
         timeouts = []
@@ -496,9 +496,9 @@ class BodyLimitTests(unittest.TestCase):
 
     def test_every_other_request_is_still_read_up_to_16_kib(self):
         others = (
-            ("GET", "/captain/api/chat"),
-            ("PUT", "/captain/api/chat"),
-            ("POST", "/captain/api/chat?bot=bot-a"),
+            ("GET", "/captain/api/chat?bot=bot-a"),
+            ("PUT", "/captain/api/chat?bot=bot-a"),
+            ("POST", "/captain/api/chat/read?bot=bot-a"),
             ("POST", "/captain/api/chats"),
             ("POST", "/captain/cards/card-1/comments"),
         )
@@ -510,7 +510,7 @@ class BodyLimitTests(unittest.TestCase):
                     server.Handler._body(over)
                 self.assertEqual(over.rfile.tell(), 0)
                 self.assertEqual(application.body_limit(command, path), 16384)
-        self.assertEqual(application.body_limit("POST", "/captain/api/chat"), 131072)
+        self.assertEqual(application.body_limit("POST", "/captain/api/chat?bot=bot-a"), 131072)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
