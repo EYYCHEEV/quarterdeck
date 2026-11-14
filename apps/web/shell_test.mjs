@@ -5837,10 +5837,21 @@ it("Server Chat: a message of 20,000 characters sends whole, and one too long fo
   await line.waitFor();
   await boxReads(p, long);
   equal([asked.posts.length, (await T(p, "chat-input").inputValue()).length, await T(p, "chat-my-message").count()], [0, 114_687, rows], "POSTs, the box keeps his text, rows");
-  await T(p, "chat-input").fill("x".repeat(20_000));
+  await T(p, "chat-input").fill("four ".repeat(3_999) + "fours");
   await T(p, "chat-send").click();
-  await p.locator('[data-message-id="iris-m31"]').waitFor();
+  await sendSettles(p.locator('[data-message-id="iris-m31"]'));
   equal([asked.posts.length, asked.posts[0].text.length, await line.count(), await T(p, "chat-input").inputValue()], [1, 20_000, 0, ""], "POSTs, the text sent, the words, the box");
+});
+
+it("Server Chat: a message of 20,000 characters with no space in it sends whole, and its row shows within five seconds", MAC, async (p) => {
+  const asked = await serverBuildChat(p);
+  await chatOpened(p);
+  await T(p, "chat-input").fill("x".repeat(20_000));
+  const from = Date.now();
+  await T(p, "chat-send").click();
+  await sendSettles(p.locator('[data-message-id="iris-m31"]'));
+  const took = Date.now() - from;
+  equal([asked.posts.length, asked.posts[0]?.text.length, took < 5_000], [1, 20_000, true], "POSTs, the text sent, and the row showed in time (it took " + took + " ms)");
 });
 
 for (const [found, name] of [[true, "the re-read holds the clientId, so his row reads Sent after one POST and no failure line ever shows"], [false, "the re-read does not hold it, so five seconds later the app reads again and sends once more by itself with the same clientId, one message shows, and no failure line ever shows"]])
