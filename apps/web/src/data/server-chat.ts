@@ -4,8 +4,8 @@ import type { Bot } from "../domain/types";
 import type { Schedule } from "../platform/timer";
 import { Unavailable, type ChatChain, type ChatClient, type TokenList } from "./api-client";
 import { appendSent, botsOf, CHAT_WORDS, checkWords, CursorGone, keepSent, mergeAfter, mergeNewest, mergeOlder, rowsOf, threadOf, threadStale, type ChatListed, type ChatRead, type ChatReceipt, type UploadReceipt } from "./chat-client";
-import type { ChatMessage, ChatRow, ChatThread, Outgoing, Quote, SendPhase, SentChatMessage, SentQuote, ServerChatApi, ServerUploadVerdict, WireOutgoing } from "./chat-types";
-import { NotConfirmed, Refused, SignInRequired } from "./source";
+import type { ChatMessage, ChatRow, ChatThread, OnSendPhase, Outgoing, Quote, SentChatMessage, SentQuote, ServerChatApi, ServerUploadVerdict, WireOutgoing } from "./chat-types";
+import { MailBusy, NotConfirmed, Refused, SignInRequired } from "./source";
 
 export type ChatHost = {
   chat: ChatClient;
@@ -14,6 +14,7 @@ export type ChatHost = {
   access: () => void;
   read: <T>(request: () => Promise<T>) => Promise<T>;
   live: () => boolean;
+  away: () => boolean;
   arm: () => void;
   republish: () => void;
   token: () => TokenList;
@@ -111,6 +112,18 @@ export function createServerChat(host: ChatHost): ChatPart {
     new Promise((done) => {
       host.schedule(done, delay);
     });
+
+  const returns = new Set<() => void>();
+
+  const shown = (): Promise<void> =>
+    new Promise((done) => {
+      returns.add(done);
+    });
+
+  function release(): void {
+    for (const done of [...returns]) done();
+    returns.clear();
+  }
 
   function remember(bot: string, message: ChatMessage): void {
     if (message.clientId === undefined) return;
@@ -273,7 +286,7 @@ export function createServerChat(host: ChatHost): ChatPart {
     return threads.get(bot)?.messages.find((one) => one.clientId === clientId && one.from === "captain") ?? null;
   }
 
-  async function send(bot: string, outgoing: Outgoing, onPhase?: (phase: SendPhase) => void): Promise<SentChatMessage<ServerUploadVerdict>> {
+  async function send(bot: string, outgoing: Outgoing, onPhase?: OnSendPhase): Promise<SentChatMessage<ServerUploadVerdict>> {
     host.access();
     if (reading) await reading;
     sending += 1;
@@ -330,7 +343,7 @@ export function createServerChat(host: ChatHost): ChatPart {
     return { ids, csrf: token };
   }
 
-  async function deliver(bot: string, outgoing: Outgoing, onPhase?: (phase: SendPhase) => void): Promise<SentChatMessage<ServerUploadVerdict>> {
+  async function deliver(bot: string, outgoing: Outgoing, onPhase?: OnSendPhase): Promise<SentChatMessage<ServerUploadVerdict>> {
     host.access();
     const { quote, files, ...rest } = outgoing;
     const wire = quote === undefined ? undefined : wired(bot, quote);
@@ -353,7 +366,8 @@ export function createServerChat(host: ChatHost): ChatPart {
       current();
       onPhase?.("sending");
     }
-    const ends = host.clock() + SEND_CAP;
+    let ends = host.clock() + SEND_CAP;
+    let resent = false;
     const left = (): number => ends - host.clock();
     for (let tries = 1; ; tries += 1) {
       let receipt: ChatReceipt;
@@ -362,18 +376,30 @@ export function createServerChat(host: ChatHost): ChatPart {
       } catch (error) {
         current();
         if (error instanceof Refused && error.message === CHAT_WORDS.expired) for (const file of files ?? []) kept.delete(file);
-        if (!passing(error)) throw error;
-        const found = error instanceof NotConfirmed && left() > 0 ? await foundSent(bot, outgoing.clientId, left()) : null;
-        current();
-        if (found) return sentOf(found);
-        const wait: number | undefined = RETRY_PAUSES[tries - 1];
-        if (wait === undefined || left() <= wait) throw error;
-        await pause(wait);
-        current();
-        const later = await foundSent(bot, outgoing.clientId, left());
-        current();
-        if (later) return sentOf(later);
-        if (left() <= 0) throw error;
+        if (error instanceof MailBusy) {
+          if (resent) throw new Refused(CHAT_WORDS.mail);
+          resent = true;
+          onPhase?.("busy", error.seconds);
+          await pause(error.seconds * 1_000);
+          current();
+          if (host.away()) await shown();
+          current();
+          onPhase?.("sending");
+          ends = host.clock() + SEND_CAP;
+        } else {
+          if (!passing(error)) throw error;
+          const found = error instanceof NotConfirmed && left() > 0 ? await foundSent(bot, outgoing.clientId, left()) : null;
+          current();
+          if (found) return sentOf(found);
+          const wait: number | undefined = resent ? undefined : RETRY_PAUSES[tries - 1];
+          if (wait === undefined || left() <= wait) throw error;
+          await pause(wait);
+          current();
+          const later = await foundSent(bot, outgoing.clientId, left());
+          current();
+          if (later) return sentOf(later);
+          if (left() <= 0) throw error;
+        }
         if (chain) {
           chain = { csrf: null };
           await host.credits(3);
@@ -483,6 +509,7 @@ export function createServerChat(host: ChatHost): ChatPart {
 
   function back(): void {
     if (onScreen()) wanted = true;
+    release();
   }
 
   function clear(): void {
@@ -499,6 +526,7 @@ export function createServerChat(host: ChatHost): ChatPart {
     poked.clear();
     staleAt = null;
     limits = null;
+    release();
   }
 
   const api: ServerChatApi = {

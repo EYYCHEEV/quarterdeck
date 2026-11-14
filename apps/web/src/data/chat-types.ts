@@ -49,7 +49,9 @@ export type Outgoing = { text: string; clientId: string; quote?: Quote; files?: 
 
 export type WireOutgoing = { text: string; clientId: string; quote?: WireQuote; files?: string[] };
 
-export type SendPhase = "uploading" | "sending";
+export type SendPhase = "uploading" | "sending" | "busy";
+
+export type OnSendPhase = (phase: SendPhase, seconds?: number) => void;
 
 export type BrowserUploadVerdict = { filename: string; detectedType: string; checkedBy: "browser-stand-in"; serverRecheckRequired: true };
 export type ServerUploadVerdict = { filename: string; detectedType: string; checkedBy: "server"; uploadId: string };
@@ -62,6 +64,6 @@ type ChatReads = {
   subscribe: (botId: string, onChange: (thread: ChatThread) => void) => () => void;
 };
 
-export type BrowserChatApi = ChatReads & { uploadBoundary: "browser-stand-in"; send: (botId: string, message: Outgoing, onPhase?: (phase: SendPhase) => void) => Promise<SentChatMessage<BrowserUploadVerdict>> };
-export type ServerChatApi = ChatReads & { uploadBoundary: "server"; older: (botId: string) => Promise<ChatThread>; send: (botId: string, message: Outgoing, onPhase?: (phase: SendPhase) => void) => Promise<SentChatMessage<ServerUploadVerdict>> };
+export type BrowserChatApi = ChatReads & { uploadBoundary: "browser-stand-in"; send: (botId: string, message: Outgoing, onPhase?: OnSendPhase) => Promise<SentChatMessage<BrowserUploadVerdict>> };
+export type ServerChatApi = ChatReads & { uploadBoundary: "server"; older: (botId: string) => Promise<ChatThread>; send: (botId: string, message: Outgoing, onPhase?: OnSendPhase) => Promise<SentChatMessage<ServerUploadVerdict>> };
 export type ChatApi = BrowserChatApi | ServerChatApi;

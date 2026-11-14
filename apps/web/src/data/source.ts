@@ -54,6 +54,13 @@ export class RateLimited extends Error {
   }
 }
 
+export class MailBusy extends Error {
+  constructor(readonly seconds: number) {
+    super("the mail server is busy, send again in " + seconds + " s");
+    this.name = "MailBusy";
+  }
+}
+
 export type AnswerInput = { choice: Choice; note: string; version: number };
 
 export type CommentInput = { text: string; requestId: string };

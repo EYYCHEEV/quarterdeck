@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { menuDot } from "../domain/seen";
-import type { ChatMessage, ChatRow, ChatThread, Outgoing, SendPhase } from "./chat-types";
+import type { ChatMessage, ChatRow, ChatThread, OnSendPhase, Outgoing } from "./chat-types";
 import { useQd, useWorld } from "./hooks";
 
 export type Loaded<T> = { value: T | null; failed: boolean; retry: () => void };
@@ -69,7 +69,7 @@ export function useNewActivity(openBotId: string | null = null): boolean {
   return world ? menuDot(world.lanes, world.bots, chats, openBotId) : false;
 }
 
-export type ThreadState = Loaded<ChatThread> & { send: (message: Outgoing, onPhase?: (phase: SendPhase) => void) => Promise<void> };
+export type ThreadState = Loaded<ChatThread> & { send: (message: Outgoing, onPhase?: OnSendPhase) => Promise<void> };
 
 export function useThread(botId: string): ThreadState {
   const { chat } = useQd();
@@ -97,7 +97,7 @@ export function useThread(botId: string): ThreadState {
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const send = useCallback(
-    async (outgoing: Outgoing, onPhase?: (phase: SendPhase) => void) => {
+    async (outgoing: Outgoing, onPhase?: OnSendPhase) => {
       const sent = queue.current.then(async () => chat.send(botId, outgoing, onPhase));
       queue.current = sent.catch(() => undefined);
       const message = await sent;

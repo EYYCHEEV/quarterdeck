@@ -809,7 +809,7 @@ export function createServerSource(client: ApiClient, clock: () => number = Date
       if (chatPart) return Promise.resolve(chatPart);
       chatLoad ??= import("./server-chat").then((lib) => {
         if (!client.chat) throw new Refused(NOT_BUILT);
-        const host: ChatHost = { chat: client.chat, clock, schedule, access, read, live: () => !paused && !unconfirmed && !away && listeners.size > 0, arm, republish, token: () => takeToken(generation, privateEpoch), generation: () => generation, epoch: () => privateEpoch, credits: chatCredits };
+        const host: ChatHost = { chat: client.chat, clock, schedule, access, read, live: () => !paused && !unconfirmed && !away && listeners.size > 0, away: () => away, arm, republish, token: () => takeToken(generation, privateEpoch), generation: () => generation, epoch: () => privateEpoch, credits: chatCredits };
         chatPart = lib.createServerChat(host);
         return chatPart;
       });

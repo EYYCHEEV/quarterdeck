@@ -6,7 +6,7 @@ import type { CardFields } from "./card";
 import type { MailListing, MailRead } from "./mail-client";
 import type { ChatList, ChatRead, ChatReceipt, UploadReceipt } from "./chat-client";
 import type { WireOutgoing } from "./chat-types";
-import { FreshSignInRequired, NotConfirmed, RateLimited, Refused, SignInRequired, TimedOut } from "./source";
+import { FreshSignInRequired, MailBusy, NotConfirmed, RateLimited, Refused, SignInRequired, TimedOut } from "./source";
 export { SignInRequired } from "./source";
 
 export class NotFound extends Error {
@@ -103,6 +103,7 @@ const CHAT_READ_PATH = CHAT_PATH + "/read";
 const FILES_PATH = "/captain/api/files";
 const POST_TIMEOUT = 20_000;
 const UPLOAD_TIMEOUT = 180_000;
+const RETRY_SECONDS = /^[0-9]{1,2}$/;
 const chatOn = typeof __QD_CHAT__ !== "undefined" && __QD_CHAT__ === "on";
 
 const isRecord = (value: unknown): value is Raw => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -453,6 +454,13 @@ export function createApiClient(options: { send?: Send; openEvents?: (address: s
 
     const errorIs = async (response: Response, name: string): Promise<boolean> => (await errorOf(response)) === name;
 
+    async function retryAfterOf(response: Response): Promise<number | null> {
+      const body = await jsonOf(response, 256).catch(() => null);
+      const header = response.headers.get("Retry-After");
+      const given: unknown = isRecord(body) && "retryAfter" in body ? body.retryAfter : header !== null && RETRY_SECONDS.test(header) ? Number(header) : null;
+      return typeof given === "number" && Number.isInteger(given) && given >= 1 && given <= 60 ? given : null;
+    }
+
     async function refuse(response: Response, mine: number): Promise<Error> {
       const { CHAT_WORDS } = await import("./chat-client");
       const status = response.status;
@@ -463,7 +471,11 @@ export function createApiClient(options: { send?: Send; openEvents?: (address: s
         return new Refused(error === "quote" ? CHAT_WORDS.quoteGone : error === "files" ? CHAT_WORDS.expired : CHAT_WORDS.bot);
       }
       if (status === 400) return new Refused(CHAT_WORDS.text);
-      if (status === 502 || (status < 500 && status >= 400)) return new Refused(CHAT_WORDS.mail);
+      if (status === 502) {
+        const seconds = await retryAfterOf(response);
+        return seconds === null ? new Refused(CHAT_WORDS.mail) : new MailBusy(seconds);
+      }
+      if (status < 500 && status >= 400) return new Refused(CHAT_WORDS.mail);
       return new NotConfirmed();
     }
 

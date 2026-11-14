@@ -120,6 +120,8 @@ export const SEND_RETRY_TEXT = "Try Again";
 
 export const DELIVERED_TEXT = "Delivered";
 
+export const busyText = (seconds: number): string => "Mail is busy. Sending again in " + seconds + (seconds === 1 ? " second" : " seconds");
+
 export function readText(seenAt: string | null | undefined, now: number): string {
   if (!seenAt) return "Read";
   const day = dayHeading(seenAt, now);
