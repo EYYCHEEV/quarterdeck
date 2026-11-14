@@ -1,8 +1,10 @@
-import { useEffect, useState, type RefObject } from "react";
+import { createContext, useContext, useEffect, useState, useSyncExternalStore, type RefObject } from "react";
 import { readAttachedText } from "../../data/attachment-text";
 import type { Attachment } from "../../data/chat-types";
 import type { DraftFile } from "../../data/session";
 import { canRead, kindOf, sizeText } from "../../domain/chat-files";
+import { blockedText } from "../../domain/files-r1";
+import { outsideLink } from "../../platform/open-link";
 import { ButtonLink, LinkButton } from "../../ui/button";
 import { cx } from "../../ui/cx";
 import { Icon } from "../../ui/icon";
@@ -11,25 +13,60 @@ import { Empty, ErrorLine, LoadingBars } from "../../ui/states";
 
 type Open = (file: Attachment, from: HTMLElement) => void;
 
+const SERVER_ROW = "flex min-h-11 w-[min(100%,320px)] min-w-0 items-center gap-2.5 rounded-small border border-line-2 bg-panel px-3 py-2 text-left";
+
+export const isPicture = (item: Attachment): boolean => (item.kind ? item.kind === "photo" : kindOf(item) === "image");
+
+const settled = new Map<string, "loaded" | "failed">();
+const settledHeard = new Set<() => void>();
+let settledVersion = 0;
+
+function settle(id: string, state: "loaded" | "failed" | null) {
+  if ((settled.get(id) ?? null) === state) return;
+  if (state === null) settled.delete(id);
+  else settled.set(id, state);
+  settledVersion += 1;
+  for (const heard of [...settledHeard]) heard();
+}
+
+function hearSettled(onChange: () => void) {
+  settledHeard.add(onChange);
+  return () => settledHeard.delete(onChange);
+}
+
+export const PhotoTurn = createContext<string | null>(null);
+
+export function usePhotoTurn(order: string[]): string | null {
+  useSyncExternalStore(hearSettled, () => settledVersion);
+  return order.find((id) => !settled.has(id)) ?? null;
+}
+
+function FailedTile({ name, onRetry }: { name: string; onRetry?: () => void }) {
+  return (
+    <div className="flex min-h-28 w-28 flex-col justify-between gap-1 rounded-small border border-line-2 bg-raised p-2" data-testid="chat-picture-failed">
+      <span className="text-small font-medium [overflow-wrap:anywhere]">{name}</span>
+      <span className="text-small text-ink-3">This picture did not load.</span>
+      {onRetry && <LinkButton onClick={onRetry}>Try again</LinkButton>}
+    </div>
+  );
+}
+
 function PictureTile({ picture, onOpen }: { picture: Attachment; onOpen: Open }) {
   const [failed, setFailed] = useState(() => !picture.url);
   const [tries, setTries] = useState(0);
   if (failed)
     return (
-      <div className="flex min-h-28 w-28 flex-col justify-between gap-1 rounded-small border border-line-2 bg-raised p-2" data-testid="chat-picture-failed">
-        <span className="text-small font-medium [overflow-wrap:anywhere]">{picture.name}</span>
-        <span className="text-small text-ink-3">This picture did not load.</span>
-        {picture.url && (
-          <LinkButton
-            onClick={() => {
-              setFailed(false);
-              setTries(tries + 1);
-            }}
-          >
-            Try again
-          </LinkButton>
-        )}
-      </div>
+      <FailedTile
+        name={picture.name}
+        onRetry={
+          picture.url
+            ? () => {
+                setFailed(false);
+                setTries(tries + 1);
+              }
+            : undefined
+        }
+      />
     );
   return (
     <button type="button" onClick={(event) => onOpen(picture, event.currentTarget)} aria-label={"Open " + (picture.alt ?? picture.name)} className="flex-none cursor-pointer rounded-small" data-testid="chat-picture-open">
@@ -38,31 +75,58 @@ function PictureTile({ picture, onOpen }: { picture: Attachment; onOpen: Open })
   );
 }
 
+function ServerPhoto({ picture, onOpen }: { picture: Attachment; onOpen: Open }) {
+  const turn = useContext(PhotoTurn);
+  const state = useSyncExternalStore(hearSettled, () => settled.get(picture.id) ?? null);
+  if (state === "failed") return <FailedTile name={picture.name} onRetry={() => settle(picture.id, null)} />;
+  if (state === null && turn !== picture.id) return <div role="img" aria-label={picture.alt ?? picture.name} className="size-28 flex-none rounded-small border border-line-2 bg-raised" data-testid="chat-picture-wait" />;
+  return (
+    <button type="button" onClick={(event) => onOpen(picture, event.currentTarget)} aria-label={"Open " + (picture.alt ?? picture.name)} className="flex-none cursor-pointer rounded-small" data-testid="chat-picture-open">
+      <img src={picture.url} alt={picture.alt ?? picture.name} decoding="sync" onLoad={() => settle(picture.id, "loaded")} onError={() => settle(picture.id, "failed")} className="size-28 rounded-small border border-line-2 object-cover" data-testid="chat-picture" />
+    </button>
+  );
+}
+
 export function AttachmentList({ items, align, onOpen }: { items: Attachment[]; align: "start" | "end"; onOpen: Open }) {
-  const pictures = items.filter((item) => kindOf(item) === "image");
-  const files = items.filter((item) => kindOf(item) === "file");
+  const pictures = items.filter(isPicture);
+  const files = items.filter((item) => !isPicture(item));
   return (
     <div className={cx("grid max-w-full gap-2", align === "end" ? "justify-items-end" : "justify-items-start")} data-testid="chat-attachments">
       {pictures.length > 0 && (
         <div className={cx("flex flex-wrap gap-2", align === "end" && "justify-end")}>
-          {pictures.map((picture) => (
-            <PictureTile key={picture.id} picture={picture} onOpen={onOpen} />
-          ))}
+          {pictures.map((picture) => (picture.kind ? <ServerPhoto key={picture.id} picture={picture} onOpen={onOpen} /> : <PictureTile key={picture.id} picture={picture} onOpen={onOpen} />))}
         </div>
       )}
-      {files.map((file) => (
-        <button
-          key={file.id}
-          type="button"
-          onClick={(event) => onOpen(file, event.currentTarget)}
-          className="flex min-h-11 w-[min(100%,320px)] cursor-pointer items-center gap-2.5 rounded-small border border-line-2 bg-panel px-3 py-2 text-left hover:border-line-3"
-          data-testid="chat-file"
-        >
-          <Icon name="file" size="sm" className="text-ink-3" />
-          <span className="min-w-0 flex-1 text-prose [overflow-wrap:anywhere]">{file.name}</span>
-          <span className="flex-none text-small text-ink-3">{sizeText(file.size)}</span>
-        </button>
-      ))}
+      {files.map((file) =>
+        file.kind === "blocked" ? (
+          <p key={file.id} className={cx(SERVER_ROW, "text-ink-2")} data-testid="chat-file-blocked">
+            <span className="flex min-w-0 flex-1 items-start gap-2.5 text-prose">
+              <span className="flex h-[1lh] flex-none items-center">
+                <Icon name="alert" size="sm" className="text-ink-3" />
+              </span>
+              <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{blockedText(file.name)}</span>
+            </span>
+          </p>
+        ) : file.kind === "file" ? (
+          <a key={file.id} {...outsideLink(file.url)} className={cx(SERVER_ROW, "cursor-pointer hover:border-line-3")} data-testid="chat-file">
+            <Icon name="file" size="sm" className="flex-none text-ink-3" />
+            <span className="min-w-0 flex-1 truncate text-prose" data-truncates="">{file.name}</span>
+            <span className="flex-none text-small text-ink-3">{sizeText(file.size)}</span>
+          </a>
+        ) : (
+          <button
+            key={file.id}
+            type="button"
+            onClick={(event) => onOpen(file, event.currentTarget)}
+            className="flex min-h-11 w-[min(100%,320px)] cursor-pointer items-center gap-2.5 rounded-small border border-line-2 bg-panel px-3 py-2 text-left hover:border-line-3"
+            data-testid="chat-file"
+          >
+            <Icon name="file" size="sm" className="text-ink-3" />
+            <span className="min-w-0 flex-1 text-prose [overflow-wrap:anywhere]">{file.name}</span>
+            <span className="flex-none text-small text-ink-3">{sizeText(file.size)}</span>
+          </button>
+        ),
+      )}
     </div>
   );
 }

@@ -22,7 +22,7 @@ export function createExampleParts(switches: Switches, now: () => number, failsO
   const mailFixtureEntry = __QD_FIXTURES__ && switches.mail ? import("./mail-fixtures.json").then((module) => mailFixture(module.default as unknown as MailFixtureFile, switches.mail ?? "")) : undefined;
   const media = __QD_PREVIEW__ ? "" : "/";
   const openChat = createOpenChat();
-  const chat = createExampleChat({ now, media, openChat, fixture: chatFixtureEntry, script: __QD_FIXTURES__ ? FIXTURE_SCRIPTS[switches.chat ?? ""] : undefined, failSend: failsOnce(switches.fail.has("chat")) });
+  const chat = createExampleChat({ now, media, openChat, fixture: chatFixtureEntry, script: __QD_FIXTURES__ ? FIXTURE_SCRIPTS[switches.chat ?? ""] : undefined, failSend: failsOnce(switches.fail.has("chat")), holdUpload: __QD_FIXTURES__ && (switches.hold?.has("upload") ?? false) });
   const secrets = createSecretStandIn({ now, bots: () => [...BOTS, ...SECRET_EXAMPLE_BOTS], accountId: "preview-captain", session: () => ({ accountId: "preview-captain", activeChat: openChat.current() }), consumers: { "preview-status-only": async () => "refused" }, latency: () => switches.delay, failWrite: failsOnce(switches.fail.has("secret")), seed: SECRET_EXAMPLE }).captain;
   return { chat, secrets, chatFixtureEntry, mailFixtureEntry };
 }

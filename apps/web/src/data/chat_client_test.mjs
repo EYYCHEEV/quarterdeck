@@ -20,6 +20,8 @@ const sample = (name) => JSON.parse(fs.readFileSync(new URL("./server-payloads/c
 const STAMP = "2026-11-06T00:12:00-05:00";
 const WORKING = { note: "reading", since: "2026-11-06T00:20:00-05:00", updatedAt: "2026-11-06T00:21:00-05:00" };
 const FILE = { id: "f-1", name: "a.png", type: "image/png", size: 10, kind: "photo", url: "/captain/api/files/f-1" };
+const LIMITS = { fileBytes: 10485760, messageBytes: 26214400, count: 5 };
+const SHOWN = { id: "f-1", name: "a.png", size: 10, type: "image/png", kind: "photo", url: "/captain/api/files/f-1" };
 const META = { seenUpTo: "m8", seenAt: STAMP, working: WORKING, firstUnread: "m7", features: ["read", "seen"], rev: 9 };
 const metaOf = (read) => ({ seenUpTo: read.seenUpTo, seenAt: read.seenAt, working: read.working, firstUnread: read.firstUnread, features: read.features, rev: read.rev });
 
@@ -60,6 +62,17 @@ test("a row with no bot id, a preview that is not text, an unread that is not a 
   for (const rev of [-1, 1.5, "7", null, Number.NaN, 2 ** 60]) assert.throws(() => parseChatRows([row("steward", "m1", { rev })]), unreadable, String(rev));
 });
 
+test("the chat list is a bare list of rows with no file limits, or chats with fileLimits, and any other shape is unreadable", async () => {
+  const { parseChatList, parseChatRows } = await load();
+  const rows = [row("steward"), row("quiet", "", { preview: "", at: "" })];
+  assert.deepEqual(parseChatList(rows), { rows: parseChatRows(rows), limits: null });
+  assert.deepEqual(parseChatList({ chats: rows, fileLimits: LIMITS }), { rows: parseChatRows(rows), limits: LIMITS });
+  assert.deepEqual(parseChatList({ chats: rows, fileLimits: { ...LIMITS, more: 1 }, more: 1 }).limits, LIMITS);
+  assert.deepEqual(parseChatList({ chats: sample("rows.json"), fileLimits: LIMITS }), { rows: parseChatRows(sample("rows.json")), limits: LIMITS });
+  const bads = [null, "rows", {}, { chats: rows }, { fileLimits: LIMITS }, { chats: "rows", fileLimits: LIMITS }, { chats: rows, fileLimits: null }, { chats: rows, fileLimits: { ...LIMITS, count: 0 } }, { chats: rows, fileLimits: { ...LIMITS, fileBytes: 1.5 } }, { chats: rows, fileLimits: { ...LIMITS, messageBytes: "26214400" } }, { chats: rows, fileLimits: { fileBytes: 1, messageBytes: 1 } }, { chats: [5], fileLimits: LIMITS }];
+  for (const bad of bads) assert.throws(() => parseChatList(bad), unreadable, JSON.stringify(bad));
+});
+
 test("a thread with r5's empty values parses oldest first with its older flag and empty seen, working, firstUnread and features", async () => {
   const { parseChatThread } = await load();
   const read = parseChatThread(thread("steward", [message(1), message(2, { from: "captain", clientId: "c-2" })], true));
@@ -94,7 +107,7 @@ test("the contract's filled thread parses with every field: seen, working, first
   assert.equal("quote" in read.messages[0], false);
   assert.equal("attachments" in read.messages[0], false);
   assert.deepEqual(read.messages[1].quote, { id: "Mc0a1", from: "captain", at: "2026-11-06T15:40:00-05:00", text: "Can you check the **door** file?" });
-  assert.deepEqual(read.messages[1].attachments, [{ id: "f-7Qk2Lm9Xz", name: "screenshot.png", size: 482113, type: "image/png", url: "/captain/api/files/f-7Qk2Lm9Xz" }]);
+  assert.deepEqual(read.messages[1].attachments, [{ id: "f-7Qk2Lm9Xz", name: "screenshot.png", size: 482113, type: "image/png", kind: "photo", url: "/captain/api/files/f-7Qk2Lm9Xz" }]);
   assert.deepEqual(read.messages[2].quote, { cardId: "Q176", version: 3 });
   assert.deepEqual(read.messages[2].attachments.map((one) => [one.name, one.size, one.type]), [["notes.pdf", 2093120, "application/pdf"]]);
   assert.equal("quote" in read.messages[3], false);
@@ -176,16 +189,34 @@ test("a message's quote is null or missing, a message quote or a card quote, and
   for (const bad of bads) assert.throws(() => quoted(bad), unreadable, JSON.stringify(bad));
 });
 
-test("a message's files are missing, an empty list or a list of file refs with their own same-origin url, and nothing else", async () => {
+test("a message's files are missing or empty, or a list whose bad items are dropped: a blocked item has no url, ids run to 255 characters, at most 50 are kept, and only files that are not a list are unreadable", async () => {
   const { parseChatThread } = await load();
   const filed = (files) => parseChatThread(thread("steward", [message(1, { files })])).messages[0];
+  const item = (id, extra = {}) => ({ ...FILE, id, url: "/captain/api/files/" + id, ...extra });
   assert.equal("attachments" in filed(undefined), false);
   assert.equal("attachments" in filed([]), false);
-  assert.deepEqual(filed([{ ...FILE, more: 1 }]).attachments, [{ id: "f-1", name: "a.png", size: 10, type: "image/png", url: "/captain/api/files/f-1" }]);
-  assert.equal(filed([FILE, { ...FILE, id: "f-2", kind: "file", url: "/captain/api/files/f-2" }]).attachments.length, 2);
-  assert.equal(filed(Array.from({ length: 50 }, (_, n) => ({ ...FILE, id: "f-" + n, url: "/captain/api/files/f-" + n }))).attachments.length, 50);
-  const bads = ["f-1", {}, null, [null], [{}], [{ ...FILE, url: "https://qd.test/captain/api/files/f-1" }], [{ ...FILE, url: "/captain/api/files/f-2" }], [{ ...FILE, url: "//qd.test/captain/api/files/f-1" }], [{ ...FILE, url: "/captain/api/files/f-1?x=1" }], [{ ...FILE, id: "a/b", url: "/captain/api/files/a/b" }], [{ ...FILE, id: "", url: "/captain/api/files/" }], [{ ...FILE, name: 5 }], [{ ...FILE, name: "" }], [{ ...FILE, type: 5 }], [{ ...FILE, size: -1 }], [{ ...FILE, size: 1.5 }], [{ ...FILE, size: "10" }], [{ ...FILE, kind: "video" }], [{ ...FILE, kind: undefined }], Array.from({ length: 51 }, (_, n) => ({ ...FILE, id: "f-" + n, url: "/captain/api/files/f-" + n }))];
-  for (const bad of bads) assert.throws(() => filed(bad), unreadable, JSON.stringify(bad));
+  assert.deepEqual(filed([{ ...FILE, more: 1 }]).attachments, [SHOWN]);
+  assert.deepEqual(filed([FILE, item("f-2", { kind: "file", name: "b.pdf", type: "application/pdf" })]).attachments.map((one) => [one.id, one.kind]), [["f-1", "photo"], ["f-2", "file"]]);
+  const blocked = { id: "f-9", name: "run.exe", type: "application/x-msdownload", size: 7, sha256: "a".repeat(64), kind: "blocked" };
+  assert.deepEqual(filed([blocked]).attachments, [{ id: "f-9", name: "run.exe", size: 7, type: "application/x-msdownload", kind: "blocked", url: "" }]);
+  const long = "A".repeat(255);
+  assert.deepEqual(filed([item(long), item("B".repeat(256))]).attachments.map((one) => one.id), [long]);
+  assert.deepEqual(filed([item("f-3", { sha256: "b".repeat(64) }), item("f-4", { sha256: "not a hash" })]).attachments.map((one) => one.id), ["f-3"]);
+  assert.deepEqual(filed(Array.from({ length: 60 }, (_, n) => item("f-" + n))).attachments.map((one) => one.id), Array.from({ length: 50 }, (_, n) => "f-" + n));
+  const bads = ["f-1", null, {}, [], 5, { ...FILE, url: undefined }, { ...blocked, url: "/captain/api/files/f-9" }, { ...FILE, id: "a/b", url: "/captain/api/files/a/b" }, { ...FILE, id: "", url: "/captain/api/files/" }, { ...FILE, name: 5 }, { ...FILE, name: "" }, { ...FILE, type: 5 }, { ...FILE, size: -1 }, { ...FILE, size: 1.5 }, { ...FILE, size: "10" }, { ...FILE, kind: "video" }, { ...FILE, kind: undefined }];
+  for (const bad of bads) assert.deepEqual(filed([bad, item("f-5")]).attachments.map((one) => one.id), ["f-5"], JSON.stringify(bad));
+  for (const bad of ["f-1", {}, null, 5]) assert.throws(() => filed(bad), unreadable, JSON.stringify(bad));
+});
+
+test("a photo or file item is kept only when its url is exactly its own files path: another host, a javascript url and another id's url are each dropped, and the rest of the message stays", async () => {
+  const { parseChatThread } = await load();
+  const filed = (files) => parseChatThread(thread("steward", [message(1, { files })])).messages[0];
+  const kept = { ...FILE, id: "f-5", url: "/captain/api/files/f-5" };
+  for (const url of ["https://qd.test/captain/api/files/f-1", "//qd.test/captain/api/files/f-1", "javascript:alert(1)", "/captain/api/files/f-2", "/captain/api/files/f-1?x=1", "/captain/api/files/f-1/", " /captain/api/files/f-1"]) {
+    const read = filed([{ ...FILE, url }, kept]);
+    assert.deepEqual(read.attachments.map((one) => one.id), ["f-5"], url);
+    assert.equal(read.text, "text 1", url);
+  }
 });
 
 test("the sent message's answer is one flat object and carries the new token", async () => {
@@ -212,7 +243,7 @@ test("the sent message's answer reads the same quote and files as a thread messa
   const { chatReceiptOf } = await load();
   const got = chatReceiptOf(receipt({ quote: { cardId: "Q176", version: 3 }, files: [FILE] }), "client-9");
   assert.deepEqual(got.quote, { cardId: "Q176", version: 3 });
-  assert.deepEqual(got.attachments, [{ id: "f-1", name: "a.png", size: 10, type: "image/png", url: "/captain/api/files/f-1" }]);
+  assert.deepEqual(got.attachments, [SHOWN]);
   assert.equal(got.uploadVerdicts.length, 0);
   assert.throws(() => chatReceiptOf(receipt({ quote: { text: "x" } }), "client-9"), notConfirmed);
   assert.throws(() => chatReceiptOf(receipt({ files: "f-1" }), "client-9"), notConfirmed);
@@ -249,6 +280,10 @@ test("the checks before a send refuse empty or long text, a bad clientId, files 
   assert.throws(() => checkOutgoing("steward", { ...ok, text: "\u{1F600}".repeat(4001) }), refusedWith(CHAT_WORDS.text));
   for (const clientId of ["", "has space", "x".repeat(81), "a/b"]) assert.throws(() => checkOutgoing("steward", { ...ok, clientId }), /^Refused|Not sent/, clientId);
   assert.throws(() => checkOutgoing("steward", { ...ok, files: [{ name: "a.png" }] }), refusedWith(CHAT_WORDS.files));
+  assert.throws(() => checkOutgoing("steward", { ...ok, files: ["a/b"] }), refusedWith(CHAT_WORDS.files));
+  assert.doesNotThrow(() => checkOutgoing("steward", { ...ok, files: ["f-1", "A".repeat(255)] }));
+  assert.doesNotThrow(() => checkOutgoing("steward", { ...ok, text: "", files: ["f-1"] }));
+  assert.throws(() => checkOutgoing("steward", { ...ok, text: "", files: [] }), refusedWith(CHAT_WORDS.text));
   assert.throws(() => checkOutgoing("steward", { ...ok, quote: { text: "x" } }), refusedWith(CHAT_WORDS.quoteGone));
   assert.doesNotThrow(() => checkOutgoing("steward", { ...ok, files: [] }));
   assert.throws(() => checkOutgoing("", ok), refusedWith(CHAT_WORDS.bot));
@@ -271,6 +306,24 @@ test("the request body holds exactly the bot, text, clientId and token, and stay
   assert.deepEqual(JSON.parse(body), { bot: "steward", text: "hello", clientId: "client-1", csrf: "token-1" });
   assert.throws(() => chatBody("steward", { text: "\u0001".repeat(4000), clientId: "client-1" }, "token-1"), refusedWith(CHAT_WORDS.text));
   assert.throws(() => chatBody("steward", { text: "hello", clientId: "client-1" }, ""), /Not sent/);
+});
+
+test("a body with files carries the uploaded ids after the token, key for key as the contract's sample, and a body with none has no files key", async () => {
+  const { chatBody } = await load();
+  const body = chatBody("bot-a", { text: "Two files.", clientId: "k5", files: ["f-7Qk2Lm9Xz", "f-3Hs8Pa1Wq"] }, "CSRF");
+  assert.deepEqual(Object.keys(JSON.parse(body)), Object.keys(sample("send-files.json")));
+  assert.deepEqual(JSON.parse(body), sample("send-files.json"));
+  assert.deepEqual(Object.keys(JSON.parse(chatBody("bot-a", { text: "x", clientId: "k6", files: [] }, "CSRF"))), ["bot", "text", "clientId", "csrf"]);
+  assert.deepEqual(JSON.parse(chatBody("bot-a", { text: "", clientId: "k7", files: ["f-1"] }, "CSRF")).text, "");
+});
+
+test("an upload's answer is one flat object with the file's id, name, type, size and kind and a new token, and anything else is not confirmed", async () => {
+  const { uploadReceiptOf } = await load();
+  const answer = { id: "f-7Qk2Lm9Xz", name: "screenshot.png", type: "image/png", size: 482113, sha256: "c".repeat(64), kind: "photo", csrf: "CSRF2", freshUntil: 1794000060 };
+  assert.deepEqual(uploadReceiptOf(answer), { id: answer.id, name: answer.name, type: answer.type, size: answer.size, kind: answer.kind, csrf: answer.csrf, freshUntil: answer.freshUntil });
+  assert.equal(uploadReceiptOf({ ...answer, kind: "file", more: 1 }).kind, "file");
+  const bads = [null, "ok", [], { ...answer, id: "a/b" }, { ...answer, id: "B".repeat(256) }, { ...answer, kind: "blocked" }, { ...answer, kind: undefined }, { ...answer, csrf: undefined }, { ...answer, csrf: 5 }, { ...answer, freshUntil: "soon" }, { ...answer, size: -1 }, { ...answer, name: "" }, { ...answer, type: 5 }, { file: answer }];
+  for (const bad of bads) assert.throws(() => uploadReceiptOf(bad), notConfirmed, JSON.stringify(bad));
 });
 
 test("a quote goes out as the contract's two shapes only, and a body with a quote is the sample's, key for key", async () => {

@@ -1,9 +1,10 @@
 import { rowPreview } from "../domain/chat-row";
 import { cachedInspection, FILE_LIMIT_TEXT, MAX_FILES } from "../domain/file-inspection";
+import type { FileLimits } from "../domain/files-r1";
 import type { Bot } from "../domain/types";
 import { fixtureMessages, type Script } from "./chat-content";
 import { appChatHistory, type FixtureHistory } from "./chat-history";
-import type { Attachment, BrowserChatApi, BrowserUploadVerdict, ChatFeature, ChatMessage, ChatRow, ChatThread, SentChatMessage, Working } from "./chat-types";
+import type { Attachment, BrowserChatApi, BrowserUploadVerdict, ChatFeature, ChatMessage, ChatRow, ChatThread, SendPhase, SentChatMessage, Working } from "./chat-types";
 import { BOTS } from "./example-content";
 import type { OpenChatHolder } from "./open-chat";
 
@@ -20,6 +21,7 @@ export type ExampleOptions = {
   fixture?: FixtureHistory | Promise<FixtureHistory | null> | null;
   script?: Script[];
   openChat?: OpenChatHolder;
+  holdUpload?: boolean;
 };
 
 const WORKING_NOTE = "reading your message";
@@ -61,6 +63,7 @@ export function createExampleChat(options: ExampleOptions = {}): BrowserChatApi 
   let attempts = 0;
   let listings = 0;
   let replies = 0;
+  let fixtureLimits: { bot: string; limits: FileLimits } | null = null;
 
   const stamp = () => new Date(now()).toISOString();
   const botOf = (id: string): Bot => {
@@ -76,6 +79,7 @@ export function createExampleChat(options: ExampleOptions = {}): BrowserChatApi 
     working: working.get(id) ?? null,
     firstUnread,
     features: FEATURES,
+    ...(fixtureLimits?.bot === id ? { fileLimits: fixtureLimits.limits } : {}),
   });
   const firstUnreadOf = (id: string): string | null => {
     if (!unread.has(id)) return null;
@@ -111,6 +115,7 @@ export function createExampleChat(options: ExampleOptions = {}): BrowserChatApi 
       seenAt.delete(fixture.bot);
       working.delete(fixture.bot);
     }
+    if (fixture?.fileLimits) fixtureLimits = { bot: fixture.bot, limits: fixture.fileLimits };
     for (const step of options.script ?? [])
       schedule(() => {
         if ("reply" in step) {
@@ -140,6 +145,10 @@ export function createExampleChat(options: ExampleOptions = {}): BrowserChatApi 
   };
   const attachments = (clientId: string, checked: { file: File }[]): Attachment[] =>
     checked.map(({ file }, n) => ({ id: clientId + "-file-" + n, name: file.name, size: file.size, type: file.type, url: URL.createObjectURL(file) }));
+  const heldUpload = (onPhase?: (phase: SendPhase) => void): Promise<never> => {
+    onPhase?.("uploading");
+    return new Promise(() => undefined);
+  };
 
   return {
     uploadBoundary: "browser-stand-in",
@@ -177,8 +186,8 @@ export function createExampleChat(options: ExampleOptions = {}): BrowserChatApi 
         leave?.();
       };
     },
-    send: (botId, { text, clientId, quote, files }) =>
-      later(async () => {
+    send: (botId, { text, clientId, quote, files }, onPhase) =>
+      options.holdUpload && files?.length ? heldUpload(onPhase) : later(async () => {
         botOf(botId);
         attempts += 1;
         if (failSend(attempts)) throw new Error("No reply from the server");

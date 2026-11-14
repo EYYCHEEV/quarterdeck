@@ -1,15 +1,20 @@
 import { avatarColor, avatarSlot } from "../domain/avatar";
 import { QUOTE_LIMIT, SEND_FAILED_TEXT, withinLimit } from "../domain/chat";
+import { claimedType, EXPIRED_TEXT, FILES_OFF_TEXT, typeText, type FileLimits } from "../domain/files-r1";
 import { plainText } from "../domain/markdown";
 import type { Bot } from "../domain/types";
 import type { Attachment, ChatFeature, ChatMessage, ChatRow, ChatThread, SentQuote, ServerUploadVerdict, Working, WireOutgoing } from "./chat-types";
 import { NotConfirmed, Refused } from "./source";
+
+export { bigText, typeText } from "../domain/files-r1";
 
 type Raw = Record<string, unknown>;
 
 export type ChatBot = { id: string; note: string; name?: string };
 
 export type ChatListed = { bot: ChatBot; preview: string; at: string; last: string; unread: boolean; rev?: number };
+
+export type ChatList = { rows: ChatListed[]; limits: FileLimits | null };
 
 export type ChatRead = {
   bot: ChatBot;
@@ -27,15 +32,18 @@ export type ChatReadReceipt = { csrf: string; freshUntil: number };
 
 export type ChatReceipt = ChatMessage & { uploadVerdicts: ServerUploadVerdict[]; csrf: string; freshUntil: number };
 
+export type UploadReceipt = { id: string; name: string; type: string; size: number; kind: "photo" | "file"; csrf: string; freshUntil: number };
+
 export const CHAT_WORDS = {
   bot: "This bot is not in your chat list.",
   text: "Message is empty or too long.",
   mail: SEND_FAILED_TEXT,
-  files: "Not sent: files are not built on the server yet.",
+  files: FILES_OFF_TEXT,
   quote: "Not sent: quotes are not built on the server yet.",
   quoteGone: "Not sent: that message is no longer in this chat.",
   clientId: "Not sent: the message id is not 1 to 80 letters, digits, _ or -.",
   token: "Not sent: there is no sign-in token.",
+  expired: EXPIRED_TEXT,
 };
 
 const BODY_LIMIT = 16384;
@@ -52,7 +60,8 @@ const MAX_FILES = 50;
 const MAX_NAME = 512;
 const MAX_MIME = 255;
 const CARD_ID = /^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/;
-const FILE_ID = /^[\w-]{1,64}$/;
+const FILE_ID = /^[A-Za-z0-9_-]{1,255}$/;
+const SHA256 = /^[0-9a-f]{64}$/;
 const FILES_PATH = "/captain/api/files/";
 
 const isRecord = (value: unknown): value is Raw => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -133,20 +142,29 @@ function quoteOf(value: unknown): SentQuote | undefined {
   return { id: messageIdOf(value.id, "a quote id"), from, at: timeOf(value.at, "a quote time", false), text: boundedText(value.text, "a quote text") };
 }
 
+function fileOf(item: unknown): Attachment | null {
+  if (!isRecord(item)) return null;
+  const { id, name, type, size, kind, url, sha256 } = item;
+  if (typeof id !== "string" || !FILE_ID.test(id)) return null;
+  if (typeof name !== "string" || name === "" || name.length > MAX_NAME) return null;
+  if (typeof type !== "string" || type.length > MAX_MIME) return null;
+  if (typeof size !== "number" || !Number.isSafeInteger(size) || size < 0) return null;
+  if (sha256 !== undefined && (typeof sha256 !== "string" || !SHA256.test(sha256))) return null;
+  if (kind === "blocked") return url === undefined ? { id, name, size, type, kind, url: "" } : null;
+  if ((kind !== "photo" && kind !== "file") || url !== FILES_PATH + id) return null;
+  return { id, name, size, type, kind, url };
+}
+
 function filesOf(value: unknown): Attachment[] | undefined {
   if (value === undefined) return undefined;
-  if (!Array.isArray(value) || value.length > MAX_FILES) throw unreadable("files");
-  if (value.length === 0) return undefined;
-  return value.map((item): Attachment => {
-    if (!isRecord(item)) throw unreadable("a file");
-    const { id, name, type, size, kind, url } = item;
-    if (typeof id !== "string" || !FILE_ID.test(id) || url !== FILES_PATH + id) throw unreadable("a file id");
-    if (typeof name !== "string" || name === "" || name.length > MAX_NAME) throw unreadable("a file name");
-    if (typeof type !== "string" || type.length > MAX_MIME) throw unreadable("a file type");
-    if (typeof size !== "number" || !Number.isSafeInteger(size) || size < 0) throw unreadable("a file size");
-    if (kind !== "photo" && kind !== "file") throw unreadable("a file kind");
-    return { id, name, size, type, url };
-  });
+  if (!Array.isArray(value)) throw unreadable("files");
+  const kept: Attachment[] = [];
+  for (const item of value) {
+    if (kept.length === MAX_FILES) break;
+    const file = fileOf(item);
+    if (file) kept.push(file);
+  }
+  return kept.length === 0 ? undefined : kept;
 }
 
 function messageOf(raw: unknown): ChatMessage {
@@ -177,6 +195,21 @@ export function parseChatRows(body: unknown): ChatListed[] {
     if (rev !== undefined) made.rev = rev;
     return made;
   });
+}
+
+const positive = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+
+function limitsOf(value: unknown): FileLimits {
+  if (!isRecord(value)) throw unreadable("the file limits");
+  const { fileBytes, messageBytes, count } = value;
+  if (!positive(fileBytes) || !positive(messageBytes) || !positive(count)) throw unreadable("the file limits");
+  return { fileBytes, messageBytes, count };
+}
+
+export function parseChatList(body: unknown): ChatList {
+  if (Array.isArray(body)) return { rows: parseChatRows(body), limits: null };
+  if (!isRecord(body) || !Array.isArray(body.chats)) throw unreadable("the chat list");
+  return { rows: parseChatRows(body.chats), limits: limitsOf(body.fileLimits) };
 }
 
 export function parseChatThread(body: unknown): ChatRead {
@@ -219,17 +252,22 @@ function wireQuoteOk(quote: unknown): boolean {
   return typeof id === "string" && id !== "" && id.length <= MAX_ID && !CONTROL.test(id) && typeof text === "string" && text !== "" && text.length <= QUOTE_LIMIT * 2 && [...text].length <= QUOTE_LIMIT;
 }
 
-export function checkOutgoing(botId: string, outgoing: WireOutgoing): void {
+export function checkWords(botId: string, outgoing: Pick<WireOutgoing, "text" | "clientId" | "quote">, withFiles: boolean): void {
   if (typeof botId !== "string" || !BOT_ID.test(botId)) throw new Refused(CHAT_WORDS.bot);
-  if (outgoing.files && outgoing.files.length > 0) throw new Refused(CHAT_WORDS.files);
   if (outgoing.quote !== undefined && !wireQuoteOk(outgoing.quote)) throw new Refused(CHAT_WORDS.quoteGone);
-  if (typeof outgoing.text !== "string" || outgoing.text.length === 0 || !withinLimit(outgoing.text)) throw new Refused(CHAT_WORDS.text);
+  if (typeof outgoing.text !== "string" || (outgoing.text.length === 0 && !withFiles) || !withinLimit(outgoing.text)) throw new Refused(CHAT_WORDS.text);
   if (typeof outgoing.clientId !== "string" || !CLIENT_ID.test(outgoing.clientId)) throw new Refused(CHAT_WORDS.clientId);
+}
+
+export function checkOutgoing(botId: string, outgoing: WireOutgoing): void {
+  const files: unknown = outgoing.files;
+  if (files !== undefined && (!Array.isArray(files) || files.length > MAX_FILES || !files.every((id) => typeof id === "string" && FILE_ID.test(id)))) throw new Refused(CHAT_WORDS.files);
+  checkWords(botId, outgoing, Array.isArray(files) && files.length > 0);
 }
 
 export function chatBody(botId: string, outgoing: WireOutgoing, csrf: string): string {
   if (typeof csrf !== "string" || csrf === "") throw new Refused(CHAT_WORDS.token);
-  const json = JSON.stringify({ bot: botId, text: outgoing.text, clientId: outgoing.clientId, csrf, ...(outgoing.quote === undefined ? {} : { quote: outgoing.quote }) });
+  const json = JSON.stringify({ bot: botId, text: outgoing.text, clientId: outgoing.clientId, csrf, ...(outgoing.quote === undefined ? {} : { quote: outgoing.quote }), ...(outgoing.files?.length ? { files: outgoing.files } : {}) });
   if (new TextEncoder().encode(json).length > BODY_LIMIT) throw new Refused(CHAT_WORDS.text);
   return json;
 }
@@ -252,6 +290,21 @@ export function readReceiptOf(raw: unknown): ChatReadReceipt {
   return { csrf, freshUntil };
 }
 
+export function uploadReceiptOf(raw: unknown): UploadReceipt {
+  if (!isRecord(raw)) throw new NotConfirmed();
+  const { id, name, type, size, kind, csrf, freshUntil } = raw;
+  if (typeof id !== "string" || !FILE_ID.test(id) || typeof name !== "string" || name === "" || name.length > MAX_NAME || typeof type !== "string" || type.length > MAX_MIME) throw new NotConfirmed();
+  if (typeof size !== "number" || !Number.isSafeInteger(size) || size < 0 || (kind !== "photo" && kind !== "file")) throw new NotConfirmed();
+  if (typeof csrf !== "string" || csrf === "" || typeof freshUntil !== "number" || !Number.isFinite(freshUntil)) throw new NotConfirmed();
+  return { id, name, type, size, kind, csrf, freshUntil };
+}
+
+export function uploadType(file: { name: string; type: string }): string {
+  const type = claimedType(file.name, file.type);
+  if (type === null) throw new Refused(typeText(file.name));
+  return type;
+}
+
 export function botOf(bot: ChatBot, order: number): Bot {
   return { id: bot.id, name: bot.name ?? bot.id, role: bot.note, color: avatarColor(avatarSlot(bot.id)), pinned: false, order };
 }
@@ -260,7 +313,7 @@ export const botsOf = (listed: ChatListed[]): Bot[] => listed.map((item, order) 
 
 export const rowsOf = (listed: ChatListed[]): ChatRow[] => listed.map((item, order) => ({ bot: botOf(item.bot, order), preview: plainText(item.preview), at: item.at, unread: item.unread }));
 
-export const threadOf = (read: ChatRead, order = 0): ChatThread => ({
+export const threadOf = (read: ChatRead, order = 0, limits: FileLimits | null = null): ChatThread => ({
   bot: botOf(read.bot, order),
   messages: read.messages,
   seenUpTo: read.seenUpTo,
@@ -269,6 +322,7 @@ export const threadOf = (read: ChatRead, order = 0): ChatThread => ({
   older: read.older,
   firstUnread: read.firstUnread,
   features: read.features,
+  ...(limits === null ? {} : { fileLimits: limits }),
 });
 
 export function mergeOlder(held: ChatRead, page: ChatRead): ChatRead {
