@@ -61,7 +61,7 @@ const settle = (promise) => {
   return state;
 };
 
-function serve(post) {
+function serve(post, get) {
   const time = fakeClock();
   const calls = [];
   const streams = [];
@@ -79,6 +79,8 @@ function serve(post) {
   const send = async (path, init) => {
     calls.push({ method: init.method, path, signal: init.signal, at: time.now() - NOW });
     if (init.method === "POST") return post ? post(path, init, server, calls.filter((call) => call.method === "POST").length) : json(path.endsWith("/comments") ? COMMENT : ANSWER);
+    const held = get?.(path, init);
+    if (held) return held;
     if (path === "/captain/cards") {
       serial += 1;
       return json({ ...structuredClone(LISTING), csrf: "token-" + serial, freshUntil: 2_000_000_000 }, 200, { ETag: '"list-' + serial + '"' });
@@ -278,4 +280,25 @@ test("an aborted answer that the server records late: Try again meets the server
   assert.equal(second.value.note, "Keep the draft");
   assert.equal(h.server.recorded.length, 1);
   assert.equal(h.calls.filter((call) => call.method === "POST").length, 2);
+});
+
+test("a card list read that never answers is cut after twenty seconds and frees its place: the next list read is a new request, not a wait on the dead one", async () => {
+  let stuck = false;
+  const h = serve(undefined, (path, init) => (stuck && path === "/captain/cards" ? hang(init) : null));
+  await h.boot();
+  await h.time.advance(10_000);
+  stuck = true;
+  const from = h.calls.length;
+  await h.refresh({ cards: true, mail: false });
+  await h.time.advance(1_000);
+  assert.equal(h.lists(from), 1, "the list read the event asked for went out");
+  await h.time.advance(18_000);
+  assert.equal(h.lists(from), 1, "nothing new while the read hangs");
+  await h.time.advance(1_500);
+  assert.equal(h.calls.slice(from).find((call) => call.path === "/captain/cards").signal?.aborted, true, "the hung read was aborted at twenty seconds");
+  stuck = false;
+  await h.time.advance(11_000);
+  assert.ok(h.lists(from) >= 2, "a new list read went out after the cut, " + h.lists(from) + " in all");
+  const world = await h.source.load();
+  assert.ok(world.cards.length > 0, "and the list is shown again");
 });

@@ -102,7 +102,7 @@ function serve(chatLib = lib, { post, rows, read, thread, cards, upload } = {}) 
       return store(body, { add, sent, uploaded });
     }
     if (path === "/captain/cards") {
-      const held = cards?.();
+      const held = cards?.(init);
       if (held) return held;
       serial += 1;
       call.csrf = "token-" + serial;
@@ -1708,6 +1708,28 @@ test("a watched thread with read on and a firstUnread is marked read once: a tok
   await h.time.advance(60_000);
   assert.equal(marks(h).length, 1);
   assert.equal((await h.source.chat.listChats()).find((one) => one.bot.id === "steward").unread, false);
+});
+
+test("a send pressed while a mark-read's token read hangs goes out once that read is cut at twenty seconds, instead of waiting for ever", async () => {
+  let stuck = false;
+  const stall = (init) => new Promise((resolve, reject) => init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))));
+  const h = serve(lib, { ...v2(marking()), cards: (init) => (stuck ? stall(init) : null) });
+  await h.boot();
+  await h.source.chat.openThread("steward");
+  stuck = true;
+  const from = h.calls.length;
+  await h.watchThread("steward");
+  await h.time.advance(1_000);
+  await tick();
+  assert.deepEqual(h.requests(from), [TOKEN], "the mark-read's token read went out and hangs");
+  const sent = watchSend(h, h.source.chat.send("steward", { text: "hello", clientId: "client-h1" }));
+  await pass(h, 18_000);
+  assert.equal(sent.done, false);
+  assert.deepEqual(POSTS(h, from), []);
+  stuck = false;
+  await pass(h, 3_000);
+  assert.equal(sent.value?.clientId, "client-h1", String(sent.error));
+  assert.equal(h.threads.get("steward").filter((one) => one.clientId === "client-h1").length, 1);
 });
 
 test("nothing is marked when the thread has no read feature or no firstUnread, when nothing watches it, or when the server is r5's", async () => {
