@@ -102,6 +102,8 @@ const CHAT_PATH = "/captain/api/chat";
 const CHAT_READ_PATH = CHAT_PATH + "/read";
 const FILES_PATH = "/captain/api/files";
 const POST_TIMEOUT = 20_000;
+const READ_TIMEOUT = 20_000;
+const BODY_READ = new Set([200, 409]);
 const UPLOAD_TIMEOUT = 180_000;
 const RETRY_SECONDS = /^[0-9]{1,2}$/;
 const chatOn = typeof __QD_CHAT__ !== "undefined" && __QD_CHAT__ === "on";
@@ -261,24 +263,35 @@ export function createApiClient(options: { send?: Send; openEvents?: (address: s
   let fresh: number | null = null;
   let session: SessionControl | null = null;
   const request = (meta: SessionRequest, perform: () => Promise<Response>) => session ? session.request(meta, perform) : perform();
+  const reads = new WeakMap<Response, { stop: () => void; signal: AbortSignal }>();
 
   async function get(path: string, more: Record<string, string> = {}, automatic = false, kind: SessionRequest["kind"] = path === LIST_PATH ? "list" : path.startsWith(MAIL_PATH) ? "mail" : "card", meta: SessionRequest = { kind, automatic }): Promise<Response> {
+    const mine = generation;
     return request(meta, async () => {
+      const controller = new AbortController();
+      const stop = (options.schedule ?? later)(() => controller.abort(), READ_TIMEOUT);
       try {
-        return await send(path, { method: "GET", headers: { Accept: "application/json", ...more }, credentials: "same-origin", redirect: "error" });
+        const response = await send(path, { method: "GET", headers: { Accept: "application/json", ...more }, credentials: "same-origin", redirect: "error", signal: controller.signal });
+        if (response.body !== null && BODY_READ.has(response.status) && mine === generation) reads.set(response, { stop, signal: controller.signal });
+        else stop();
+        return response;
       } catch {
+        stop();
         throw new Unavailable("The server is not answering.");
       }
     });
   }
 
   async function jsonOf(response: Response, limit = 1_048_576, failure: () => Error = () => unreadable("it is not JSON")): Promise<unknown> {
+    const read = reads.get(response);
     try {
       const { text, cut } = await readText(response, limit, true);
       if (cut) throw unreadable("more than 1 MiB");
       return JSON.parse(text) as unknown;
     } catch {
-      throw failure();
+      throw read?.signal.aborted ? new Unavailable("The server is not answering.") : failure();
+    } finally {
+      read?.stop();
     }
   }
 
