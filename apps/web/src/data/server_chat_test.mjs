@@ -308,6 +308,26 @@ test("Show older reads the page before the oldest held id, costs one credit and 
   assert.equal(watcher.seen.at(-1).messages.length, 23);
 });
 
+test("a short page that says older messages remain pages back from its oldest message until none remain", async () => {
+  const message = (n) => ({ id: "m" + (100 + n), from: "bot", text: "text " + n, at: stamp(n + 1), refs: [] });
+  const page = (from, to, older) => ({ bot: { id: "steward", note: "the steward" }, messages: Array.from({ length: to - from }, (_, n) => message(from + n)), seenUpTo: null, seenAt: null, working: null, older });
+  const pages = new Map([[null, page(4, 6, true)], ["m104", page(1, 4, true)], ["m101", page(0, 1, false)]]);
+  const h = serve(lib, { read: (path) => (path.startsWith("/captain/api/chat?") ? json(pages.get(new URL(path, "https://qd.test").searchParams.get("before"))) : null) });
+  await h.boot();
+  const first = await h.source.chat.openThread("steward");
+  assert.deepEqual(first.messages.map((one) => one.id), ["m104", "m105"]);
+  assert.equal(first.older, true);
+  const from = h.calls.length;
+  const second = await h.source.chat.older("steward");
+  assert.deepEqual(second.messages.map((one) => one.id), ["m101", "m102", "m103", "m104", "m105"]);
+  assert.equal(second.older, true);
+  const third = await h.source.chat.older("steward");
+  assert.deepEqual(third.messages.map((one) => one.id), ["m100", "m101", "m102", "m103", "m104", "m105"]);
+  assert.equal(third.older, false);
+  await h.source.chat.older("steward");
+  assert.deepEqual(h.requests(from).filter((one) => one.startsWith("GET /captain/api/chat?")), [THREAD("steward", "m104"), THREAD("steward", "m101")]);
+});
+
 test("a send reads a fresh token list, posts once, costs three credits and refreshes the Queue", async () => {
   const h = serve();
   await h.boot();
