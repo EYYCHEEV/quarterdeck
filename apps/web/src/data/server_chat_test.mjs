@@ -356,7 +356,7 @@ test("a 200 answer that is nested is not confirmed, the thread read finds the cl
   await h.source.chat.openThread("steward");
   const from = h.calls.length;
   const message = await h.source.chat.send("steward", { text: "hello there", clientId: "client-2" });
-  assert.deepEqual(h.requests(from), [TOKEN, POST, THREAD("steward")]);
+  assert.deepEqual(h.requests(from), [POST, THREAD("steward")]);
   assert.equal(message.clientId, "client-2");
   assert.equal(h.requests(from).filter((one) => one === POST).length, 1);
 });
@@ -374,9 +374,9 @@ test("a send that is not confirmed and not found is read again at once and after
   assert.deepEqual(POSTS(h, from), ["client-3", "client-3"]);
   await pass(h, 2_000);
   assert.equal(first.error?.name, "NotConfirmed");
-  assert.deepEqual(h.requests(from), [TOKEN, POST, THREAD("steward"), THREAD("steward"), TOKEN, POST, THREAD("steward"), THREAD("steward"), TOKEN, POST, THREAD("steward")]);
-  assert.equal(h.calls[from + 3].at - h.calls[from + 2].at, 5_000);
-  assert.equal(h.calls[from + 7].at - h.calls[from + 6].at, 15_000);
+  assert.deepEqual(h.requests(from), [POST, THREAD("steward"), THREAD("steward"), TOKEN, POST, THREAD("steward"), THREAD("steward"), TOKEN, POST, THREAD("steward")]);
+  assert.equal(h.calls[from + 2].at - h.calls[from + 1].at, 5_000);
+  assert.equal(h.calls[from + 6].at - h.calls[from + 5].at, 15_000);
   assert.deepEqual(POSTS(h, from), ["client-3", "client-3", "client-3"]);
   lost = false;
   const again = h.calls.length;
@@ -401,7 +401,7 @@ test("a send that is not confirmed twice lands on its third POST, twenty seconds
   assert.equal(state.done, false, "still waiting out the fifteen seconds after the second failure");
   await pass(h, 2_000);
   assert.equal(state.value?.clientId, "client-365a");
-  assert.deepEqual(h.requests(from), [TOKEN, POST, THREAD("steward"), THREAD("steward"), TOKEN, POST, THREAD("steward"), THREAD("steward"), TOKEN, POST]);
+  assert.deepEqual(h.requests(from), [POST, THREAD("steward"), THREAD("steward"), TOKEN, POST, THREAD("steward"), THREAD("steward"), TOKEN, POST]);
   assert.deepEqual(POSTS(h, from), ["client-365a", "client-365a", "client-365a"]);
   assert.equal(h.threads.get("steward").filter((one) => one.clientId === "client-365a").length, 1);
   settledNear(state, 20_000);
@@ -463,11 +463,11 @@ test("a POST that never answers is aborted after twenty seconds, read again, sen
   const from = h.calls.length;
   const state = watchSend(h, h.source.chat.send("steward", { text: "hello", clientId: "client-5" }));
   await pass(h, 19_000);
-  assert.deepEqual(h.requests(from), [TOKEN, POST]);
+  assert.deepEqual(h.requests(from), [POST]);
   assert.equal(state.done, false);
   await pass(h, 41_000);
   assert.equal(state.error?.name, "NotConfirmed");
-  assert.deepEqual(h.requests(from), [TOKEN, POST, THREAD("steward"), THREAD("steward"), TOKEN, POST, THREAD("steward")]);
+  assert.deepEqual(h.requests(from), [POST, THREAD("steward"), THREAD("steward"), TOKEN, POST, THREAD("steward")]);
   assert.deepEqual(POSTS(h, from), ["client-5", "client-5"]);
   assert.ok(state.at <= 55_000, String(state.at));
 });
@@ -489,7 +489,7 @@ for (const [label, reply, expected] of REFUSALS) {
     const from = h.calls.length;
     if (expected === "RateLimited") await assert.rejects(h.source.chat.send("steward", { text: "hello", clientId: "client-6" }), named("RateLimited"));
     else await assert.rejects(h.source.chat.send("steward", { text: "hello", clientId: "client-6" }), refusedWith(expected));
-    assert.deepEqual(h.requests(from), [TOKEN, POST]);
+    assert.deepEqual(h.requests(from), [POST]);
     const after = h.calls.length;
     await h.time.advance(6_000);
     await h.source.chat.listChats();
@@ -711,10 +711,10 @@ test("a 502 mail refusal waits five seconds, reads again, sends once more with t
   const state = watchSend(h, h.source.chat.send("steward", { text: "hello", clientId: "client-12" }));
   await pass(h, 4_900);
   assert.equal(state.done, false);
-  assert.deepEqual(h.requests(from), [TOKEN, POST]);
+  assert.deepEqual(h.requests(from), [POST]);
   await pass(h, 1_000);
   assert.equal(state.value?.clientId, "client-12");
-  assert.deepEqual(h.requests(from), [TOKEN, POST, THREAD("steward"), TOKEN, POST]);
+  assert.deepEqual(h.requests(from), [POST, THREAD("steward"), TOKEN, POST]);
   assert.deepEqual(POSTS(h, from), ["client-12", "client-12"]);
   assert.equal(watcher.seen.at(-1).messages.filter((one) => one.clientId === "client-12").length, 1);
 });
@@ -729,7 +729,7 @@ test("a third 502 after the two retries refuses with Not Delivered, with three P
   assert.equal(state.done, false, "still waiting out the fifteen seconds after the second refusal");
   await pass(h, 2_000);
   assert.ok(refusedWith("Not Delivered")(state.error), String(state.error));
-  assert.deepEqual(h.requests(from), [TOKEN, POST, THREAD("steward"), TOKEN, POST, THREAD("steward"), TOKEN, POST]);
+  assert.deepEqual(h.requests(from), [POST, THREAD("steward"), TOKEN, POST, THREAD("steward"), TOKEN, POST]);
   assert.deepEqual(POSTS(h, from), ["client-13", "client-13", "client-13"]);
 });
 
@@ -753,11 +753,11 @@ test("a 502 that names a retry time makes the send wait that long, then post onc
   const state = watchSend(h, h.source.chat.send("steward", { text: "hello", clientId: "client-b1" }, (phase, seconds) => phases.push(seconds === undefined ? phase : phase + " " + seconds)));
   await pass(h, 11_800);
   assert.equal(state.done, false);
-  assert.deepEqual(h.requests(from), [TOKEN, POST]);
+  assert.deepEqual(h.requests(from), [POST]);
   assert.deepEqual(phases, ["busy 12"]);
   await pass(h, 500);
   assert.equal(state.value?.clientId, "client-b1");
-  assert.deepEqual(h.requests(from), [TOKEN, POST, TOKEN, POST]);
+  assert.deepEqual(h.requests(from), [POST, TOKEN, POST]);
   assert.deepEqual(h.calls.slice(from).filter((call) => call.method === "POST").map((call) => [call.body.clientId, call.body.text]), [["client-b1", "hello"], ["client-b1", "hello"]]);
   assert.deepEqual(phases, ["busy 12", "sending"]);
   assert.equal(h.threads.get("steward").filter((one) => one.clientId === "client-b1").length, 1);
@@ -771,7 +771,7 @@ test("a second busy answer on that one resend refuses with Not Delivered, with t
   const state = watchSend(h, h.source.chat.send("steward", { text: "hello", clientId: "client-b2" }));
   await pass(h, 4_000);
   assert.ok(refusedWith("Not Delivered")(state.error), String(state.error));
-  assert.deepEqual(h.requests(from), [TOKEN, POST, TOKEN, POST]);
+  assert.deepEqual(h.requests(from), [POST, TOKEN, POST]);
   await pass(h, 30_000);
   assert.deepEqual(POSTS(h, from), ["client-b2", "client-b2"]);
 });
@@ -789,7 +789,7 @@ test("a resend after a busy answer that is not confirmed is looked for once in t
   const state = watchSend(h, h.source.chat.send("steward", { text: "hello", clientId: "client-b3" }));
   await pass(h, 4_000);
   assert.equal(state.error?.name, "NotConfirmed");
-  assert.deepEqual(h.requests(from), [TOKEN, POST, TOKEN, POST, THREAD("steward")]);
+  assert.deepEqual(h.requests(from), [POST, TOKEN, POST, THREAD("steward")]);
   await pass(h, 30_000);
   assert.deepEqual(POSTS(h, from), ["client-b3", "client-b3"]);
 });
@@ -873,7 +873,7 @@ test("a POST aborted at twenty seconds and answered on the retry resolves as sen
   const state = watchSend(h, h.source.chat.send("steward", { text: "hello", clientId: "client-14" }));
   await pass(h, 30_000);
   assert.equal(state.value?.clientId, "client-14");
-  assert.deepEqual(h.requests(from), [TOKEN, POST, THREAD("steward"), THREAD("steward"), TOKEN, POST]);
+  assert.deepEqual(h.requests(from), [POST, THREAD("steward"), THREAD("steward"), TOKEN, POST]);
   settledNear(state, 25_000);
 });
 
@@ -896,7 +896,7 @@ test("a send the server stored behind a network failure is found by the read fiv
   const state = watchSend(h, h.source.chat.send("steward", { text: "hello", clientId: "client-15" }));
   await pass(h, 6_000);
   assert.equal(state.value?.clientId, "client-15");
-  assert.deepEqual(h.requests(from), [TOKEN, POST, THREAD("steward"), THREAD("steward")]);
+  assert.deepEqual(h.requests(from), [POST, THREAD("steward"), THREAD("steward")]);
   assert.deepEqual(POSTS(h, from), ["client-15"]);
 });
 
@@ -916,19 +916,20 @@ test("a re-read that never answers counts as not found and the retry still goes 
   const state = watchSend(h, h.source.chat.send("steward", { text: "hello", clientId: "client-17" }));
   await pass(h, 12_000);
   assert.equal(state.value?.clientId, "client-17");
-  assert.deepEqual(h.requests(from), [TOKEN, POST, THREAD("steward"), TOKEN, POST]);
+  assert.deepEqual(h.requests(from), [POST, THREAD("steward"), TOKEN, POST]);
   settledNear(state, 10_000);
 });
 
-test("when every token read and thread read hangs, Not sent comes at the fifty-five second cap, under a minute from the tap", async () => {
+test("when no token is stored and every token read and thread read hangs, Not sent comes at the fifty-five second cap, under a minute from the tap", async () => {
   let stuck = false;
   const h = serve(lib, {
-    post: (body, init) => hang(init),
+    post: (body, init) => (stuck ? hang(init) : json({ error: "text" }, 400)),
     cards: () => (stuck ? never() : null),
     read: (path) => (stuck && path.startsWith("/captain/api/chat?") ? never() : null),
   });
   await h.boot();
   await h.source.chat.openThread("steward");
+  await assert.rejects(h.source.chat.send("steward", { text: "spends the stored token", clientId: "client-16a" }), refusedWith("Message is empty or too long."));
   stuck = true;
   const from = h.calls.length;
   const state = watchSend(h, h.source.chat.send("steward", { text: "hello", clientId: "client-16" }));
@@ -1588,7 +1589,7 @@ test("a chat read leaves the 45 second cards check where it was", async () => {
   assert.ok(h.requests(from).includes(TOKEN), h.requests(from).join(", "));
 });
 
-test("one busy minute of chat alone costs thirteen credits, under the cap of twenty-nine", async () => {
+test("one busy minute of chat alone costs eleven credits, under the cap of twenty-nine", async () => {
   const h = serve();
   await h.boot();
   const from = h.calls.length;
@@ -1610,7 +1611,7 @@ test("one busy minute of chat alone costs thirteen credits, under the cap of twe
   await h.time.advance(6_000);
   const own = h.calls.slice(from).filter((call) => call.path.startsWith("/captain/api/chat") || (call.path === "/captain/cards"));
   const total = own.reduce((sum, call) => sum + (call.method === "POST" ? 2 : 1), 0);
-  assert.equal(total, 13);
+  assert.equal(total, 11);
   assert.ok(total <= 29);
 });
 
@@ -1840,7 +1841,7 @@ test("a chat opened with a long unread run is marked once whatever the server ke
   await h.watchThread("steward");
   await h.time.advance(1_000);
   await tick();
-  assert.deepEqual(h.requests(opened), [TOKEN, READ]);
+  assert.deepEqual(h.requests(opened), [READ]);
   assert.deepEqual(marks(h).map((call) => call.body.upTo), [shown]);
   const reread = h.calls.length;
   state.rowRev = 2;
@@ -2280,7 +2281,7 @@ test("the thread carries the file limits only when the list gave them, and a sen
   assert.deepEqual((await h.source.chat.openThread("steward")).fileLimits, LIMITS);
 });
 
-test("with the files switch off or on, a send with no files makes today's requests: one token read and one POST whose body keys are bot, text, clientId and csrf", async () => {
+test("with the files switch off or on, a send with no files is one POST whose body keys are bot, text, clientId and csrf, with no token read and no files request", async () => {
   for (const options of [{}, FILES_ON]) {
     const h = serve(lib, options);
     await h.boot();
@@ -2288,8 +2289,8 @@ test("with the files switch off or on, a send with no files makes today's reques
     await h.source.chat.openThread("steward");
     const from = h.calls.length;
     const message = await h.source.chat.send("steward", { text: "hello", clientId: "client-f10" });
-    assert.deepEqual(h.requests(from), [TOKEN, POST]);
-    assert.equal(h.credits(from), 3);
+    assert.deepEqual(h.requests(from), [POST]);
+    assert.equal(h.credits(from), 2);
     assert.deepEqual(Object.keys(h.calls.at(-1).body), ["bot", "text", "clientId", "csrf"]);
     assert.equal("attachments" in message, false);
   }
@@ -2444,7 +2445,8 @@ function tokenServer() {
   };
   const send = async (path, init) => {
     const body = typeof init.body === "string" && init.body ? JSON.parse(init.body) : null;
-    const call = { line: init.method + " " + path, csrf: body?.csrf ?? null, clientId: body?.clientId ?? null, conditional: new Headers(init.headers ?? {}).has("If-None-Match") };
+    const headers = new Headers(init.headers ?? {});
+    const call = { line: init.method + " " + path, csrf: body?.csrf ?? headers.get("X-QD-Csrf"), clientId: body?.clientId ?? null, conditional: headers.has("If-None-Match") };
     calls.push(call);
     if (path === "/captain/cards") {
       if (call.conditional && server.notModified) return new Response(null, { status: 304 });
@@ -2457,6 +2459,7 @@ function tokenServer() {
     if (!spend(call.csrf)) return json({ error: "request refused" }, 403);
     landed.push(call);
     const next = { csrf: issue(), freshUntil: Math.floor(NOW / 1000) + 1800 };
+    if (path === "/captain/api/files") return json({ id: "f-" + serial, name: decodeURIComponent(headers.get("X-QD-File-Name") ?? "file"), type: headers.get("Content-Type") ?? "", size: new Blob([init.body]).size, sha256: "0".repeat(64), kind: "photo", ...next });
     return path === "/captain/api/chat/read" ? json(next) : json({ id: "m" + serial, from: "captain", text: body.text, at: stamp(serial), refs: [], clientId: body.clientId, uploadVerdicts: [], ...next });
   };
   const client = lib.createApiClient({ send, openEvents: () => ({ readyState: 0, addEventListener() {}, close() {} }), schedule: () => () => undefined, now: () => clock.at });
@@ -2566,4 +2569,19 @@ test("a token is never used by two POSTs in flight: two sends and a mark-read st
   assert.equal(tokens.filter((one) => one === "t-1").length, 1, tokens.join(", "));
   assert.equal(s.lines(1).filter((line) => line === TOKEN).length, 2);
   assert.equal(s.landed.length, 3);
+});
+
+test("the token an upload's answer gives stays with that send's chain: two plain sends pressed meanwhile carry other tokens, and the chain's own POST then lands with it", async () => {
+  const s = tokenServer();
+  await s.client.cards();
+  const first = await s.client.chat.token();
+  const up = await s.client.chat.upload(photo("one.png"), first);
+  await hello(s.client, 1);
+  await hello(s.client, 2);
+  await s.client.chat.send("steward", { text: "with a file", clientId: "client-t3", files: [up.id] }, undefined, { csrf: up.csrf });
+  const [upload, one, two, chained] = s.calls.slice(2);
+  assert.deepEqual([upload.line, one.line, two.line, chained.line], [UPLOAD, POST, POST, POST]);
+  assert.equal(chained.csrf, up.csrf);
+  assert.ok(one.csrf !== up.csrf && two.csrf !== up.csrf, [one.csrf, two.csrf, up.csrf].join(", "));
+  assert.deepEqual(s.landed, [upload, one, two, chained]);
 });

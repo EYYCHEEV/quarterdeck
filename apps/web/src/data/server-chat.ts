@@ -86,7 +86,6 @@ export function createServerChat(host: ChatHost): ChatPart {
   let busy = false;
   const marked = new Map<string, string>();
   const poked = new Set<string>();
-  let reading: Promise<void> | null = null;
   let sending = 0;
   const unshown = new Map<string, Map<string, ChatMessage>>();
   const readsStarted = new Map<string, number>();
@@ -288,7 +287,6 @@ export function createServerChat(host: ChatHost): ChatPart {
 
   async function send(bot: string, outgoing: Outgoing, onPhase?: OnSendPhase): Promise<SentChatMessage<ServerUploadVerdict>> {
     host.access();
-    if (reading) await reading;
     sending += 1;
     try {
       return await deliver(bot, outgoing, onPhase);
@@ -487,15 +485,8 @@ export function createServerChat(host: ChatHost): ChatPart {
     busy = true;
     try {
       if (job.kind === "list") await readList(true);
-      else if (job.kind === "read") {
-        const flight = markRead(job.bot, job.upTo);
-        reading = flight;
-        try {
-          await flight;
-        } finally {
-          if (reading === flight) reading = null;
-        }
-      } else {
+      else if (job.kind === "read") await markRead(job.bot, job.upTo);
+      else {
         poked.delete(job.bot);
         const row = listed?.find((one) => one.bot.id === job.bot);
         if (row) tried.set(job.bot, stamp(row));
