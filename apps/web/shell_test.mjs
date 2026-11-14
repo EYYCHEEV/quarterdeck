@@ -1201,8 +1201,8 @@ it("Task Card: saved versions show with his answer to the first one", PHONE, asy
   await T(p, "version").first().waitFor();
   await T(p, "earlier-versions").getByText(/^You answered: B\. Friday 5 PM/).waitFor();
   await T(p, "version").last().getByText(/^Risk: /).waitFor();
-  const picture = await T(p, "version-picture").first().evaluate((el) => [getComputedStyle(el).fontSize, el.scrollWidth <= el.clientWidth]);
-  equal(picture.join(" "), "12.5px true", "picture at the picture size, not cut");
+  const picture = await T(p, "version-picture").first().evaluate((el) => [getComputedStyle(el).fontSize === getComputedStyle(document.documentElement).getPropertyValue("--text-label").trim(), el.scrollWidth <= el.clientWidth]);
+  equal(picture, [true, true], "picture at the theme's label size, not cut");
 });
 
 it("Lane: the tracker comes first, then the activity, then waiting and answered rows", PHONE, async (p) => {
@@ -2960,8 +2960,17 @@ it("Search: an Artifact comes up under Artifacts and opens in its project", MAC,
   equal(new URL(p.url()).pathname, "/projects/quarterdeck/artifacts/AR-1", "route");
 });
 
-const BRASS = "rgb(232, 179, 93)";
-const BRASS_INK = "rgb(28, 20, 8)";
+const tonesOf = (p, names) =>
+  p.evaluate((list) => {
+    const probe = document.createElement("i");
+    document.body.append(probe);
+    const found = list.map((name) => {
+      probe.style.color = "var(--color-" + name + ")";
+      return getComputedStyle(probe).color;
+    });
+    probe.remove();
+    return found;
+  }, names);
 const radios = (p) => T(p, "settings-appearance").getByRole("radio").evaluateAll((items) => items.map((item) => [item.textContent, item.getAttribute("aria-checked"), item.disabled]));
 
 it("Settings on the Mac: the gear opens the Settings screen with its five sections, and Appearance offers System, Light and Dark", MAC, async (p) => {
@@ -3154,13 +3163,14 @@ for (const [name, size, phone] of SIGN_OUT_SIZES)
     equal(found, [], "targets under 44 px");
   });
 
-it("Brass: the answer path is solid brass, and its ink reads at least 4.5 to 1", PHONE, async (p) => {
+it("Hand: the answer path is the lit key, solid in the hand colour, and its ink reads at least 4.5 to 1", PHONE, async (p) => {
   await open(p, "/queue/alba-1");
+  const [hand, onHand] = await tonesOf(p, ["hand", "on-hand"]);
   const send = await T(p, "send").evaluate((el) => {
     const style = getComputedStyle(el);
     return { fill: style.backgroundColor, image: style.backgroundImage, ink: style.color };
   });
-  equal(send, { fill: BRASS, image: "none", ink: BRASS_INK }, "Send");
+  equal(send, { fill: hand, image: "none", ink: onHand }, "Send");
   const ratio = await p.evaluate(([a, b]) => {
     const lum = (rgb) => {
       const [r, g, bl] = rgb.match(/\d+/g).map((v) => {
@@ -3171,18 +3181,20 @@ it("Brass: the answer path is solid brass, and its ink reads at least 4.5 to 1",
     };
     const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
     return (hi + 0.05) / (lo + 0.05);
-  }, [BRASS, BRASS_INK]);
+  }, [hand, onHand]);
   equal(ratio >= 4.5, true, "contrast " + ratio.toFixed(2) + " to 1");
 });
 
-it("Brass: the focus ring and the chat unread dot are the same solid brass", MAC, async (p) => {
+it("Signals: the focus ring is the hand colour and the unread mark is the new colour, both solid", MAC, async (p) => {
   await open(p, "/queue");
-  const dot = p.getByRole("img", { name: "Unread" }).first();
-  equal(await dot.evaluate((el) => [getComputedStyle(el).backgroundColor, getComputedStyle(el).backgroundImage]), [BRASS, "none"], "unread dot");
+  const [hand, fresh] = await tonesOf(p, ["hand", "new"]);
+  equal(hand === fresh, false, "the two signals are different colours");
+  const mark = p.getByRole("img", { name: "Unread" }).first();
+  equal(await mark.evaluate((el) => [getComputedStyle(el).backgroundColor, getComputedStyle(el).backgroundImage]), [fresh, "none"], "unread mark");
   await T(p, "settings-btn").focus();
   await p.keyboard.press("Shift+Tab");
   await p.keyboard.press("Tab");
-  equal(await p.evaluate(() => getComputedStyle(document.activeElement).outlineColor), BRASS, "focus ring");
+  equal(await p.evaluate(() => getComputedStyle(document.activeElement).outlineColor), hand, "focus ring");
 });
 
 const look = (p) => p.evaluate(() => document.documentElement.getAttribute("data-appearance"));
@@ -3255,33 +3267,34 @@ const bubbleTones = (p) =>
       return value;
     };
     const style = getComputedStyle(document.querySelector(".chat-bot-bubble"));
-    const [back, ink, muted, inset, link] = [style.backgroundColor, style.color, tone("color-chat-bot-muted"), tone("color-chat-bot-inset"), tone("color-chat-bot-link")];
+    const [back, ink, panel, themeInk, muted, inset] = [style.backgroundColor, style.color, tone("color-panel"), tone("color-ink"), tone("color-ink-2"), tone("color-well")];
     return {
-      colours: [back, ink, link],
-      ratios: { ink: ratio(read(ink), read(back)), muted: ratio(read(muted), read(back)), link: ratio(read(link), read(back)), inkOnInset: ratio(read(ink), read(inset)), mutedOnInset: ratio(read(muted), read(inset)) },
+      colours: [back, ink],
+      theme: [panel, themeInk],
+      ratios: { ink: ratio(read(ink), read(back)), muted: ratio(read(muted), read(back)), inkOnInset: ratio(read(ink), read(inset)), mutedOnInset: ratio(read(muted), read(inset)) },
     };
   });
 
-it("Chat in the dark look: the bot bubble is dark with white text, brass links and muted words that stay readable", { ...MAC, colorScheme: "dark" }, async (p) => {
+it("Chat in the dark look: the bot bubble is a panel in the theme's ink, and its quiet words stay readable", { ...MAC, colorScheme: "dark" }, async (p) => {
   await open(p, "/chat/iris");
   await T(p, "chat-bot-message").first().waitFor();
   const tones = await bubbleTones(p);
-  equal(tones.colours, ["rgb(38, 38, 43)", "rgb(236, 236, 239)", "rgb(232, 179, 93)"], "bubble, text and link");
-  const { ink, muted, link, inkOnInset, mutedOnInset } = tones.ratios;
-  equal([ink >= 12, muted >= 6, link >= 7, inkOnInset >= 14, mutedOnInset >= 7], [true, true, true, true, true], JSON.stringify(tones.ratios));
+  equal(tones.colours, tones.theme, "bubble and text are the theme's panel and ink");
+  const { ink, muted, inkOnInset, mutedOnInset } = tones.ratios;
+  equal([ink >= 12, muted >= 6, inkOnInset >= 14, mutedOnInset >= 7], [true, true, true, true], JSON.stringify(tones.ratios));
 });
 
-it("Chat in the light look: the bot bubble keeps its pale colours and contrast", { ...MAC, colorScheme: "light" }, async (p) => {
+it("Chat in the light look: the bot bubble is a panel in the theme's ink and keeps its contrast", { ...MAC, colorScheme: "light" }, async (p) => {
   await open(p, "/chat/iris");
   await T(p, "chat-bot-message").first().waitFor();
   const tones = await bubbleTones(p);
-  equal(tones.colours, ["rgb(232, 232, 227)", "rgb(37, 38, 42)", "rgb(101, 70, 0)"], "bubble, text and link");
-  const { ink, muted, link } = tones.ratios;
-  equal([ink >= 10, muted >= 5, link >= 5], [true, true, true], JSON.stringify(tones.ratios));
+  equal(tones.colours, tones.theme, "bubble and text are the theme's panel and ink");
+  const { ink, muted } = tones.ratios;
+  equal([ink >= 10, muted >= 5], [true, true], JSON.stringify(tones.ratios));
 });
 
 for (const look of ["dark", "light"])
-  it("Chat in the " + look + " look: a keyboard focus ring inside a bot bubble is the bubble's link colour", { ...MAC, colorScheme: look }, async (p) => {
+  it("Chat in the " + look + " look: a keyboard focus ring inside a bot bubble is the hand colour, as everywhere", { ...MAC, colorScheme: look }, async (p) => {
     await open(p, "/chat/iris");
     await T(p, "chat-bot-message").first().waitFor();
     let inside = false;
@@ -3290,15 +3303,8 @@ for (const look of ["dark", "light"])
       inside = await p.evaluate(() => Boolean(document.activeElement?.closest(".chat-bot-bubble")));
     }
     equal(inside, true, "a Tab stop inside the bubble");
-    const [ring, link] = await p.evaluate(() => {
-      const probe = document.createElement("i");
-      probe.style.color = "var(--color-chat-bot-link)";
-      document.body.append(probe);
-      const colour = getComputedStyle(probe).color;
-      probe.remove();
-      return [getComputedStyle(document.activeElement).outlineColor, colour];
-    });
-    equal(ring, link, "the ring colour and the bubble's link colour");
+    const [hand] = await tonesOf(p, ["hand"]);
+    equal(await p.evaluate(() => getComputedStyle(document.activeElement).outlineColor), hand, "the ring colour and the hand colour");
   });
 
 for (const look of ["dark", "light"])
@@ -3325,17 +3331,15 @@ it("Home screen: in a browser tab there is no home-screen flag and no strip", PH
   equal([await p.evaluate(() => document.documentElement.hasAttribute("data-standalone")), (await stripOf(p))?.display ?? "none"], [false, "none"], "flag and strip");
 });
 
-for (const [look, iris, alba] of [
-  ["dark", "rgb(95, 207, 196)", "rgb(183, 156, 255)"],
-  ["light", "rgb(13, 107, 99)", "rgb(106, 63, 192)"],
-])
-  it("Sidebar in the " + look + " look: each pinned bot's avatar shows its palette colour", { ...MAC, colorScheme: look }, async (p) => {
+for (const look of ["dark", "light"])
+  it("Sidebar in the " + look + " look: no bot has a colour of its own; every pinned bot's tile is the same quiet ink", { ...MAC, colorScheme: look }, async (p) => {
     await open(p, "/queue");
-    const colour = (id) => T(p, "pinned-bot").and(p.locator(`[data-id="${id}"]`)).locator('span[aria-hidden="true"]').first().evaluate((el) => getComputedStyle(el).color);
-    equal([await colour("iris"), await colour("alba")], [iris, alba], "avatar colours");
+    const [quiet] = await tonesOf(p, ["ink-2"]);
+    const colour = (id) => T(p, "pinned-bot").and(p.locator(`[data-id="${id}"]`)).locator("span[data-avatar]").first().evaluate((el) => getComputedStyle(el).color);
+    equal([await colour("iris"), await colour("alba")], [quiet, quiet], "tile colours");
   });
 
-const AVATAR = 'span[aria-hidden="true"].rounded-full';
+const AVATAR = "span[data-avatar]";
 const AVATAR_SIZES = { 18: "xs", 22: "sm", 28: "md", 36: "lg", 46: "xl" };
 const AVATAR_ROUTES = ["/chat/dr-kivo", "/lanes/l-sea", "/lanes/l-set", "/chat/iris"];
 

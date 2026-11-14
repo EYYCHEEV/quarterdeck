@@ -1,7 +1,7 @@
 import { countViewTransitions, motionContext, runningAnimations, settle, viewTransitionCalls } from "./tools/motion-harness.mjs";
 
-export const QUICK = 100;
-export const STANDARD = 200;
+export const QUICK = 80;
+export const STANDARD = 160;
 export const SCREEN = 240;
 
 const SPEEDS = [QUICK, STANDARD, SCREEN];
