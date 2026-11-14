@@ -6352,6 +6352,21 @@ for (const [status, error, words] of [
     equal([asked.posts.length, new Set(asked.posts.map((body) => body.clientId)).size, await T(p, "chat-input").inputValue()], [error === "mail" ? 4 : 2, 1, ALBA_1_LINE + "\nNext thought."], "POSTs, one clientId, the box left as it was");
   }, new RegExp(String(status)));
 
+it("Server Chat on the Mac: with files listed and no quote listed, Talk to puts the card line in the box and the file he attached stays in the draft", MAC, async (p) => {
+  await serverBuildChat(p, { list: "list-added.json", rows: { chats: chatPayload("rows.json"), fileLimits: { fileBytes: 10485760, messageBytes: 26214400, count: 5 } }, shape: (thread) => ({ ...thread, features: ["files"] }) });
+  await serverCardReads(p);
+  await open(p, "/queue/alba-1");
+  await talkTo(p, MAC);
+  await p.waitForURL("**/chat/alba");
+  equal(await draftReads(p, ALBA_1_LINE + "\n"), ALBA_1_LINE + "\n", "the box after the first Talk to");
+  await T(p, "pick-files").setInputFiles([{ name: "notes.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n") }]);
+  await T(p, "draft-file").waitFor();
+  await p.goBack();
+  await talkTo(p, MAC);
+  await p.waitForURL("**/chat/alba");
+  equal([await draftReads(p, ALBA_1_LINE + "\n"), await T(p, "draft-file").count()], [ALBA_1_LINE + "\n", 1], "the box and the files in the draft after the second Talk to");
+});
+
 it("Server Chat: a failed send among good ones keeps its row, words and Try Again where it was, the next send turns Sent in its own row below it, and Try Again later lands as its own row", MAC, async (p) => {
   await p.clock.install({ time: new Date("2026-11-06T06:00:00Z") });
   const asked = await serverBuildChat(p, { post: (route, body, n) => (n <= 3 ? chatReply(route, 502, { error: "mail" }) : chatReply(route, 200, chatSent(body, n - 3))) });
