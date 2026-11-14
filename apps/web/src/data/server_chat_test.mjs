@@ -343,7 +343,7 @@ test("a 200 answer that is nested is not confirmed, the thread read finds the cl
   assert.equal(h.requests(from).filter((one) => one === POST).length, 1);
 });
 
-test("a send that is not confirmed and not found is read again at once and five seconds later, sent once more with the same clientId, then throws; the next try sends the same clientId", async () => {
+test("a send that is not confirmed and not found is read again at once and after each pause, sent a second time five seconds after the first failure and a third time fifteen seconds after the second, all with the same clientId, then throws; the next try sends the same clientId", async () => {
   let lost = true;
   const post = (body, init, server) => (lost ? new Response("", { status: 503 }) : store(body, server));
   const h = serve(lib, { post });
@@ -351,16 +351,77 @@ test("a send that is not confirmed and not found is read again at once and five 
   await h.source.chat.openThread("steward");
   const from = h.calls.length;
   const first = watchSend(h, h.source.chat.send("steward", { text: "hello there", clientId: "client-3" }));
-  await pass(h, 10_000);
-  assert.equal(first.error?.name, "NotConfirmed");
-  assert.deepEqual(h.requests(from), [TOKEN, POST, THREAD("steward"), THREAD("steward"), TOKEN, POST, THREAD("steward")]);
-  assert.equal(h.calls[from + 3].at - h.calls[from + 2].at, 5_000);
+  await pass(h, 19_000);
+  assert.equal(first.done, false, "still waiting out the fifteen seconds after the second failure");
   assert.deepEqual(POSTS(h, from), ["client-3", "client-3"]);
+  await pass(h, 2_000);
+  assert.equal(first.error?.name, "NotConfirmed");
+  assert.deepEqual(h.requests(from), [TOKEN, POST, THREAD("steward"), THREAD("steward"), TOKEN, POST, THREAD("steward"), THREAD("steward"), TOKEN, POST, THREAD("steward")]);
+  assert.equal(h.calls[from + 3].at - h.calls[from + 2].at, 5_000);
+  assert.equal(h.calls[from + 7].at - h.calls[from + 6].at, 15_000);
+  assert.deepEqual(POSTS(h, from), ["client-3", "client-3", "client-3"]);
   lost = false;
   const again = h.calls.length;
   const message = await h.source.chat.send("steward", { text: "hello there", clientId: "client-3" });
   assert.equal(message.clientId, "client-3");
   assert.deepEqual(POSTS(h, again), ["client-3"]);
+});
+
+test("a send that is not confirmed twice lands on its third POST, twenty seconds after the first, with one row and the same clientId on all three", async () => {
+  let lost = 2;
+  const post = (body, init, server) => {
+    if (lost === 0) return store(body, server);
+    lost -= 1;
+    return new Response("", { status: 503 });
+  };
+  const h = serve(lib, { post });
+  await h.boot();
+  await h.source.chat.openThread("steward");
+  const from = h.calls.length;
+  const state = watchSend(h, h.source.chat.send("steward", { text: "third time", clientId: "client-365a" }));
+  await pass(h, 19_000);
+  assert.equal(state.done, false, "still waiting out the fifteen seconds after the second failure");
+  await pass(h, 2_000);
+  assert.equal(state.value?.clientId, "client-365a");
+  assert.deepEqual(h.requests(from), [TOKEN, POST, THREAD("steward"), THREAD("steward"), TOKEN, POST, THREAD("steward"), THREAD("steward"), TOKEN, POST]);
+  assert.deepEqual(POSTS(h, from), ["client-365a", "client-365a", "client-365a"]);
+  assert.equal(h.threads.get("steward").filter((one) => one.clientId === "client-365a").length, 1);
+  settledNear(state, 20_000);
+});
+
+test("the third try goes out while the tab is hidden, as the second does", async () => {
+  let lost = 2;
+  const post = (body, init, server) => {
+    if (lost === 0) return store(body, server);
+    lost -= 1;
+    return new Response("", { status: 503 });
+  };
+  const h = serve(lib, { post });
+  await h.boot();
+  await h.source.chat.openThread("steward");
+  const from = h.calls.length;
+  h.hide();
+  const state = watchSend(h, h.source.chat.send("steward", { text: "sent hidden", clientId: "client-365b" }));
+  await pass(h, 21_000);
+  assert.equal(state.value?.clientId, "client-365b");
+  assert.deepEqual(POSTS(h, from), ["client-365b", "client-365b", "client-365b"]);
+});
+
+test("when the session ends during the fifteen second pause, the third try posts nothing and the send says sign in again", async () => {
+  let end = false;
+  const h = serve(lib, { post: () => new Response("", { status: 503 }), read: (path) => (end && path.startsWith("/captain/api/chat?") ? json({ error: "session" }, 401) : null) });
+  await h.boot();
+  await h.source.chat.openThread("steward");
+  const from = h.calls.length;
+  const state = watchSend(h, h.source.chat.send("steward", { text: "hello", clientId: "client-365c" }));
+  await pass(h, 10_000);
+  assert.equal(state.done, false, "waiting out the fifteen seconds after the second failure");
+  assert.deepEqual(POSTS(h, from), ["client-365c", "client-365c"]);
+  end = true;
+  await assert.rejects(h.source.chat.openThread("iris"), named("SignInRequired"));
+  await pass(h, 15_000);
+  assert.equal(state.error?.name, "SignInRequired");
+  assert.deepEqual(POSTS(h, from), ["client-365c", "client-365c"]);
 });
 
 test("a send whose POST was delivered but whose answer was lost resolves from the thread read", async () => {
@@ -506,18 +567,20 @@ test("a send whose token read fails in the network, as when the phone is offline
   assert.deepEqual(h.chatRequests(from), [THREAD("steward"), POST]);
 });
 
-test("a send whose token reads all fail in the network ends only after its one automatic retry, with the thread checked between and no POST", async () => {
+test("a send whose token reads all fail in the network ends only after its two automatic retries, twenty seconds on, with the thread checked before each and no POST", async () => {
   const { net, h } = offlineServe();
   await h.boot();
   await h.source.chat.openThread("steward");
   const from = h.calls.length;
   net.offline = true;
   const state = watchSend(h, h.source.chat.send("steward", { text: "never out", clientId: "client-off-2" }));
-  await pass(h, 10_000);
+  await pass(h, 19_000);
+  assert.equal(state.done, false, "still waiting out the fifteen seconds after the second failure");
+  await pass(h, 2_000);
   assert.equal(state.error?.name, "Unavailable");
-  assert.ok(state.at >= 5_000, "settled at " + state.at + ", after the 5 s pause");
+  assert.ok(state.at >= 20_000, "settled at " + state.at + ", after the 5 s and the 15 s pause");
   assert.deepEqual(POSTS(h, from), []);
-  assert.deepEqual(h.chatRequests(from), [THREAD("steward")]);
+  assert.deepEqual(h.chatRequests(from), [THREAD("steward"), THREAD("steward")]);
 });
 
 test("a send whose token read is refused with 403 ends at once as sign in again, with no retry and no POST", async () => {
@@ -638,16 +701,18 @@ test("a 502 mail refusal waits five seconds, reads again, sends once more with t
   assert.equal(watcher.seen.at(-1).messages.filter((one) => one.clientId === "client-12").length, 1);
 });
 
-test("a second 502 after the one retry refuses with Not Delivered, with two POSTs in all", async () => {
+test("a third 502 after the two retries refuses with Not Delivered, with three POSTs in all", async () => {
   const h = serve(lib, { post: () => json({ error: "mail" }, 502) });
   await h.boot();
   await h.source.chat.openThread("steward");
   const from = h.calls.length;
   const state = watchSend(h, h.source.chat.send("steward", { text: "hello", clientId: "client-13" }));
-  await pass(h, 10_000);
+  await pass(h, 19_000);
+  assert.equal(state.done, false, "still waiting out the fifteen seconds after the second refusal");
+  await pass(h, 2_000);
   assert.ok(refusedWith("Not Delivered")(state.error), String(state.error));
-  assert.deepEqual(h.requests(from), [TOKEN, POST, THREAD("steward"), TOKEN, POST]);
-  assert.deepEqual(POSTS(h, from), ["client-13", "client-13"]);
+  assert.deepEqual(h.requests(from), [TOKEN, POST, THREAD("steward"), TOKEN, POST, THREAD("steward"), TOKEN, POST]);
+  assert.deepEqual(POSTS(h, from), ["client-13", "client-13", "client-13"]);
 });
 
 test("a POST aborted at twenty seconds and answered on the retry resolves as sent", async () => {
