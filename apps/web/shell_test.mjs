@@ -5843,15 +5843,22 @@ it("Server Chat: a message of 20,000 characters sends whole, and one too long fo
   equal([asked.posts.length, asked.posts[0].text.length, await line.count(), await T(p, "chat-input").inputValue()], [1, 20_000, 0, ""], "POSTs, the text sent, the words, the box");
 });
 
-it("Server Chat: a message of 20,000 characters with no space in it sends whole, and its row shows within five seconds", MAC, async (p) => {
+it("Server Chat on a phone: a message of 20,000 characters with no space in it sends whole, its row shows within five seconds, and the word wraps inside the bubble with no sideways scroll", PHONE, async (p) => {
   const asked = await serverBuildChat(p);
   await chatOpened(p);
   await T(p, "chat-input").fill("x".repeat(20_000));
   const from = Date.now();
-  await T(p, "chat-send").click();
-  await sendSettles(p.locator('[data-message-id="iris-m31"]'));
+  await T(p, "chat-send").tap();
+  const row = p.locator('[data-message-id="iris-m31"]');
+  await sendSettles(row);
   const took = Date.now() - from;
   equal([asked.posts.length, asked.posts[0]?.text.length, took < 5_000], [1, 20_000, true], "POSTs, the text sent, and the row showed in time (it took " + took + " ms)");
+  const fit = await row.evaluate((el) => {
+    const pane = document.querySelector('[data-testid="chat-scroll"]');
+    const box = el.getBoundingClientRect();
+    return [box.left >= 0 && box.right <= innerWidth, pane.scrollWidth <= pane.clientWidth, document.documentElement.scrollWidth <= innerWidth];
+  });
+  equal(fit, [true, true, true], "the row is inside the window, the list has no sideways scroll, the page has none");
 });
 
 for (const [found, name] of [[true, "the re-read holds the clientId, so his row reads Sent after one POST and no failure line ever shows"], [false, "the re-read does not hold it, so five seconds later the app reads again and sends once more by itself with the same clientId, one message shows, and no failure line ever shows"]])

@@ -1002,6 +1002,19 @@ test("a 20,000 character message is posted whole, also as four-byte characters",
   }
 });
 
+test("a long message is confirmed by its own answer: one POST and no thread read after it", async () => {
+  const h = serve();
+  await h.boot();
+  await h.source.chat.openThread("steward");
+  for (const [n, text] of [["1", "x".repeat(20_000)], ["2", "\u{1F600}".repeat(20_000)], ["3", "x".repeat(114_686)]]) {
+    const from = h.calls.length;
+    const sent = watchSend(h, h.source.chat.send("steward", { text, clientId: "client-whole-" + n }));
+    await pass(h, 2_000);
+    assert.equal(sent.value?.text, text, String(sent.error));
+    assert.deepEqual(h.chatRequests(from), [POST], "the requests for message " + n);
+  }
+});
+
 test("with the app's own cap reached a send and a thread open are refused before any request", async () => {
   const h = serve();
   await h.boot();
