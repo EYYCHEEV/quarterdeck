@@ -6575,6 +6575,63 @@ it("Server Chat on a phone: with cursor listed, a bot reply that arrives one sec
   assert.ok(took <= ROUND_TRIP + 400, "the reply showed " + Math.round(took) + " ms after the refresh, over one round trip and 400 ms");
 });
 
+const SEND_ROUND = 300;
+for (const flight of [false, true])
+  it("Server Chat timing, numbers only: the time from the Send press to the POST and to the Sent mark with each answer " + SEND_ROUND + " ms away, " + (flight ? "with a thread read in flight" : "with nothing else in flight"), MAC, async (p) => {
+    const REPLY = { id: "iris-reply", from: "bot", text: "A reply while he sends.", at: "2026-11-06T00:35:00-05:00", refs: [] };
+    let arrived = false;
+    await serverBuildChat(p, {
+      rows: () => chatPayload("rows.json").map((row) => (row.bot.id === "iris" && arrived ? { ...row, last: REPLY.id, at: REPLY.at, preview: REPLY.text } : row)),
+      "iris": (messages) => (arrived ? [...messages, REPLY] : messages),
+      shape: (body) => ({ ...body, features: ["cursor"] }),
+    });
+    await p.addInitScript(() => {
+      const Quiet = window.EventSource;
+      window.EventSource = class extends Quiet {
+        constructor(...args) {
+          super(...args);
+          window.qdStream = this;
+        }
+      };
+      const timing = { calls: [] };
+      window.qdTiming = timing;
+      addEventListener("click", (event) => {
+        if (event.target instanceof Element && event.target.closest('[data-testid="chat-send"]')) timing.press = performance.now();
+      }, true);
+      const plain = window.fetch;
+      window.fetch = (input, init) => {
+        const url = new URL(typeof input === "string" ? input : input.url, location.href);
+        timing.calls.push([init?.method ?? "GET", url.pathname + url.search, performance.now()]);
+        return plain(input, init);
+      };
+      new MutationObserver(() => {
+        if (timing.sent === undefined && document.querySelector('[data-message-id="iris-m31"]')) timing.sent = performance.now();
+      }).observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-message-id"] });
+    });
+    await p.route((url) => url.pathname.startsWith("/captain/"), async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, SEND_ROUND));
+      await route.fallback();
+    });
+    await chatOpened(p);
+    await T(p, "chat-input").fill("Please send the sheet.");
+    if (flight) {
+      arrived = true;
+      const reading = p.waitForRequest((request) => request.method() === "GET" && new URL(request.url()).pathname === "/captain/api/chat", { timeout: 15_000 });
+      await p.evaluate(() => window.qdStream.dispatchEvent(new MessageEvent("refresh", { data: '{"cards":false,"mail":false,"chats":true}' })));
+      await reading;
+    }
+    await T(p, "chat-send").click();
+    await sendSettles(p.locator('[data-message-id="iris-m31"]'));
+    const timing = await p.evaluate(() => window.qdTiming);
+    const after = timing.calls.filter(([, , at]) => at >= timing.press);
+    const post = after.find(([method, path]) => method === "POST" && path === "/captain/api/chat");
+    equal([typeof timing.press, typeof timing.sent, post !== undefined], ["number", "number", true], "the press, the Sent mark and the POST were all timed");
+    console.log(
+      "info Server Chat timing, each answer " + SEND_ROUND + " ms away, " + (flight ? "a thread read in flight" : "nothing else in flight") + ": the POST started " + Math.round(post[2] - timing.press) + " ms after the Send press and the Sent mark showed " + Math.round(timing.sent - timing.press) + " ms after it; requests after the press: " +
+        after.map(([method, path, at]) => method + " " + path + " at " + Math.round(at - timing.press)).join(", "),
+    );
+  });
+
 it("Server Chat: leaving the chat while a send is out and coming back shows the same Sending row, and it turns Sent once when the answer lands", MAC, async (p) => {
   const { promise: held, resolve: release } = Promise.withResolvers();
   const asked = await serverBuildChat(p, {
