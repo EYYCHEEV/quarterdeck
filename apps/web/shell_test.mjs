@@ -5118,7 +5118,10 @@ for (const [door, what] of SEND_DOORS) {
     const server = await answerServer(p, door);
     await answerReady(p);
     server.lists = "down";
+    const refused = p.waitForResponse((response) => new URL(response.url()).pathname === "/captain/cards" && response.status() === 503);
     await p.clock.runFor(53_000);
+    await (await refused).finished();
+    await p.waitForTimeout(300);
     server.lists = "hold-one";
     const asked = p.waitForRequest((request) => new URL(request.url()).pathname === "/captain/cards");
     await sendPick(p, door);
@@ -5130,6 +5133,8 @@ for (const [door, what] of SEND_DOORS) {
     const answered = p.waitForResponse((response) => new URL(response.url()).pathname === "/captain/cards" && response.status() === 200);
     await releaseHeld(server);
     await (await answered).finished();
+    await p.waitForTimeout(300);
+    equal([await hidden.count(), await T(p, "task-card").count(), server.posts.length], [1, 0, 0], "after the held token read answers: the hidden line, the card, and posts");
     server.lists = "open";
     await hidden.getByRole("button", { name: "Retry", exact: true }).tap();
     await T(p, "option").nth(2).waitFor();
