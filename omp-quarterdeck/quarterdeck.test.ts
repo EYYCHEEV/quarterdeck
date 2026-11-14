@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test";
-import { chmod, copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import { chmod, copyFile, mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -157,9 +157,13 @@ class FakePi implements ExtensionApi {
 
 type StandinResponse = {
   exitCode?: number;
+  holdAfterMs?: number;
   holdMs?: number;
+  ignoreTerm?: boolean;
   messages?: unknown[];
+  raw?: string;
   stderr?: string;
+  trickle?: boolean;
 };
 
 type Harness = {
@@ -228,12 +232,14 @@ function install(
   createQuarterdeckExtension({ config: harness.config, retry, reconcileIntervalMs })(harness.pi);
 }
 
-async function readState(harness: Harness) {
+type StandinState = {
+  calls: number;
+  invocations: Array<{ argv: string[]; at: number; pid: number }>;
+};
+
+async function readState(harness: Harness): Promise<StandinState> {
   try {
-    return JSON.parse(await readFile(harness.statePath, "utf8")) as {
-      calls: number;
-      invocations: Array<{ argv: string[]; at: number }>;
-    };
+    return JSON.parse(await readFile(harness.statePath, "utf8")) as StandinState;
   } catch (error) {
     if (hasErrno(error, "ENOENT")) return { calls: 0, invocations: [] };
     throw error;
@@ -427,35 +433,6 @@ describe("Quarterdeck OMP wake extension", () => {
     } finally {
       if (previousConfig === undefined) delete process.env.QUARTERDECK_CONFIG;
       else process.env.QUARTERDECK_CONFIG = previousConfig;
-    }
-  });
-
-  test("refuses to start when the configured client file is missing", async () => {
-    const harness = await makeHarness([]);
-    await rm(harness.scenarioPath);
-    install(harness);
-
-    await expect(harness.pi.emit("session_start")).rejects.toThrow("client configuration is invalid");
-    expect((await readState(harness)).calls).toBe(0);
-    expect(await fileExists(join(harness.config.cursorRoot, "bot-a"))).toBe(false);
-  });
-
-  test("refuses a client config without a valid bot instead of using a process fallback", async () => {
-    const harness = await makeHarness([]);
-    const scenario = JSON.parse(await readFile(harness.scenarioPath, "utf8")) as Record<string, unknown>;
-    scenario.adapter = {};
-    await writeFile(harness.scenarioPath, JSON.stringify(scenario), { mode: 0o600 });
-    const previousBot = process.env.QUARTERDECK_BOT;
-    process.env.QUARTERDECK_BOT = "bot-b";
-    install(harness);
-
-    try {
-      await expect(harness.pi.emit("session_start")).rejects.toThrow("has no bot identity");
-      expect((await readState(harness)).calls).toBe(0);
-      expect(await fileExists(join(harness.config.cursorRoot, "bot-b"))).toBe(false);
-    } finally {
-      if (previousBot === undefined) delete process.env.QUARTERDECK_BOT;
-      else process.env.QUARTERDECK_BOT = previousBot;
     }
   });
 
@@ -741,8 +718,10 @@ describe("Quarterdeck OMP wake extension", () => {
     await waitFor(async () => (await readState(harness)).calls >= 3);
 
     const state = await readState(harness);
-    expect(state.invocations[1].at - state.invocations[0].at).toBeGreaterThanOrEqual(45);
-    expect(state.invocations[2].at - state.invocations[1].at).toBeGreaterThanOrEqual(65);
+    const timeouts = state.invocations.slice(0, 3).map((call) => call.argv[call.argv.indexOf("--timeout") + 1]);
+    expect(timeouts).toEqual(["0", "300", "0"]);
+    expect(state.invocations[2].at - state.invocations[1].at).toBeGreaterThanOrEqual(45);
+    expect(state.invocations.filter((call) => call.at - state.invocations[0].at < 45).length).toBeLessThanOrEqual(2);
     await waitFor(() => harness.pi.sent.length === 1);
   });
 
@@ -1174,7 +1153,7 @@ describe("118g capped id-only pending state", () => {
     expect([...observed.announced.values()].every((count) => count === 1)).toBe(true);
   });
 
-  test("64 retained 1000-message batches keep 1000 ids and polling later drains every dropped id", async () => {
+  test("64 retained 1000-message batches keep 1000 ids and polling later drains the dropped ids 100 at a time", async () => {
     const messages = Array.from({ length: 64_000 }, (_, id) => mail(`118g-retained-${String(id).padStart(5, "0")}`));
     const harness = await makeHarness([{ messages }]);
     await useCursorServer(harness);
@@ -1193,29 +1172,792 @@ describe("118g capped id-only pending state", () => {
     await clock.advance(0);
     await waitFor(() => fileExists(cursorPath));
     await waitFor(() => successTimers(clock) >= 1);
-    for (let batch = 1; batch < 64; batch += 1) {
-      let timers = successTimers(clock);
-      await clock.advance(250);
-      await waitFor(() => successTimers(clock) > timers);
-      timers = successTimers(clock);
-      await clock.advance(120_000);
-      const expected = `118g-retained-${String((batch + 1) * 1000 - 1).padStart(5, "0")}`;
-      await waitFor(async () => {
-        const actual = (await readFile(cursorPath, "utf8")).trim();
-        if (actual !== expected && harness.pi.sent.length > batch + 1) {
-          throw new Error(`retained cursor advanced unexpectedly: batch=${batch} expected=${expected} actual=${actual} notices=${harness.pi.sent.length}`);
-        }
-        return actual === expected;
-      }).catch(async (error) => {
-        throw new Error(`retained cursor check: batch=${batch} expected=${expected} actual=${(await readFile(cursorPath, "utf8")).trim()} notices=${harness.pi.sent.length} announced=${observed.announced.size}: ${error}`);
-      });
+    const lastId = "118g-retained-01999";
+    for (let round = 0; round < 25 && (await readFile(cursorPath, "utf8")).trim() !== lastId; round += 1) {
+      const timers = successTimers(clock);
+      await clock.advance(120_250);
       await waitFor(() => successTimers(clock) > timers);
     }
-    expect(harness.pi.sent).toHaveLength(64);
-    expect(harness.pi.sent.every((entry) => entry.message.content === "Quarterdeck: 1000 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.")).toBe(true);
+    expect((await readFile(cursorPath, "utf8")).trim()).toBe(lastId);
+    expect(harness.pi.sent.map((entry) => entry.message.content)).toEqual([
+      "Quarterdeck: 1000 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.",
+      ...Array.from({ length: 10 }, () => "Quarterdeck: 100 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack."),
+    ]);
     expect(observed.maximum).toBeLessThanOrEqual(1000);
     expect(observed.metadataRetained).toBe(false);
-    expect(observed.announced.size).toBe(64_000);
+    expect(observed.announced.size).toBe(2000);
     expect([...observed.announced.values()].every((count) => count === 1)).toBe(true);
+  }, 30_000);
+});
+
+const unreadableNotice = "Quarterdeck: mail the wake cannot read; read it with qd_wait, then acknowledge it with qd_ack.";
+const containedLine = "Quarterdeck wake add-on: an internal error was contained.\n";
+const stalledNotice = "Quarterdeck: the wake has not reached mail for 30 minutes; check with qd_wait.";
+const pageBytesLimit = 192 * 1024;
+const hostFaults: unknown[] = [];
+const recordHostFault = (error: unknown) => {
+  hostFaults.push(error);
+};
+
+function newMail(count: number) {
+  return `Quarterdeck: ${count} new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.`;
+}
+
+function noticeTexts(harness: Harness) {
+  return harness.pi.sent.map((entry) => entry.message.content);
+}
+
+function noticeCounts(harness: Harness) {
+  return harness.pi.sent.map((entry) => Number(/^Quarterdeck: (\d+) /.exec(entry.message.content)?.[1] ?? Number.NaN));
+}
+
+function afterArguments(state: StandinState) {
+  return state.invocations.flatMap((call) => {
+    const index = call.argv.indexOf("--after");
+    return index >= 0 ? [call.argv[index + 1]] : [];
+  });
+}
+
+function reconcileCalls(state: StandinState) {
+  return state.invocations.filter((call) => call.argv[call.argv.indexOf("--timeout") + 1] === "0");
+}
+
+async function patchScenario(harness: Harness, patch: Record<string, unknown>) {
+  const scenario = JSON.parse(await readFile(harness.scenarioPath, "utf8")) as Record<string, unknown>;
+  const next = `${harness.scenarioPath}.next`;
+  await writeFile(next, JSON.stringify({ ...scenario, ...patch }), { mode: 0o600 });
+  await rename(next, harness.scenarioPath);
+}
+
+async function readCursor(harness: Harness) {
+  try {
+    return (await readFile(join(harness.config.cursorRoot, harness.bot, "wake.cursor"), "utf8")).trim();
+  } catch (error) {
+    if (hasErrno(error, "ENOENT")) return undefined;
+    throw error;
+  }
+}
+
+async function settle(harness: Harness, clock: FakeContext) {
+  let seen = "";
+  let since = performance.now();
+  const deadline = since + 5_000;
+  while (performance.now() < deadline) {
+    const current = `${(await readState(harness)).calls}:${clock.scheduledDelays.length}:${harness.pi.sent.length}`;
+    if (current !== seen) {
+      seen = current;
+      since = performance.now();
+    } else if (performance.now() - since >= 150) {
+      return;
+    }
+    await Bun.sleep(10);
+  }
+}
+
+async function pollRound(harness: Harness, clock: FakeContext, advanceMs: number) {
+  const before = (await readState(harness)).calls;
+  await clock.advance(advanceMs);
+  await waitFor(async () => (await readState(harness)).calls > before, 5_000).catch((error) => {
+    expect(hostFaults.map(String)).toEqual([]);
+    throw error;
+  });
+  await settle(harness, clock);
+  expect(hostFaults.map(String)).toEqual([]);
+}
+
+async function pageAll(harness: Harness, clock: FakeContext, lastId: string, limit: number) {
+  await harness.pi.emit("session_start");
+  await pollRound(harness, clock, 0);
+  const cursors = [await readCursor(harness)];
+  for (let rounds = 0; rounds < limit && cursors.at(-1) !== lastId; rounds += 1) {
+    await pollRound(harness, clock, 120_250);
+    cursors.push(await readCursor(harness));
+  }
+  return cursors;
+}
+
+function expectCursorsFollowPages(cursors: Array<string | undefined>, counts: number[], idAt: (index: number) => string) {
+  let delivered = 0;
+  expect(cursors).toEqual(counts.map((count) => idAt((delivered += count) - 1)));
+}
+
+async function expectChildrenGone(harness: Harness) {
+  await harness.pi.shutdown();
+  for (const call of (await readState(harness)).invocations) await waitFor(() => processGone(call.pid), 4_000);
+}
+
+function recordStderr() {
+  const lines: string[] = [];
+  const spy = spyOn(process.stderr, "write").mockImplementation((chunk: string | Uint8Array) => {
+    lines.push(String(chunk));
+    return true;
+  });
+  clockRestores.push(() => spy.mockRestore());
+  return lines;
+}
+
+async function recoverAfterUnreadable(poison: StandinResponse) {
+  const harness = await makeHarness([
+    { messages: [] },
+    poison,
+    poison,
+    { messages: [mail("fine-1"), mail("fine-2")] },
+    { holdMs: 10_000 },
+  ]);
+  const clock = useClock(harness);
+  install(harness, { initialMs: 40, maximumMs: 80 }, 86_400_000);
+  await harness.pi.emit("session_start");
+  await pollRound(harness, clock, 0);
+  expect(noticeTexts(harness)).toEqual([unreadableNotice]);
+  expect(await readCursor(harness)).toBeUndefined();
+  await pollRound(harness, clock, 100);
+  expect(noticeTexts(harness)).toEqual([unreadableNotice]);
+  expect(await readCursor(harness)).toBeUndefined();
+  await pollRound(harness, clock, 100);
+  await clock.advance(120_000);
+  await waitFor(async () => (await readCursor(harness)) === "fine-2");
+  expect(noticeTexts(harness)).toEqual([unreadableNotice, newMail(2)]);
+  expect(hostFaults.map(String)).toEqual([]);
+  await expectChildrenGone(harness);
+}
+
+describe("0.1.3 the wake add-on never ends the host", () => {
+  beforeEach(() => {
+    hostFaults.length = 0;
+    process.on("unhandledRejection", recordHostFault);
+    process.on("uncaughtException", recordHostFault);
+  });
+
+  afterEach(() => {
+    process.off("unhandledRejection", recordHostFault);
+    process.off("uncaughtException", recordHostFault);
+  });
+
+  test("case 1: over 256 KiB of valid mail is read in pages of at most 192 KiB and the cursor reaches the last id", async () => {
+    const mailbox = Array.from({ length: 130 }, (_, index) => mail(`big-${String(index).padStart(5, "0")}`, { body: "b".repeat(3_000) }));
+    const lineBytes = Buffer.byteLength(`${JSON.stringify(mailbox[0])}\n`);
+    expect(lineBytes * mailbox.length).toBeGreaterThan(256 * 1024);
+    const harness = await makeHarness([]);
+    await patchScenario(harness, { mailbox });
+    const clock = useClock(harness);
+    install(harness, { initialMs: 40, maximumMs: 80 }, 86_400_000);
+    const cursors = await pageAll(harness, clock, "big-00129", 6);
+    const counts = noticeCounts(harness);
+    const perPage = Math.floor(pageBytesLimit / lineBytes);
+    expect(counts.reduce((total, count) => total + count, 0)).toBe(130);
+    expect(counts.slice(0, -1).every((count) => count === perPage)).toBe(true);
+    expect(counts.at(-1)).toBeLessThanOrEqual(perPage);
+    expectCursorsFollowPages(cursors, counts, (index) => `big-${String(index).padStart(5, "0")}`);
+    expect(cursors.at(-1)).toBe("big-00129");
+    await expectChildrenGone(harness);
+  }, 30_000);
+
+  test("case 2: one line over 64 KiB with no newline gives one count-only notice, keeps polling and recovers", async () => {
+    await recoverAfterUnreadable({ raw: "x".repeat(100 * 1024), holdAfterMs: 3_000 });
+  }, 30_000);
+
+  test("case 3: over 1000 small messages are read 100 at a time and the cursor reaches the last id", async () => {
+    const tinyId = (index: number) => `tiny-${String(index).padStart(5, "0")}`;
+    const mailbox = Array.from({ length: 1_100 }, (_, index) => ({ id: tinyId(index), sender: "s", subject: "s" }));
+    const harness = await makeHarness([]);
+    await patchScenario(harness, { mailbox });
+    const clock = useClock(harness);
+    install(harness, { initialMs: 40, maximumMs: 80 }, 86_400_000);
+    const cursors = await pageAll(harness, clock, tinyId(1_099), 14);
+    const counts = noticeCounts(harness);
+    expect(counts).toEqual(Array.from({ length: 11 }, () => 100));
+    expectCursorsFollowPages(cursors, counts, tinyId);
+    expect(afterArguments(await readState(harness))).toEqual(Array.from({ length: 10 }, (_, page) => tinyId(page * 100 + 99)));
+    await expectChildrenGone(harness);
+  }, 30_000);
+
+  test("case 8: lines just under 64 KiB each make pages of 3 and the cursor reaches the last id", async () => {
+    const edgeId = (index: number) => `edge-${String(index).padStart(5, "0")}`;
+    const mailbox = Array.from({ length: 7 }, (_, index) => mail(edgeId(index), { body: "e".repeat(64_800) }));
+    const lineBytes = Buffer.byteLength(`${JSON.stringify(mailbox[0])}\n`);
+    expect(lineBytes).toBeLessThan(64 * 1024);
+    expect(lineBytes * 3).toBeLessThanOrEqual(pageBytesLimit);
+    expect(lineBytes * 4).toBeGreaterThan(pageBytesLimit);
+    const harness = await makeHarness([]);
+    await patchScenario(harness, { mailbox });
+    const clock = useClock(harness);
+    install(harness, { initialMs: 40, maximumMs: 80 }, 86_400_000);
+    const cursors = await pageAll(harness, clock, edgeId(6), 5);
+    const counts = noticeCounts(harness);
+    expect(counts).toEqual([3, 3, 1]);
+    expectCursorsFollowPages(cursors, counts, edgeId);
+    await expectChildrenGone(harness);
+  }, 30_000);
+
+  for (const [name, line] of [
+    ["invalid JSON", "{not json"],
+    ["an invalid message", JSON.stringify({ id: "bad-1" })],
+  ]) {
+    test(`case 4: ${name} in mid-stream while the child is still alive gives one count-only notice and recovers`, async () => {
+      const raw = `${[JSON.stringify(mail("early-1")), line, JSON.stringify(mail("late-1"))].join("\n")}\n`;
+      await recoverAfterUnreadable({ raw, holdAfterMs: 3_000 });
+    }, 30_000);
+  }
+
+  test("case 5: a non-zero exit stays silent for 30 minutes, then gives one notice an hour, and a success resets the clock", async () => {
+    const failing = [{ exitCode: 2, stderr: "qd failed\n" }];
+    const harness = await makeHarness(failing);
+    const clock = useClock(harness);
+    install(harness, { initialMs: 40, maximumMs: 80 }, 86_400_000);
+    await harness.pi.emit("session_start");
+    await pollRound(harness, clock, 0);
+    for (let step = 0; step < 5; step += 1) await pollRound(harness, clock, 300_000);
+    expect(noticeTexts(harness)).toEqual([]);
+    await patchScenario(harness, { responses: [{ messages: [] }] });
+    await pollRound(harness, clock, 300_000);
+    await patchScenario(harness, { responses: failing });
+    for (let step = 0; step < 5; step += 1) await pollRound(harness, clock, 300_000);
+    expect(noticeTexts(harness)).toEqual([]);
+    await pollRound(harness, clock, 300_000);
+    expect(noticeTexts(harness)).toEqual([stalledNotice]);
+    await pollRound(harness, clock, 300_000);
+    await pollRound(harness, clock, 1_800_000);
+    expect(noticeTexts(harness)).toEqual([stalledNotice]);
+    await pollRound(harness, clock, 1_500_000);
+    expect(noticeTexts(harness)).toEqual([stalledNotice, stalledNotice]);
+    expect(await readCursor(harness)).toBeUndefined();
+    expect(hostFaults.map(String)).toEqual([]);
+    await expectChildrenGone(harness);
+  }, 30_000);
+
+  test("case 6a: an oversized backlog seen by reconcile is read as one page and fresh mail still wakes", async () => {
+    const backlog = Array.from({ length: 130 }, (_, index) => mail(`old-${String(index).padStart(5, "0")}`, { body: "b".repeat(3_000) }));
+    const lineBytes = Buffer.byteLength(`${JSON.stringify(backlog[0])}\n`);
+    const perPage = Math.floor(pageBytesLimit / lineBytes);
+    const harness = await makeHarness([]);
+    await patchScenario(harness, { mailbox: backlog });
+    const botDirectory = join(harness.config.cursorRoot, harness.bot);
+    await mkdir(botDirectory, { recursive: true, mode: 0o700 });
+    await writeFile(join(botDirectory, "wake.cursor"), "old-00129\n", { mode: 0o600 });
+    const clock = useClock(harness);
+    install(harness, { initialMs: 40, maximumMs: 80 }, 86_400_000);
+    await harness.pi.emit("session_start");
+    await pollRound(harness, clock, 0);
+    expect(noticeCounts(harness)).toEqual([perPage]);
+    await patchScenario(harness, { mailbox: [...backlog, mail("fresh-1")] });
+    await settle(harness, clock);
+    await clock.advance(120_250);
+    await waitFor(async () => (await readCursor(harness)) === "fresh-1");
+    expect(noticeCounts(harness)).toEqual([perPage, 1]);
+    expect(reconcileCalls(await readState(harness))).toHaveLength(1);
+    expect(hostFaults.map(String)).toEqual([]);
+    await expectChildrenGone(harness);
+  }, 30_000);
+
+  test("case 6b: a failed reconcile moves its next time forward and never blocks the cursor poll", async () => {
+    const harness = await makeHarness([
+      { raw: "{not json\n", holdAfterMs: 3_000 },
+      { messages: [mail("fresh-1")] },
+      { holdMs: 10_000 },
+    ]);
+    const clock = useClock(harness);
+    install(harness, { initialMs: 100_000, maximumMs: 200_000 }, 86_400_000);
+    await harness.pi.emit("session_start");
+    await pollRound(harness, clock, 0);
+    expect(noticeTexts(harness)).toEqual([newMail(1)]);
+    expect(await readCursor(harness)).toBe("fresh-1");
+    await pollRound(harness, clock, 250);
+    const state = await readState(harness);
+    expect(reconcileCalls(state)).toHaveLength(1);
+    expect(afterArguments(state)).toEqual(["fresh-1"]);
+    expect(hostFaults.map(String)).toEqual([]);
+    await expectChildrenGone(harness);
+  }, 30_000);
+
+  test("case 5b: the unreadable notice interval runs from the notice that was admitted, not from the failed read", async () => {
+    const poison = { raw: "{not json\n", holdAfterMs: 3_000 };
+    const harness = await makeHarness([{ messages: [] }, { messages: [mail("ord-1")] }, poison]);
+    const clock = useClock(harness);
+    install(harness, { initialMs: 40, maximumMs: 80 }, 86_400_000);
+    await harness.pi.emit("session_start");
+    await pollRound(harness, clock, 0);
+    await pollRound(harness, clock, 250);
+    await pollRound(harness, clock, 119_750);
+    expect(noticeTexts(harness)).toEqual([newMail(1), unreadableNotice]);
+    await pollRound(harness, clock, 490_000);
+    expect(noticeTexts(harness)).toEqual([newMail(1), unreadableNotice]);
+    await pollRound(harness, clock, 120_000);
+    expect(noticeTexts(harness)).toEqual([newMail(1), unreadableNotice, unreadableNotice]);
+    const stamps = harness.pi.sent.map((entry) => entry.at);
+    expect(stamps[2] - stamps[1]).toBeGreaterThanOrEqual(600_000);
+    expect(hostFaults.map(String)).toEqual([]);
+    await expectChildrenGone(harness);
+  }, 30_000);
+
+  test("case 5c: the stalled notice interval runs from the notice that was admitted, not from the failed read", async () => {
+    const harness = await makeHarness([{ exitCode: 2, stderr: "qd failed\n" }]);
+    const clock = useClock(harness);
+    install(harness, { initialMs: 40, maximumMs: 80 }, 86_400_000);
+    await harness.pi.emit("session_start");
+    await pollRound(harness, clock, 0);
+    await pollRound(harness, clock, 1_790_000);
+    await harness.pi.emit("mcp_notification", notification([mail("mcp-1")]));
+    expect(noticeTexts(harness)).toEqual([newMail(1)]);
+    await pollRound(harness, clock, 10_000);
+    await pollRound(harness, clock, 110_000);
+    expect(noticeTexts(harness)).toEqual([newMail(1), stalledNotice]);
+    await pollRound(harness, clock, 3_500_000);
+    expect(noticeTexts(harness)).toEqual([newMail(1), stalledNotice]);
+    await pollRound(harness, clock, 200_000);
+    expect(noticeTexts(harness)).toEqual([newMail(1), stalledNotice, stalledNotice]);
+    const stamps = harness.pi.sent.map((entry) => entry.at);
+    expect(stamps[2] - stamps[1]).toBeGreaterThanOrEqual(3_600_000);
+    expect(hostFaults.map(String)).toEqual([]);
+    await expectChildrenGone(harness);
+  }, 30_000);
+
+  test("case 6c: a reconcile whose notice is refused still moves its next time forward and the cursor wait runs in the same round", async () => {
+    const harness = await makeHarness([
+      { messages: [mail("rec-1")] },
+      { messages: [mail("fresh-1")] },
+      { holdMs: 10_000 },
+    ]);
+    harness.pi.receiptOutcomes.push("refused");
+    const clock = useClock(harness);
+    install(harness, { initialMs: 40, maximumMs: 80 }, 86_400_000);
+    await harness.pi.emit("session_start");
+    await pollRound(harness, clock, 0);
+    const first = await readState(harness);
+    expect(first.calls).toBe(2);
+    expect(reconcileCalls(first)).toHaveLength(1);
+    expect(noticeTexts(harness)).toEqual([]);
+    expect(harness.pi.attempts).toHaveLength(1);
+    await pollRound(harness, clock, 120_000);
+    expect(noticeTexts(harness)).toEqual([newMail(2)]);
+    expect(await readCursor(harness)).toBe("fresh-1");
+    expect(reconcileCalls(await readState(harness))).toHaveLength(1);
+    expect(hostFaults.map(String)).toEqual([]);
+    await expectChildrenGone(harness);
+  }, 30_000);
+
+  test("case 9a: an ordinary stop with a throwing clearTimer still stops the wait child, frees the lock and lets the next session poll", async () => {
+    const harness = await makeHarness([{ messages: [] }, { holdMs: 20_000 }]);
+    const clearTimer = harness.pi.context.clearTimer.bind(harness.pi.context);
+    let clearAttempts = 0;
+    harness.pi.context.clearTimer = () => {
+      clearAttempts += 1;
+      throw new Error("clear-timer-detail");
+    };
+    const lines = recordStderr();
+    install(harness, { initialMs: 40, maximumMs: 80 }, 86_400_000);
+    await harness.pi.emit("session_start");
+    await waitFor(async () => (await readState(harness)).calls === 2);
+    const waitPid = (await readState(harness)).invocations[1].pid;
+    await harness.pi.emit("mcp_notification", notification([mail("push-1")]));
+    await harness.pi.emit("mcp_notification", notification([mail("push-2")]));
+    await waitFor(() => harness.pi.context.scheduledDelays.some((delay) => delay > 100_000));
+    try {
+      await expect(harness.pi.emit("session_shutdown")).resolves.toBeUndefined();
+      expect(clearAttempts).toBeGreaterThan(0);
+      await waitFor(() => processGone(waitPid), 4_000);
+    } finally {
+      harness.pi.context.clearTimer = clearTimer;
+      if (!(await processGone(waitPid))) process.kill(waitPid, "SIGKILL");
+    }
+    expect(lines).toEqual([]);
+    expect(hostFaults.map(String)).toEqual([]);
+    await expectNextSessionTakesTheLock(harness);
+  }, 30_000);
+
+  test("case 9b: an ordinary stop with a throwing clearTimer and a poll timer pending still frees the lock and lets the next session poll", async () => {
+    const harness = await makeHarness([{ messages: [] }, { messages: [] }, { holdMs: 20_000 }]);
+    const clearTimer = harness.pi.context.clearTimer.bind(harness.pi.context);
+    let clearAttempts = 0;
+    harness.pi.context.clearTimer = () => {
+      clearAttempts += 1;
+      throw new Error("clear-timer-detail");
+    };
+    const lines = recordStderr();
+    install(harness, { initialMs: 40, maximumMs: 80, successMs: 60_000 }, 86_400_000);
+    await harness.pi.emit("session_start");
+    await waitFor(() => harness.pi.context.scheduledDelays.includes(60_000));
+    try {
+      await expect(harness.pi.emit("session_shutdown")).resolves.toBeUndefined();
+      expect(clearAttempts).toBeGreaterThan(0);
+    } finally {
+      harness.pi.context.clearTimer = clearTimer;
+    }
+    expect(lines).toEqual([]);
+    expect(hostFaults.map(String)).toEqual([]);
+    await expectNextSessionTakesTheLock(harness);
+  }, 30_000);
+
+  const configBreaks: Array<[string, (harness: Harness) => Promise<void>]> = [
+    ["a missing client file", (harness) => rm(harness.scenarioPath)],
+    ["a client file with no bot", (harness) => patchScenario(harness, { adapter: {} })],
+  ];
+  for (const [name, breakConfig] of configBreaks) {
+    test(`case 7: session_start with ${name} resolves, starts no poller, prints one fixed line and works once the file is right`, async () => {
+      const harness = await makeHarness([{ messages: [] }, { messages: [mail("back-1")] }, { holdMs: 10_000 }]);
+      const clock = useClock(harness);
+      const lines = recordStderr();
+      const previousBot = process.env.QUARTERDECK_BOT;
+      process.env.QUARTERDECK_BOT = "bot-b";
+      try {
+        const original = await readFile(harness.scenarioPath, "utf8");
+        await breakConfig(harness);
+        install(harness);
+        await expect(harness.pi.emit("session_start")).resolves.toBeUndefined();
+        expect((await readState(harness)).calls).toBe(0);
+        expect(await fileExists(join(harness.config.cursorRoot, "bot-a"))).toBe(false);
+        expect(await fileExists(join(harness.config.cursorRoot, "bot-b"))).toBe(false);
+        expect(lines).toEqual([containedLine]);
+        await writeFile(harness.scenarioPath, original, { mode: 0o600 });
+        await harness.pi.emit("session_start");
+        await pollRound(harness, clock, 0);
+        expect(noticeTexts(harness)).toEqual([newMail(1)]);
+        expect(await readCursor(harness)).toBe("back-1");
+        expect(lines).toEqual([containedLine]);
+        expect(hostFaults.map(String)).toEqual([]);
+      } finally {
+        if (previousBot === undefined) delete process.env.QUARTERDECK_BOT;
+        else process.env.QUARTERDECK_BOT = previousBot;
+      }
+    }, 30_000);
+  }
+
+  test("a hostile context in session_start and mcp_notification is contained with one fixed line per session", async () => {
+    const harness = await makeHarness([{ holdMs: 10_000 }]);
+    const lines = recordStderr();
+    install(harness);
+    Object.defineProperty(harness.pi.context, "agent", {
+      configurable: true,
+      get() {
+        throw new Error("hostile-agent-detail");
+      },
+    });
+    await expect(harness.pi.emit("session_start")).resolves.toBeUndefined();
+    for (let notices = 0; notices < 3; notices += 1) {
+      await expect(harness.pi.emit("mcp_notification", notification([mail("x")]))).resolves.toBeUndefined();
+    }
+    expect(lines).toEqual([containedLine]);
+    expect(lines.join("")).not.toContain("hostile-agent-detail");
+    expect((await readState(harness)).calls).toBe(0);
+    expect(hostFaults.map(String)).toEqual([]);
+  }, 30_000);
+
+  test("a read that hits a limit cancels the stream, so a child that ignores SIGTERM gets a broken pipe and ends", async () => {
+    const harness = await makeHarness([
+      { messages: [] },
+      { raw: "z".repeat(200 * 1024), ignoreTerm: true, holdAfterMs: 3_000, trickle: true },
+      { holdMs: 10_000 },
+    ]);
+    const pipeClosedPath = join(harness.root, "pipe-closed.txt");
+    await patchScenario(harness, { pipeClosedPath });
+    const clock = useClock(harness);
+    install(harness);
+    await harness.pi.emit("session_start");
+    await pollRound(harness, clock, 0);
+    await waitFor(() => fileExists(pipeClosedPath));
+    const state = await readState(harness);
+    const closedPid = Number((await readFile(pipeClosedPath, "utf8")).trim());
+    expect(closedPid).toBe(state.invocations[1].pid);
+    await waitFor(() => processGone(closedPid));
+    await waitFor(() => noticeTexts(harness).length > 0);
+    expect(noticeTexts(harness)).toEqual([unreadableNotice]);
+    expect(hostFaults.map(String)).toEqual([]);
+    await expectChildrenGone(harness);
+  }, 30_000);
+
+  test("cursor order: pages follow the mailbox order, each after the last id of the one before, every id once", async () => {
+    const descendingId = (index: number) => `desc-${String(999 - index).padStart(3, "0")}`;
+    const mailbox = Array.from({ length: 250 }, (_, index) => ({ id: descendingId(index), sender: "s", subject: "s" }));
+    const harness = await makeHarness([]);
+    await patchScenario(harness, { mailbox });
+    const clock = useClock(harness);
+    install(harness, { initialMs: 40, maximumMs: 80 }, 86_400_000);
+    const cursors = await pageAll(harness, clock, descendingId(249), 5);
+    const counts = noticeCounts(harness);
+    expect(counts).toEqual([100, 100, 50]);
+    expect(cursors).toEqual(["desc-900", "desc-800", "desc-750"]);
+    expectCursorsFollowPages(cursors, counts, descendingId);
+    expect(afterArguments(await readState(harness))).toEqual(["desc-900", "desc-800"]);
+    await expectChildrenGone(harness);
+  }, 30_000);
+
+  test("lock loss: a holder that ends while clearTimer throws leaves the host running and polling stops", async () => {
+    const harness = await makeHarness([{ messages: [] }]);
+    const clock = useClock(harness);
+    const endPath = join(harness.root, "holder-end");
+    const lockHolderPath = await writeHolder(harness, `while (!existsSync(${JSON.stringify(endPath)})) await Bun.sleep(20);`);
+    const clearTimer = harness.pi.context.clearTimer.bind(harness.pi.context);
+    let clearAttempts = 0;
+    harness.pi.context.clearTimer = () => {
+      clearAttempts += 1;
+      throw new Error("clear-timer-detail");
+    };
+    createQuarterdeckExtension({ config: harness.config, retry: { initialMs: 40, maximumMs: 80 }, reconcileIntervalMs: 86_400_000, lockHolderPath })(harness.pi);
+    await harness.pi.emit("session_start");
+    await pollRound(harness, clock, 0);
+    const callsBefore = (await readState(harness)).calls;
+    await writeFile(endPath, "");
+    try {
+      await waitFor(() => clearAttempts > 0);
+      await clock.advance(1_000);
+      await settle(harness, clock);
+      expect((await readState(harness)).calls).toBe(callsBefore);
+      expect(hostFaults.map(String)).toEqual([]);
+    } finally {
+      harness.pi.context.clearTimer = clearTimer;
+    }
+    await expectChildrenGone(harness);
+  }, 30_000);
+
+  test("lock loss: a holder that ends while a wait is in flight stops the wait child and nothing escapes", async () => {
+    const harness = await makeHarness([{ messages: [] }, { holdMs: 20_000 }]);
+    const clock = useClock(harness);
+    const endPath = join(harness.root, "holder-end");
+    const lockHolderPath = await writeHolder(harness, `while (!existsSync(${JSON.stringify(endPath)})) await Bun.sleep(20);`);
+    createQuarterdeckExtension({ config: harness.config, retry: { initialMs: 40, maximumMs: 80 }, reconcileIntervalMs: 86_400_000, lockHolderPath })(harness.pi);
+    await harness.pi.emit("session_start");
+    await pollRound(harness, clock, 0);
+    await waitFor(async () => (await readState(harness)).calls === 2);
+    const waitPid = (await readState(harness)).invocations[1].pid;
+    await writeFile(endPath, "");
+    await waitFor(async () => (await readFile(harness.stoppedPath, "utf8").catch(() => "")).split("\n").includes(String(waitPid)));
+    await waitFor(() => processGone(waitPid), 4_000);
+    await clock.advance(1_000);
+    await settle(harness, clock);
+    expect((await readState(harness)).calls).toBe(2);
+    expect(noticeTexts(harness)).toEqual([]);
+    expect(hostFaults.map(String)).toEqual([]);
+    await expectChildrenGone(harness);
+  }, 30_000);
+
+  test("source gate: quarterdeck.ts has no unawaited promise call and no raw timer (not a type-aware lint)", async () => {
+    const source = await readFile(join(import.meta.dir, "quarterdeck.ts"), "utf8");
+    expect(sourceGateFindings(source)).toEqual([]);
+  });
+
+  const gateFlagged: Array<[string, string]> = [
+    ["a bare call of a promise function", "this.pollOnce();"],
+    ["a raw timer reached by an alias", "const timer = setTimeout;"],
+    ["a raw timer reached as a property of the global object", "globalThis.setTimeout(callback, 1);"],
+    ["a promise stored and never awaited", "const pending = this.reconcile();"],
+    ["a void statement with then and no catch", "void pending.then(callback);"],
+    ["process.nextTick", "process.nextTick(callback);"],
+    ["Bun.write called without await", "Bun.write(path, text);"],
+    ["a cursor store write called without await", "this.state.cursorStore.write(text);"],
+  ];
+  const gateAccepted: Array<[string, string]> = [
+    ["an awaited call", "await this.reconcile();"],
+    ["a void then with both handlers and a catch", ["void exited.then(", "  () => callback(),", "  () => callback(),", ").catch(() => undefined);"].join("\n")],
+    ["an awaited race of two then calls", ["await Promise.race([", "  reader.read().then((result) => result),", "  holder.exited.then((code) => code),", "]);"].join("\n")],
+    ["a synchronous write on the process object", "process.stderr.write(text);"],
+  ];
+  for (const [name, statement] of gateFlagged) {
+    test(`source gate fixture: ${name} is flagged (not a type-aware lint)`, () => {
+      expect(sourceGateFindings(gateFixtureSource(statement))).not.toEqual([]);
+    });
+  }
+  for (const [name, statement] of gateAccepted) {
+    test(`source gate fixture: ${name} passes (not a type-aware lint)`, () => {
+      expect(sourceGateFindings(gateFixtureSource(statement))).toEqual([]);
+    });
+  }
+});
+
+const gateExemptDeclarations = [
+  "setTimeout(callback: () => void, delay: number): unknown;",
+  "clearTimer(handle: unknown): void;",
+];
+const gateAuditedStatement = "const delivery = this.deliveryTail.then(operation);";
+const gateNamedPromiseFunctions = ["deliver", "queueDelivery", "stop", "release"];
+
+function sourceGateFindings(source: string) {
+  const lines = source.split("\n");
+  const promiseFunctions = new Set([
+    ...gateNamedPromiseFunctions,
+    ...[...source.matchAll(/\basync\s+(?:function\s+)?([A-Za-z_$][\w$]*)\s*\(/g)].map((match) => match[1]),
+  ]);
+  const statementAt = (index: number) => {
+    let start = index;
+    while (start > 0 && lines[start - 1].trim() !== "" && !/[;{}]$/.test(lines[start - 1].trimEnd())) start -= 1;
+    let end = index;
+    while (end < lines.length - 1 && !/[;{}]$/.test(lines[end].trimEnd())) end += 1;
+    return lines.slice(start, end + 1).join("\n");
+  };
+  const handled = (statement: string) => /\b(?:await|return)\b|\.catch\(/.test(statement);
+  const findings: string[] = [];
+  lines.forEach((line, index) => {
+    const text = line.trim();
+    for (const match of line.matchAll(/(?<![\w$])(?:setTimeout|setInterval|setImmediate|queueMicrotask|nextTick)(?![\w$])/g)) {
+      if (line.slice(0, match.index).endsWith("context.") || gateExemptDeclarations.includes(text)) continue;
+      findings.push(text);
+    }
+    for (const match of line.matchAll(/(?<![\w$])([A-Za-z_$][\w$]*)\s*\(/g)) {
+      if (!promiseFunctions.has(match[1])) continue;
+      const before = line.slice(0, match.index);
+      const declaration = /^\s*(?:(?:private|public|protected|static|async|readonly|export|function)\s+)*$/.test(before) && /\)\s*(?::\s*[^{;]*)?\{\}?$/.test(line.trimEnd());
+      const receiver = /(?<![\w$.])(?:[A-Za-z_$][\w$]*\??\.)+$/.exec(before)?.[0] ?? "";
+      if (declaration || receiver.startsWith("process.") || handled(statementAt(index))) continue;
+      findings.push(text);
+    }
+    if (/^void\s/.test(text) || line.includes(".then(")) {
+      const statement = statementAt(index);
+      if (!handled(statement) && statement.trim() !== gateAuditedStatement) findings.push(text);
+    }
+  });
+  return findings;
+}
+
+function gateFixtureSource(statement: string) {
+  return [
+    "class Fixture {",
+    "  async pollOnce() {}",
+    "  async reconcile() {}",
+    "  async write(text: string) {}",
+    "  async run() {",
+    ...statement.split("\n").map((line) => `    ${line}`),
+    "  }",
+    "}",
+  ].join("\n");
+}
+
+async function expectNextSessionTakesTheLock(harness: Harness) {
+  await waitFor(async () => (await flockExit(join(harness.config.cursorRoot, harness.bot, "wake-poller.lock"))) === 0, 4_000);
+  await patchScenario(harness, { mailbox: [mail("new-1")] });
+  const next = await makeHarness([], { shared: harness });
+  install(next);
+  await next.pi.emit("session_start");
+  await waitFor(() => next.pi.sent.length === 1);
+  expect(noticeTexts(next)).toEqual([newMail(1)]);
+  await expectChildrenGone(next);
+}
+
+async function writeHolder(harness: Harness, waitStatement: string) {
+  const holderPath = join(harness.root, "test-holder.ts");
+  const source = [`import { existsSync } from "node:fs";`, `process.stdout.write("locked\\n");`, waitStatement, `process.exit(0);`].join("\n");
+  await writeFile(holderPath, source, { mode: 0o600 });
+  return holderPath;
+}
+
+const hostSource = [
+  `import { appendFileSync } from "node:fs";`,
+  `import extension from ${JSON.stringify(join(import.meta.dir, "index.ts"))};`,
+  `const sentPath = process.argv[2];`,
+  `const handlers = new Map();`,
+  `const context = { setTimeout: (callback, delay) => setTimeout(callback, delay), clearTimer: (handle) => clearTimeout(handle) };`,
+  `extension({`,
+  `  on: (name, handler) => handlers.set(name, handler),`,
+  `  sendMessage: (message) => appendFileSync(sentPath, message.content + "\\n"),`,
+  `});`,
+  `const call = (name) => Promise.resolve().then(() => handlers.get(name)?.({}, context)).catch(() => undefined);`,
+  `process.on("SIGTERM", async () => {`,
+  `  await call("session_shutdown");`,
+  `  process.exit(0);`,
+  `});`,
+  `await call("session_start");`,
+  `setInterval(() => undefined, 1000);`,
+].join("\n");
+
+async function runHost(harness: Harness, runMs: number, source = hostSource) {
+  const hostPath = join(harness.root, "host.ts");
+  const sentPath = join(harness.root, "host-sent.txt");
+  await writeFile(hostPath, source, { mode: 0o600 });
+  await writeFile(sentPath, "", { mode: 0o600 });
+  const child = Bun.spawn([realExecPath, hostPath, sentPath], {
+    env: {
+      HOME: process.env.HOME ?? "/",
+      PATH: process.env.PATH ?? "/usr/bin:/bin",
+      QUARTERDECK_CONFIG: harness.scenarioPath,
+      QUARTERDECK_CURSOR_ROOT: harness.config.cursorRoot,
+      QUARTERDECK_QD: harness.config.qdExecutable,
+    },
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const stderr = new Response(child.stderr).text();
+  const outcome = await Promise.race([child.exited.then(() => "exited" as const), Bun.sleep(runMs).then(() => "running" as const)]);
+  const stillRunning = outcome === "running";
+  if (stillRunning) child.kill("SIGTERM");
+  await child.exited;
+  const sent = (await readFile(sentPath, "utf8")).split("\n").filter((line) => line.length > 0);
+  return { stillRunning, stderr: await stderr, sent };
+}
+
+const lossHostSource = (holderPath: string, clearPath: string, throwingClear: boolean) => [
+  `import { appendFileSync } from "node:fs";`,
+  `import { createQuarterdeckExtension } from ${JSON.stringify(join(import.meta.dir, "quarterdeck.ts"))};`,
+  `let shuttingDown = false;`,
+  `const handlers = new Map();`,
+  `const context = {`,
+  `  setTimeout: (callback, delay) => setTimeout(callback, delay),`,
+  `  clearTimer: (handle) => {`,
+  `    if (${throwingClear}) {`,
+  `      appendFileSync(${JSON.stringify(clearPath)}, shuttingDown ? "stop\\n" : "loss\\n");`,
+  `      throw new Error("clear-timer-detail");`,
+  `    }`,
+  `    clearTimeout(handle);`,
+  `  },`,
+  `};`,
+  `createQuarterdeckExtension({`,
+  `  retry: { initialMs: 1000, maximumMs: 2000, successMs: 600000 },`,
+  `  reconcileIntervalMs: 86400000,`,
+  `  lockHolderPath: ${JSON.stringify(holderPath)},`,
+  `})({`,
+  `  on: (name, handler) => handlers.set(name, handler),`,
+  `  sendMessage: () => undefined,`,
+  `});`,
+  `const call = (name) => Promise.resolve().then(() => handlers.get(name)?.({}, context)).catch(() => undefined);`,
+  `process.on("SIGTERM", async () => {`,
+  `  shuttingDown = true;`,
+  `  await call("session_shutdown");`,
+  `  process.exit(0);`,
+  `});`,
+  `await call("session_start");`,
+  `setInterval(() => undefined, 1000);`,
+].join("\n");
+
+describe("0.1.3 the host process survives the add-on", () => {
+  test("host process: over 256 KiB of valid mail leaves the host running and the mail arrives in pages", async () => {
+    const mailbox = Array.from({ length: 130 }, (_, index) => mail(`big-${String(index).padStart(5, "0")}`, { body: "b".repeat(3_000) }));
+    const lineBytes = Buffer.byteLength(`${JSON.stringify(mailbox[0])}\n`);
+    const perPage = Math.floor(pageBytesLimit / lineBytes);
+    expect(lineBytes * mailbox.length).toBeGreaterThan(256 * 1024);
+    const harness = await makeHarness([]);
+    await patchScenario(harness, { mailbox });
+    const result = await runHost(harness, 5_000);
+    expect(result.stillRunning).toBe(true);
+    expect(result.stderr).not.toContain("Quarterdeck wait output is too large");
+    expect(result.stderr).not.toContain("Unhandled");
+    expect(result.sent).toEqual([newMail(perPage)]);
+    expect(afterArguments(await readState(harness))).toContain(`big-${String(perPage - 1).padStart(5, "0")}`);
+  }, 30_000);
+
+  test("host process: invalid JSON mid-stream leaves the host running and the wake keeps working", async () => {
+    const raw = `${[JSON.stringify(mail("early-1")), "{not json", JSON.stringify(mail("late-1"))].join("\n")}\n`;
+    const harness = await makeHarness([{ raw, holdAfterMs: 8_000 }]);
+    const result = await runHost(harness, 5_000);
+    expect(result.stillRunning).toBe(true);
+    expect(result.stderr).not.toContain("Quarterdeck wait returned invalid JSON");
+    expect(result.stderr).not.toContain("Unhandled");
+    expect(result.sent).toEqual([unreadableNotice]);
+  }, 30_000);
+
+  test("host process: a holder that ends while clearTimer throws leaves the host running", async () => {
+    const harness = await makeHarness([{ messages: [] }]);
+    const holderPath = await writeHolder(harness, "await Bun.sleep(1500);");
+    const clearPath = join(harness.root, "host-clear.txt");
+    const result = await runHost(harness, 5_000, lossHostSource(holderPath, clearPath, true));
+    expect(result.stillRunning).toBe(true);
+    expect(result.stderr).not.toContain("clear-timer-detail");
+    expect(result.stderr).not.toContain("Unhandled");
+    expect((await readFile(clearPath, "utf8")).split("\n")).toContain("loss");
+  }, 30_000);
+
+  test("host process: a holder that ends while a wait is in flight leaves the host running and polling stops", async () => {
+    const harness = await makeHarness([{ messages: [] }, { holdMs: 20_000 }]);
+    const holderPath = await writeHolder(harness, "await Bun.sleep(1500);");
+    const result = await runHost(harness, 5_000, lossHostSource(holderPath, join(harness.root, "host-clear.txt"), false));
+    expect(result.stillRunning).toBe(true);
+    expect(result.stderr).not.toContain("Unhandled");
+    expect((await readState(harness)).calls).toBe(2);
   }, 30_000);
 });
