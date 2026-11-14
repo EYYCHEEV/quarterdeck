@@ -366,6 +366,12 @@ class ChatPageLinkTests(unittest.TestCase):
         )
         self.assertEqual(page.inline_styles, 0)
 
+    def test_the_message_box_has_no_length_limit(self):
+        page = (ROOT / "chat.html").read_text(encoding="utf-8")
+
+        self.assertIn('<textarea id="message"', page)
+        self.assertNotIn("maxlength", page)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

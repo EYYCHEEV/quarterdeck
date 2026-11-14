@@ -4,7 +4,9 @@ import io
 import json
 import tempfile
 import time
+import types
 import unittest
+from email.message import Message
 from pathlib import Path
 from unittest import mock
 
@@ -465,6 +467,50 @@ class ServerConfigTests(unittest.TestCase):
         self.assertTrue(owned_server.closed)
         self.assertTrue(updates.stopped)
         self.assertTrue(mailbox.closed)
+
+
+class BodyLimitTests(unittest.TestCase):
+    @staticmethod
+    def framed(length, command="POST", path="/captain/api/chat"):
+        headers = Message()
+        headers["Content-Length"] = str(length)
+        timeouts = []
+        connection = types.SimpleNamespace(settimeout=timeouts.append)
+        return types.SimpleNamespace(
+            headers=headers,
+            connection=connection,
+            rfile=io.BytesIO(b"x" * length),
+            command=command,
+            path=path,
+            timeouts=timeouts,
+        )
+
+    def test_only_a_chat_send_is_read_up_to_128_kib(self):
+        limit = 131072
+        self.assertEqual(len(server.Handler._body(self.framed(limit))), limit)
+        over = self.framed(limit + 1)
+        with self.assertRaises(ValueError):
+            server.Handler._body(over)
+        self.assertEqual((over.rfile.tell(), over.timeouts), (0, []))
+        self.assertEqual((application.CHAT_SEND_BODY_BYTES, application.MAX_BODY_BYTES), (limit, 16384))
+
+    def test_every_other_request_is_still_read_up_to_16_kib(self):
+        others = (
+            ("GET", "/captain/api/chat"),
+            ("PUT", "/captain/api/chat"),
+            ("POST", "/captain/api/chat?bot=bot-a"),
+            ("POST", "/captain/api/chats"),
+            ("POST", "/captain/cards/card-1/comments"),
+        )
+        for command, path in others:
+            with self.subTest(command=command, path=path):
+                self.assertEqual(len(server.Handler._body(self.framed(16384, command, path))), 16384)
+                over = self.framed(16385, command, path)
+                with self.assertRaises(ValueError):
+                    server.Handler._body(over)
+                self.assertEqual(over.rfile.tell(), 0)
+                self.assertEqual(application.body_limit(command, path), 16384)
+        self.assertEqual(application.body_limit("POST", "/captain/api/chat"), 131072)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

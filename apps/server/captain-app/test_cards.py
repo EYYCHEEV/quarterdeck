@@ -384,6 +384,28 @@ class CardInboxTests(unittest.TestCase):
         })
         self.assertIn(("COMMENT: repo-lead-1", "account-user"), checker.calls)
 
+    def test_a_chat_text_of_20000_characters_is_sent_whole_also_as_four_byte_characters(self):
+        mail = FakeMail([
+            message("m2", "bot-a", "CHAT: bot-a", {
+                "qd": "chat/1",
+                "bot": "bot-a",
+                "text": "Ready?",
+            }),
+        ])
+        service = cards.CardService(mail, FixtureChecker())
+        service.refresh()
+
+        for number, text in enumerate(("x" * 4001, "x" * 20000, "\U0001F600" * 20000)):
+            with self.subTest(characters=len(text), first=text[0]):
+                service.send_chat("bot-a", text, f"request-long-{number}")
+                self.assertEqual(json.loads(mail.sent[-1][2])["text"], text)
+        self.assertEqual(len(mail.sent), 3)
+        for text in ("", None, 5):
+            with self.subTest(text=text):
+                with self.assertRaises(cards.CardRefused):
+                    service.send_chat("bot-a", text, "request-empty")
+        self.assertEqual(len(mail.sent), 3)
+
     def test_chat_list_contains_every_fresh_listed_bot(self):
         mail = FakeMail(
             [

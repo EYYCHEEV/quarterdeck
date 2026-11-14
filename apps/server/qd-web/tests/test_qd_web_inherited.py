@@ -301,8 +301,8 @@ class Trickle:
         return len(chunk)
 
 
-def framed(headers, data=b"", step=4096):
-    return types.SimpleNamespace(headers=headers, connection=Connection(), rfile=Trickle(data, step))
+def framed(headers, data=b"", step=4096, command="POST", path="/captain/cards"):
+    return types.SimpleNamespace(headers=headers, connection=Connection(), rfile=Trickle(data, step), command=command, path=path)
 
 
 class BodyFramingTests(unittest.TestCase):
@@ -329,6 +329,31 @@ class BodyFramingTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             server.Handler._body(fake)
         self.assertEqual((fake.rfile.calls, fake.connection.timeouts), (0, []))
+
+    def test_only_a_chat_send_is_read_up_to_128_kib(self):
+        limit = 131072
+        fake = framed(headers_of(("Content-Length", str(limit))), b"x" * limit, path="/captain/api/chat")
+        self.assertEqual(len(server.Handler._body(fake)), limit)
+        fake = framed(headers_of(("Content-Length", str(limit + 1))), b"x" * (limit + 1), path="/captain/api/chat")
+        with self.assertRaises(ValueError):
+            server.Handler._body(fake)
+        self.assertEqual((fake.rfile.calls, fake.connection.timeouts), (0, []))
+        others = (
+            ("GET", "/captain/api/chat"),
+            ("PUT", "/captain/api/chat"),
+            ("POST", "/captain/api/chat/read"),
+            ("POST", "/captain/api/chat?bot=bot-b"),
+            ("POST", "/captain/api/chats"),
+            ("POST", "/captain/cards/card-1/comments"),
+        )
+        for command, path in others:
+            with self.subTest(command=command, path=path):
+                fake = framed(headers_of(("Content-Length", "16385")), b"x" * 16385, command=command, path=path)
+                with self.assertRaises(ValueError):
+                    server.Handler._body(fake)
+                self.assertEqual(fake.rfile.calls, 0)
+                self.assertEqual(application.body_limit(command, path), 16384)
+        self.assertEqual(application.body_limit("POST", "/captain/api/chat"), limit)
 
     def test_every_other_framing_is_refused_before_any_read(self):
         cases = {
