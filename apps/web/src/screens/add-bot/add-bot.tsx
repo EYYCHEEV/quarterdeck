@@ -131,7 +131,7 @@ function Top({ title, sub, waiting, onClose }: { title: string; sub: string | nu
   return (
     <div className="sheet-top flex flex-none items-start gap-s3 px-s4 pb-s1">
       <div className="min-w-0 flex-1" role="status" data-testid={waiting ? "bot-waiting" : undefined}>
-        <h2 className="text-title leading-tight font-strong [overflow-wrap:anywhere]">{title}</h2>
+        <h2 className="text-title font-strong [overflow-wrap:anywhere]">{title}</h2>
         {sub && <p className="mt-s1 text-meta text-ink-2">{sub}</p>}
       </div>
       <IconButton icon="x" label="Close Add bot" onClick={onClose} className="rounded-round bg-control" data-testid="add-bot-close" />

@@ -3,7 +3,7 @@
 .projects-body{padding:var(--spacing-s3) var(--spacing-s6) var(--spacing-s7)}
 .flow-desktop-head header{min-height:76px;padding-left:var(--spacing-s6);padding-right:var(--spacing-s6)}
 .flow-kicker{font-size:var(--text-label);line-height:var(--leading-snug);font-weight:var(--font-weight-strong);letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--color-ink-2);margin-bottom:var(--spacing-s2)}
-.project-intro h1,.lane-title h1,.phone-projects-title{font-size:var(--text-display);font-weight:var(--font-weight-strong);line-height:var(--leading-tight);overflow-wrap:anywhere}
+.project-intro h1,.lane-title h1,.phone-projects-title{font-size:var(--text-display);font-weight:var(--font-weight-strong);line-height:var(--text-display--line-height);overflow-wrap:anywhere}
 .project-intro{padding:var(--spacing-s2) 0 var(--spacing-s5)}
 .project-description{margin-top:var(--spacing-s3);font-size:var(--text-body);line-height:var(--leading-body);color:var(--color-ink-2);max-width:580px}
 .project-meta{display:flex;align-items:center;flex-wrap:wrap;gap:var(--spacing-s2);font-size:var(--text-meta);color:var(--color-ink-2);margin-top:var(--spacing-s4)}

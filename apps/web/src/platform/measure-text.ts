@@ -6,15 +6,28 @@ export default function centreInkAcross(el: HTMLElement) {
   const font = fontWeight + " " + fontSize + " " + fontFamily;
   const text = el.textContent ?? "";
   const key = font + letterSpacing + text;
-  let shift = shifts.get(key);
-  if (shift === undefined) {
+  const measure = () => {
     pen ??= document.createElement("canvas").getContext("2d");
-    if (!pen) return;
+    if (!pen) return undefined;
     pen.font = font;
     pen.letterSpacing = letterSpacing;
     const ink = pen.measureText(text);
-    shift = (ink.width + ink.actualBoundingBoxLeft - ink.actualBoundingBoxRight) / parseFloat(fontSize);
-    shifts.set(key, shift);
+    return (ink.width + ink.actualBoundingBoxLeft - ink.actualBoundingBoxRight) / parseFloat(fontSize);
+  };
+  const place = (shift: number | undefined) => {
+    if (shift !== undefined) el.style.marginLeft = shift + "em";
+  };
+  const kept = shifts.get(key);
+  if (kept !== undefined) {
+    place(kept);
+    return;
   }
-  el.style.marginLeft = shift + "em";
+  place(measure());
+  const settle = () => {
+    const shift = shifts.get(key) ?? measure();
+    if (shift === undefined) return;
+    shifts.set(key, shift);
+    place(shift);
+  };
+  document.fonts.load(font, text).then(settle, settle);
 }

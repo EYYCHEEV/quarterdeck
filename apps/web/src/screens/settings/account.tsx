@@ -73,7 +73,7 @@ export function SignOutConfirm({ onClose, onSignedOut, returnTo }: { onClose: ()
   return (
     <SheetDialog label="Sign out of Quarterdeck?" pop="sign-out-confirm" onClose={onClose} returnTo={returnTo}>
       <div className="sheet-body grid min-h-0 flex-1 content-start gap-s3 overflow-y-auto px-s4 pt-s4">
-        <h2 className="text-title leading-tight font-strong">Sign out of Quarterdeck?</h2>
+        <h2 className="text-title font-strong">Sign out of Quarterdeck?</h2>
         <p className="text-body text-ink-2">Unsent drafts on this device are removed.</p>
         {failed && <ErrorLine>Sign-out did not reach Quarterdeck. Try again.</ErrorLine>}
         <div className="mt-s2 grid grid-cols-2 gap-s3">

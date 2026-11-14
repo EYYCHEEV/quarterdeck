@@ -276,7 +276,7 @@ export function TaskCardScreen({ cardId, pane, auto = false, toList }: { cardId:
         </div>
       )}
       {head}
-      <div className={cx(pane ? "pt-s1" : "px-s4 pt-s1", phone && FLOAT_TOP_PAD)}>
+      <div className={cx(!pane && "px-s4", phone ? FLOAT_TOP_PAD : "pt-s1")}>
         {showReceipt && phone && <DoneLine className="mb-s3">{receipt.text}</DoneLine>}
         {body}
       </div>

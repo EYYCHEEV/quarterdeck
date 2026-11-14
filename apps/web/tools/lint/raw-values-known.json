@@ -20,8 +20,6 @@
   "w-[340px]": "stage 3 (layout): filter pop-up",
   "max-w-[720px]": "stage 3 (layout): reading column and bottom sheet",
   "h-[14px]": "stage 3 (layout): loading shape",
-  "h-[21.6px]": "stage 3 (layout): loading shape",
-  "h-[18.2px]": "stage 3 (layout): loading shape",
   "h-[28px]": "stage 3 (layout): loading shape",
   "w-[64px]": "stage 3 (layout): loading shape and link thumbnail",
   "h-[190px]": "stage 3 (layout): loading shape",

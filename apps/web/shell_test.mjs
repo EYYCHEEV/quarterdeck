@@ -1996,7 +1996,7 @@ it("Mail on the Mac and sideways: a opens Ask for the open thread", MAC, async (
 
 it("Mail in a short Mac window and sideways: after scrolling to the end of the page the reference row stays at the top, and a opens Ask in view", MAC, async (p) => {
   const inView = (locator) => locator.evaluate((el) => el.getBoundingClientRect().top >= 0 && el.getBoundingClientRect().bottom <= window.innerHeight);
-  for (const [width, height] of [[1512, 640], [1133, 744]]) {
+  for (const [width, height] of [[1512, 640], [1133, 640]]) {
     await p.setViewportSize({ width, height });
     await open(p, "/mail/MT-101");
     await T(p, "mail-item").first().waitFor();
@@ -2894,7 +2894,7 @@ it("Frame: the phone menu opens the drawer, Esc closes it and focus returns to M
 });
 
 for (const [where, size, menu] of [
-  ["the Mac", MAC, false],
+  ["the Mac", { viewport: { width: 1512, height: 900 } }, false],
   ["a phone", PHONE, true],
   ["an iPad 1024 wide", { viewport: { width: 1024, height: 768 }, hasTouch: true, isMobile: true }, true],
 ])
@@ -3608,6 +3608,16 @@ it("Floating top: the phone Queue shows the menu toggle at the left, and Search 
   equal(await p.locator("header").count(), 0, "no solid header");
 });
 
+it("Floating top: on a phone the Queue's title and the Task Card's title start below the capsule", PHONE, async (p) => {
+  await queueShown(p);
+  const [actions, title] = [await queueActions(p).boundingBox(), await p.getByRole("heading", { level: 1, name: /^Queue/ }).boundingBox()];
+  equal(title.y >= actions.y + actions.height, true, "the Queue's title starts at " + title.y + ", the capsule ends at " + (actions.y + actions.height));
+  await open(p, "/queue/alba-1");
+  await T(p, "card-title").waitFor();
+  const [capsule, card] = [await p.locator('[data-float="capsule"]').boundingBox(), await T(p, "card-title").boundingBox()];
+  equal(card.y >= capsule.y + capsule.height, true, "the card's title starts at " + card.y + ", the capsule ends at " + (capsule.y + capsule.height));
+});
+
 it("Floating top: the toggle opens the menu, and Esc returns focus to the toggle", PHONE, async (p) => {
   await queueShown(p);
   await T(p, "menu-btn").click();
@@ -4009,7 +4019,7 @@ const motionPage = () => ({
   ignore: mailRefusal,
 });
 const motionCase = (name, size, steps) => it("Motion: " + name, size, (p) => motionPair(p, size, steps, motionPage()));
-const shapesOf = (list) => [...new Set(list.map((one) => one.duration + " " + one.properties.join("+")))].sort();
+const shapesOf = (list) => [...new Set(list.map((one) => one.duration + " " + one.properties.join("+")))].sort((a, b) => parseFloat(a) - parseFloat(b) || a.localeCompare(b));
 
 motionCase("on a phone the leaving screen slides forward and back while the arriving screen fades in where it lands, a first visit never slides a blank, a tap during it lands as it would with Reduce Motion, and a system back does not move", PHONE, async (p, m) => {
   const places = () => Promise.all([T(p, "menu-btn").boundingBox(), T(p, "card-row").first().boundingBox()]);

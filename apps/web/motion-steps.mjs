@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { countViewTransitions, motionContext, runningAnimations, settle, viewTransitionCalls } from "./tools/motion-harness.mjs";
 
 export const QUICK = 80;
@@ -142,15 +144,28 @@ function pixelsApart([a, b]) {
   });
 }
 
+let kept = 0;
+
+function keepPictures(size, moving, still) {
+  const folder = process.env.QD_MOTION_SHOTS;
+  if (!folder) return "";
+  fs.mkdirSync(folder, { recursive: true });
+  const stem = path.join(folder, process.pid + "-" + ++kept + "-" + (size.viewport ? size.viewport.width + "x" + size.viewport.height : "page"));
+  fs.writeFileSync(stem + "-motion.png", moving);
+  fs.writeFileSync(stem + "-reduce.png", still);
+  return "; both pictures are kept as " + stem + "-motion.png and " + stem + "-reduce.png";
+}
+
 export async function motionPair(p, size, steps, extra = {}) {
   const browser = p.context().browser();
   const moving = await motionRun(browser, { size, still: false, steps, ...extra });
   const still = await motionRun(browser, { size, still: true, steps, ...extra });
   same(still.starts, 0, "with Reduce Motion no view transition starts");
   if (moving.picture.equals(still.picture)) return;
+  const where = keepPictures(size, moving.picture, still.picture);
   const page = await browser.newPage();
   try {
-    throw new Error("the end picture with motion differs from the Reduce Motion picture: " + (await page.evaluate(pixelsApart, [moving.picture.toString("base64"), still.picture.toString("base64")])));
+    throw new Error("the end picture with motion differs from the Reduce Motion picture: " + (await page.evaluate(pixelsApart, [moving.picture.toString("base64"), still.picture.toString("base64")])) + where);
   } finally {
     await page.close();
   }

@@ -31,7 +31,7 @@ function Confirm({
   return (
     <SheetDialog label={label} pop={pop} onClose={onCancel} returnTo={returnTo}>
       <div className="sheet-body grid min-h-0 flex-1 content-start gap-s3 overflow-y-auto px-s4 pt-s4">
-        <h2 className="text-title leading-tight font-strong">{title}</h2>
+        <h2 className="text-title font-strong">{title}</h2>
         {children}
         <div className="mt-s2 grid grid-cols-2 gap-s3">
           <Button kind="plain" onClick={onCancel} data-autofocus="" data-testid="confirm-cancel">

@@ -34,10 +34,10 @@ export function LoadingBars({ rows, height, className }: { rows: number; height:
 
 const TITLE_BARS: [string, string?, string?][] = [
   ["w-[88%]", "w-[54%]", "upright:max-wide:hidden"],
-  ["w-[72%]", "w-[38%]", "min-[420px]:hidden"],
-  ["w-[94%]", "w-[40%]", "min-[420px]:max-wide:hidden"],
+  ["w-[72%]"],
+  ["w-[94%]"],
   ["w-[90%]", "w-[46%]", "upright:max-wide:hidden"],
-  ["w-[84%]", "w-[58%]", "upright:max-wide:hidden"],
+  ["w-[84%]", "w-[58%]", "min-[420px]:hidden"],
   ["w-[66%]"],
   ["w-[80%]", "w-[44%]", "upright:max-wide:hidden"],
 ];
@@ -55,19 +55,19 @@ export function RowBars({ rows }: { rows: number }) {
             </span>
             <span className="grid min-w-0 flex-1 gap-s1">
               <span className="grid">
-                <span className="flex h-[21.6px] items-center">
+                <span className="flex h-lh items-center text-body">
                   <span className={cx("h-[14px] rounded-round bg-raised", first)} />
                 </span>
                 {second && (
-                  <span className={cx("flex h-[21.6px] items-center", hide)}>
+                  <span className={cx("flex h-lh items-center text-body", hide)}>
                     <span className={cx("h-[14px] rounded-round bg-raised", second)} />
                   </span>
                 )}
               </span>
-              <span className="flex h-[18.2px] items-center">
+              <span className="flex h-lh items-center text-meta">
                 <span className="h-s3 w-[46%] rounded-round bg-control" />
               </span>
-              <span className="flex h-[18.2px] items-center">
+              <span className="flex h-lh items-center text-meta">
                 <span className="h-s3 w-[34%] rounded-round bg-control" />
               </span>
             </span>

@@ -229,7 +229,7 @@ export function QueueScreen({ cardId, wide, pane }: { cardId: string | null; wid
   const title = (
     <Title>
       Queue
-      {view && <span className="text-body font-strong text-ink-2"> · {view.count}</span>}
+      {view && <span className="text-body leading-none font-strong text-ink-2"> · {view.count}</span>}
     </Title>
   );
   const head = <Head className={cx(!wide && "px-s2")}>{title}</Head>;
@@ -238,7 +238,7 @@ export function QueueScreen({ cardId, wide, pane }: { cardId: string | null; wid
     return (
       <div className="mx-auto w-full max-w-[720px]">
         {phone ? <FloatListTop label="Queue actions" dot={dot} /> : head}
-        <div className={cx("px-s4 pt-s2 pb-s7", phone && FLOAT_TOP_PAD)}>
+        <div className={cx("px-s4 pb-s7", phone ? FLOAT_TOP_PAD : "pt-s2")}>
           {phone && <div className="pb-s2">{title}</div>}
           {top}
           {body}

@@ -6,7 +6,7 @@
 .sheet-body{padding-bottom:max(var(--spacing-s4),env(safe-area-inset-bottom))}
 .sheet-toast{top:max(var(--spacing-s4),env(safe-area-inset-top));z-index:60}
 .sheet-danger{border-color:var(--color-stop)}
-.join-code{font-size:var(--text-display);line-height:var(--leading-tight);letter-spacing:var(--tracking-brand)}
+.join-code{font-size:var(--text-display);line-height:var(--text-display--line-height);letter-spacing:var(--tracking-brand)}
 :where(.settings-rows>:not(:last-child)){border-top-width:0;border-bottom:var(--line-w) solid var(--color-line)}
 .settings-row{min-height:52px}
 .settings-row-md{min-height:62px}
