@@ -1123,7 +1123,7 @@ class CardService:
         request_id: str,
     ) -> tuple[str, str]:
         bot = self._chat_bot(bot, self._chat_set())
-        if not isinstance(text, str) or not 1 <= len(text) <= 4000:
+        if not isinstance(text, str) or not text:
             raise ChatTextRefused("chat text is invalid")
         return bot, self._request(request_id)
 

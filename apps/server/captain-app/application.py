@@ -16,6 +16,7 @@ import cards
 
 
 MAX_BODY_BYTES = 16_384
+CHAT_SEND_BODY_BYTES = 131_072
 CARD_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]{0,63}")
 CHAT_PATH = "/captain/api/chat"
 CHATS_PATH = "/captain/api/chats"
@@ -49,6 +50,12 @@ STATIC_SECURITY_HEADERS = (
     ("X-Content-Type-Options", "nosniff"),
     ("X-Frame-Options", "DENY"),
 )
+
+
+def body_limit(method: str, path: str) -> int:
+    if method == "POST" and path.partition("?")[0] == CHAT_PATH:
+        return CHAT_SEND_BODY_BYTES
+    return MAX_BODY_BYTES
 
 
 class AuthenticationRequired(RuntimeError):
@@ -184,14 +191,18 @@ class CardApplication:
         return approval_app.Response(status, tuple(headers), body)
 
     @staticmethod
-    def _json(request: approval_app.Request, fields: set[str]) -> dict[str, Any]:
+    def _json(
+        request: approval_app.Request,
+        fields: set[str],
+        limit: int = MAX_BODY_BYTES,
+    ) -> dict[str, Any]:
         headers = {
             name.lower(): value
             for name, value in request.headers.items()
         }
         if (
             headers.get("content-type") != "application/json"
-            or len(request.body) > MAX_BODY_BYTES
+            or len(request.body) > limit
         ):
             raise cards.CardRefused("card request body is invalid")
         try:
@@ -386,6 +397,7 @@ class CardApplication:
             payload = self._json(
                 request,
                 {"text", "requestId", "csrf"},
+                CHAT_SEND_BODY_BYTES if chat else MAX_BODY_BYTES,
             )
         else:
             return self._response(404, {"error": "not found"})

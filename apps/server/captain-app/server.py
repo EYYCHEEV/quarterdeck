@@ -132,7 +132,7 @@ class Handler(BaseHTTPRequestHandler):
         if not raw.isascii() or not raw.isdigit():
             raise ValueError("content length is invalid")
         length = int(raw)
-        if length > application.MAX_BODY_BYTES:
+        if length > application.body_limit(self.command, self.path):
             raise ValueError("request body is too large")
         self.connection.settimeout(5)
         body = bytearray(length)

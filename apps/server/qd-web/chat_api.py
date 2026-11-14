@@ -20,7 +20,7 @@ import cards
 ET = ZoneInfo("America/New_York")
 COOKIE = "__Host-qd-approval"
 CHATS_PATH = "/captain/api/chats"
-CHAT_PATH = "/captain/api/chat"
+CHAT_PATH = application.CHAT_SEND_PATH
 READ_PATH = "/captain/api/chat/read"
 SEND_FIELDS = {"bot", "text", "clientId", "csrf"}
 SEND_OPTIONAL = frozenset({"quote"})
@@ -248,7 +248,12 @@ class ChatApi:
     def _send(self, request: approval_app.Request) -> approval_app.Response:
         if urlsplit(request.path).query:
             raise cards.CardRefused("chat query is invalid")
-        payload = application.CardApplication._json(request, SEND_FIELDS, SEND_OPTIONAL)
+        payload = application.CardApplication._json(
+            request,
+            SEND_FIELDS,
+            SEND_OPTIONAL,
+            application.CHAT_SEND_BODY_BYTES,
+        )
         csrf = payload["csrf"]
         if not isinstance(csrf, str):
             raise cards.CardRefused("chat csrf is invalid")

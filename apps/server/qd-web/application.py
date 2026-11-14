@@ -15,8 +15,16 @@ import cards
 
 
 MAX_BODY_BYTES = 16_384
+CHAT_SEND_BODY_BYTES = 131_072
 CARD_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]{0,63}")
 CHAT_PAGE_PATH = "/captain/chat"
+CHAT_SEND_PATH = "/captain/api/chat"
+
+
+def body_limit(method: str, path: str) -> int:
+    if method == "POST" and path == CHAT_SEND_PATH:
+        return CHAT_SEND_BODY_BYTES
+    return MAX_BODY_BYTES
 
 
 class AuthenticationRequired(RuntimeError):
@@ -146,6 +154,7 @@ class CardApplication:
         request: approval_app.Request,
         fields: set[str],
         optional: frozenset[str] = frozenset(),
+        limit: int = MAX_BODY_BYTES,
     ) -> dict[str, Any]:
         headers = {
             name.lower(): value
@@ -153,7 +162,7 @@ class CardApplication:
         }
         if (
             headers.get("content-type") != "application/json"
-            or len(request.body) > MAX_BODY_BYTES
+            or len(request.body) > limit
         ):
             raise cards.CardRefused("card request body is invalid")
         try:
