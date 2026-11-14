@@ -30,6 +30,7 @@ class ChatTextRefused(CardRefused):
 
 
 CHAT_PAGE = 15
+CHAT_PAGE_BYTES = 786_432
 CHAT_AFTER = 50
 CHAT_FEATURES = ("quote", "read", "cursor")
 QUOTE_LIMIT = 280
@@ -1091,12 +1092,23 @@ class CardService:
             if after not in index or end - index[after] - 1 > CHAT_AFTER:
                 raise ChatCursorRefused("chat cursor is stale")
             start = index[after] + 1
+        entries = view["entries"]
         shown = []
-        for _, event, document in view["entries"][start:end]:
+        used = 0
+        first = end
+        while first > start:
+            _, event, document = entries[first - 1]
             message = self._chat_message(event)
             message["quote"] = self._quote_shown(document.get("quote"), events, index)
             message["files"] = []
+            used += len(json.dumps(message, separators=(",", ":"), ensure_ascii=False).encode("utf-8")) + 1
+            if shown and used > CHAT_PAGE_BYTES:
+                if after is not None:
+                    raise ChatCursorRefused("chat cursor is stale")
+                break
             shown.append(message)
+            first -= 1
+        shown.reverse()
         return {
             "bot": self._bot_object(bot),
             "rev": view["rev"],
@@ -1106,7 +1118,7 @@ class CardService:
             "seenAt": view["seenAt"],
             "working": None,
             "firstUnread": view["firstUnread"],
-            "older": start > 0,
+            "older": first > 0,
         }
 
     def chat_sent(self, bot: str, message_id: str) -> dict[str, Any] | None:

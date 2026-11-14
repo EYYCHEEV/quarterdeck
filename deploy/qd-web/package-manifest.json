@@ -12,7 +12,7 @@
     "auth_bridge.py": "8db17a4d92e7f33cabfa3b5e3c814e9e54abc3669e9c24e6bfeb90eee6893550",
     "bot_list.py": "fb258e296ed830ea2bbf5bbd999282c11f55f88b2b228e29ed3e5c46ed3604a8",
     "bundle.py": "c8194f4e2e0531dc28e4c7571879272392b2db7a65f1b3a2da6af4b2af67915f",
-    "cards.py": "cc3e84d7f30c55474bfef0cffbab0a703f570f963c421df16399d923710cc013",
+    "cards.py": "9291e4c38b98779a6f60b66257f610d751a1e7bb9c0bc98eb28f212fef57b75d",
     "chat_api.py": "2a0f34c88d36c690a07e6819e47ad23ca1bb253ec4a00dc5db2b4a3f5af9fdc0",
     "checker_adapter.py": "cdfe31b63c432e631a0d51d8b4620b2fb11af4c913ad1a9a375b92700e92ec25",
     "compose-fragment.json": "4121ec16737c41c91d9dc762feca256752a424b3566c30cb311dca51426a86f4",
