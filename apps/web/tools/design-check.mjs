@@ -221,6 +221,18 @@ const refusedDrop = async (vp, p) => {
   await p.locator(T("chat")).dispatchEvent("drop", { dataTransfer });
   await p.getByRole("alert").first().waitFor();
 };
+const paddedPicture = (name, bytes) => ({ name, mimeType: "image/png", buffer: Buffer.concat([fs.readFileSync(path.join("public/chat/media", "phone-search-1.png")), Buffer.alloc(bytes)]) });
+const serverPick = (files, line) => async (vp, p) => {
+  await p.getByText("The search sheet, the run log, and one file the server stopped.", { exact: true }).first().waitFor();
+  await p.locator(T("pick-files")).setInputFiles(files());
+  await p.getByText(line).first().waitFor();
+};
+const uploadingSend = async (vp, p) => {
+  await p.locator(T("pick-photos")).setInputFiles(pictureFile("screenshot-1.png", "phone-search-1.png"));
+  await p.locator(T("draft-file")).waitFor();
+  await tap(vp, p, T("chat-send"));
+  await p.locator(T("chat-uploading")).waitFor();
+};
 const shownText = (text) => (vp, p) => p.getByText(text).first().waitFor();
 const evidenceShown = async (p) => {
   await p.locator(T("evidence-media")).first().scrollIntoViewIfNeeded();
@@ -506,6 +518,14 @@ const STATES = [
   { name: "chat-plus", route: "/chat/iris", open: (vp, p) => tap(vp, p, T("plus-btn")), pop: () => '[data-pop="plus"]', closes: ["esc", "outside"] },
   { name: "chat-strip", route: "/chat/iris", shot: true, open: attachedFiles },
   { name: "chat-refused", route: "/chat/alba", shot: true, open: refusedDrop },
+  { name: "chat-server-files", route: "/chat/alba?chatfx=CF-FILES", shot: true, open: async (vp, p) => {
+      await picturesLoaded(vp, p);
+      await p.locator(T("chat-file-blocked")).scrollIntoViewIfNeeded();
+    } },
+  { name: "chat-uploading", route: "/chat/iris?hold=upload", shot: true, open: uploadingSend },
+  { name: "chat-server-refused", route: "/chat/alba?chatfx=CF-FILES", shot: true, open: serverPick(() => [paddedPicture("big-screenshot.png", 11 * 1048576), { name: "setup.exe", mimeType: "application/x-msdownload", buffer: Buffer.from("MZ") }, { name: "IMG_0001.HEIC", mimeType: "image/heic", buffer: Buffer.from("0000ftypheic") }], "This picture is in Apple's format.") },
+  { name: "chat-server-refused-count", route: "/chat/alba?chatfx=CF-FILES", shot: true, open: serverPick(() => [1, 2, 3, 4, 5, 6].map((n) => pictureFile("screenshot-" + n + ".png", "phone-search-1.png")), "A message can carry up to 5 files.") },
+  { name: "chat-server-refused-together", route: "/chat/alba?chatfx=CF-FILES", shot: true, open: serverPick(() => ["a", "b", "c"].map((n) => paddedPicture("export-" + n + ".png", 9 * 1048576)), "These files are too big together.") },
   { name: "chat-secret-request", route: "/chat/alba", shot: true, open: (vp, p) => p.locator(T("secret-request")).scrollIntoViewIfNeeded() },
   {
     name: "chat-secret-box",

@@ -1,10 +1,11 @@
 import { mailQuote, messageQuote, readableText, type QuoteRange, type SentQuote } from "../domain/chat";
+import type { FileLimits } from "../domain/files-r1";
 import type { Attachment, ChatMessage, Working } from "./chat-types";
 import { BOTS } from "./example-content";
 import { mediaPath } from "./media";
 import { MAIL_THREADS, type PackArtifact } from "./pack-extra";
 
-type RawAttachment = { id: string; kind: "picture" | "file"; name: string; mime: string; file?: string; width?: number; height?: number; bytes: number; alt?: string; text?: string };
+type RawAttachment = { id: string; kind: "picture" | "file"; server?: "photo" | "file" | "blocked"; name: string; mime: string; file?: string; width?: number; height?: number; bytes: number; alt?: string; text?: string };
 
 type RawQuote = { kind: "message"; messageId: string; from: string; text: string; whole: boolean; range?: QuoteRange } | { kind: "taskCard"; card: string; version: number } | { kind: "mail"; ref: string };
 
@@ -29,7 +30,7 @@ export type ChatContent = {
   existingMessageFixes?: Record<string, { text: { now: string } }>;
 };
 
-export type ChatFixture = { fixture: string; bot: string; message?: RawMessage; messages?: RawMessage[]; artifactAdd?: PackArtifact };
+export type ChatFixture = { fixture: string; bot: string; message?: RawMessage; messages?: RawMessage[]; artifactAdd?: PackArtifact; fileLimits?: FileLimits };
 
 export type ChatFixtureFile = { fixtures: ChatFixture[] };
 
@@ -77,6 +78,7 @@ const byTime = (a: RawMessage, b: RawMessage) => Date.parse(a.at) - Date.parse(b
 const FIXTURE_MEDIA = __QD_FIXTURES__ ? new Map(Array.from({ length: 8 }, (_, n) => ["../evidence/media/fixture-picture-" + (n + 1) + ".png", "fixture-picture-" + (n + 1) + ".png"])) : null;
 
 function attachmentOf(raw: RawAttachment, media: string, fixture: boolean): Attachment {
+  if (raw.server === "blocked") return { id: raw.id, name: raw.name, size: raw.bytes, type: raw.mime, url: "", kind: "blocked" };
   const mapped = fixture && raw.file !== undefined ? FIXTURE_MEDIA?.get(raw.file) : undefined;
   const kind = raw.kind === "picture" ? "image" : "file";
   const base = media === "" ? "chat/media/" : "/chat/media/";
@@ -85,7 +87,7 @@ function attachmentOf(raw: RawAttachment, media: string, fixture: boolean): Atta
     : mapped
       ? mediaPath(mapped, kind, media === "" ? "evidence/media/" : "/evidence/media/")
       : mediaPath(raw.file, kind, base);
-  return { id: raw.id, name: raw.name, size: raw.bytes, type: raw.mime, url, ...(raw.alt ? { alt: raw.alt } : {}) };
+  return { id: raw.id, name: raw.name, size: raw.bytes, type: raw.mime, url, ...(raw.alt ? { alt: raw.alt } : {}), ...(raw.server ? { kind: raw.server } : {}) };
 }
 
 function quoteOf(raw: RawQuote, list: Map<string, RawMessage | null>, botName: string, own: ReadonlySet<RawMessage>): SentQuote | undefined {

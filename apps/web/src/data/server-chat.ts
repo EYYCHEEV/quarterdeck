@@ -1,9 +1,10 @@
 import { wireQuote, type WireQuote } from "../domain/chat";
+import type { FileLimits } from "../domain/files-r1";
 import type { Bot } from "../domain/types";
 import type { Schedule } from "../platform/timer";
-import { Unavailable, type ChatClient, type TokenList } from "./api-client";
-import { appendSent, botsOf, CHAT_WORDS, CursorGone, keepSent, mergeAfter, mergeNewest, mergeOlder, rowsOf, threadOf, threadStale, type ChatListed, type ChatRead, type ChatReceipt } from "./chat-client";
-import type { ChatMessage, ChatRow, ChatThread, Outgoing, Quote, SentChatMessage, SentQuote, ServerChatApi, ServerUploadVerdict } from "./chat-types";
+import { Unavailable, type ChatChain, type ChatClient, type TokenList } from "./api-client";
+import { appendSent, botsOf, CHAT_WORDS, checkWords, CursorGone, keepSent, mergeAfter, mergeNewest, mergeOlder, rowsOf, threadOf, threadStale, type ChatListed, type ChatRead, type ChatReceipt, type UploadReceipt } from "./chat-client";
+import type { ChatMessage, ChatRow, ChatThread, Outgoing, Quote, SendPhase, SentChatMessage, SentQuote, ServerChatApi, ServerUploadVerdict, WireOutgoing } from "./chat-types";
 import { NotConfirmed, Refused, SignInRequired } from "./source";
 
 export type ChatHost = {
@@ -18,6 +19,7 @@ export type ChatHost = {
   token: () => TokenList;
   generation: () => number;
   epoch: () => number;
+  credits: (cost: number) => Promise<void>;
 };
 
 export type ChatDue = { kind: "list" } | { kind: "thread"; bot: string } | { kind: "read"; bot: string; upTo: string };
@@ -38,8 +40,11 @@ const SEND_CAP = 55_000;
 const ATTEMPT_CAP = 25_000;
 const REREAD_CAP = 5_000;
 const RETRY_AFTER = 5_000;
+const KEEP_UPLOAD = 55 * 60_000;
 
 const passing = (error: unknown): boolean => error instanceof NotConfirmed || error instanceof Unavailable || (error instanceof Refused && error.message === CHAT_WORDS.mail);
+
+const lost = (error: unknown): boolean => error instanceof NotConfirmed || error instanceof Unavailable;
 
 function cursorGone(error: unknown): null {
   if (error instanceof CursorGone) return null;
@@ -51,6 +56,7 @@ function plain(receipt: ChatReceipt, quote?: SentQuote): ChatMessage {
   if (receipt.clientId !== undefined) message.clientId = receipt.clientId;
   const shown = receipt.quote ?? quote;
   if (shown !== undefined) message.quote = shown;
+  if (receipt.attachments !== undefined) message.attachments = receipt.attachments;
   return message;
 }
 
@@ -65,6 +71,8 @@ function shownQuote(wire: WireQuote, held: ChatRead | undefined): SentQuote | un
 export function createServerChat(host: ChatHost): ChatPart {
   let listed: ChatListed[] | null = null;
   let listedAt = -Infinity;
+  let limits: FileLimits | null = null;
+  const kept = new WeakMap<File, { id: string; at: number }>();
   const threads = new Map<string, ChatRead>();
   const tried = new Map<string, string>();
   const rowWatchers = new Set<() => void>();
@@ -138,7 +146,7 @@ export function createServerChat(host: ChatHost): ChatPart {
     const held = threads.get(bot);
     const set = threadWatchers.get(bot);
     if (!held || !set) return;
-    const thread = threadOf(held, orderOf(bot));
+    const thread = threadOf(held, orderOf(bot), limits);
     for (const heard of [...set]) heard(thread);
   }
 
@@ -149,11 +157,14 @@ export function createServerChat(host: ChatHost): ChatPart {
     const value = await host.read(() => host.chat.rows(automatic));
     const before = JSON.stringify(listed);
     const botsBefore = JSON.stringify(listed === null ? null : botsOf(listed));
-    listed = value;
+    const limitsBefore = JSON.stringify(limits);
+    listed = value.rows;
+    limits = value.limits;
     listedAt = started;
     if (staleAt !== null && staleAt <= started) staleAt = null;
-    if (JSON.stringify(botsOf(value)) !== botsBefore) host.republish();
-    if (JSON.stringify(value) !== before) for (const heard of [...rowWatchers]) heard();
+    if (JSON.stringify(botsOf(value.rows)) !== botsBefore) host.republish();
+    if (JSON.stringify(value.rows) !== before) for (const heard of [...rowWatchers]) heard();
+    if (JSON.stringify(limits) !== limitsBefore) for (const bot of [...threadWatchers.keys()]) tellThread(bot);
   }
 
   function openList(): Promise<void> {
@@ -223,7 +234,7 @@ export function createServerChat(host: ChatHost): ChatPart {
     await flight;
     const held = threads.get(bot);
     if (!held) throw new Refused("The thread could not be read.");
-    return threadOf(held, orderOf(bot));
+    return threadOf(held, orderOf(bot), limits);
   }
 
   async function older(bot: string): Promise<ChatThread> {
@@ -249,7 +260,7 @@ export function createServerChat(host: ChatHost): ChatPart {
     }
     const now = threads.get(bot);
     if (!now) throw new Refused("This thread is not open.");
-    return threadOf(now, orderOf(bot));
+    return threadOf(now, orderOf(bot), limits);
   }
 
   async function foundSent(bot: string, clientId: string, limit: number): Promise<ChatMessage | null> {
@@ -262,12 +273,12 @@ export function createServerChat(host: ChatHost): ChatPart {
     return threads.get(bot)?.messages.find((one) => one.clientId === clientId && one.from === "captain") ?? null;
   }
 
-  async function send(bot: string, outgoing: Outgoing): Promise<SentChatMessage<ServerUploadVerdict>> {
+  async function send(bot: string, outgoing: Outgoing, onPhase?: (phase: SendPhase) => void): Promise<SentChatMessage<ServerUploadVerdict>> {
     host.access();
     if (reading) await reading;
     sending += 1;
     try {
-      return await deliver(bot, outgoing);
+      return await deliver(bot, outgoing, onPhase);
     } finally {
       sending -= 1;
     }
@@ -282,23 +293,75 @@ export function createServerChat(host: ChatHost): ChatPart {
     return wire;
   }
 
-  async function deliver(bot: string, outgoing: Outgoing): Promise<SentChatMessage<ServerUploadVerdict>> {
+  async function uploadOne(file: File, given: string | null, current: () => void): Promise<UploadReceipt> {
+    let token = given;
+    for (let tries = 1; ; tries += 1) {
+      try {
+        token ??= await host.chat.token(host.token());
+        current();
+        const receipt = await host.chat.upload(file, token);
+        current();
+        return receipt;
+      } catch (error) {
+        current();
+        if (!lost(error)) throw error;
+        if (tries === 2) throw new Refused(CHAT_WORDS.mail);
+        token = null;
+      }
+    }
+  }
+
+  async function uploaded(files: File[], current: () => void): Promise<{ ids: string[]; csrf: string }> {
+    const ids: string[] = [];
+    let token: string | null = null;
+    for (const file of files) {
+      const held = kept.get(file);
+      if (held && host.clock() - held.at < KEEP_UPLOAD) {
+        ids.push(held.id);
+        continue;
+      }
+      const receipt = await uploadOne(file, token, current);
+      kept.set(file, { id: receipt.id, at: host.clock() });
+      ids.push(receipt.id);
+      token = receipt.csrf;
+    }
+    token ??= await host.chat.token(host.token());
+    current();
+    return { ids, csrf: token };
+  }
+
+  async function deliver(bot: string, outgoing: Outgoing, onPhase?: (phase: SendPhase) => void): Promise<SentChatMessage<ServerUploadVerdict>> {
     host.access();
-    const { quote, ...rest } = outgoing;
+    const { quote, files, ...rest } = outgoing;
     const wire = quote === undefined ? undefined : wired(bot, quote);
     const mine = host.generation();
     const epoch = host.epoch();
-    const ends = host.clock() + SEND_CAP;
-    const left = (): number => ends - host.clock();
     const current = (): void => {
       if (mine !== host.generation()) throw new SignInRequired();
     };
+    const words = wire === undefined ? rest : { ...rest, quote: wire };
+    let body: WireOutgoing = words;
+    let chain: ChatChain | undefined;
+    if (files && files.length > 0) {
+      if (!threads.get(bot)?.features.includes("files") || limits === null) throw new Refused(CHAT_WORDS.files);
+      checkWords(bot, words, true);
+      onPhase?.("uploading");
+      const sent = await uploaded(files, current);
+      body = { ...words, files: sent.ids };
+      chain = { csrf: sent.csrf };
+      await host.credits(2);
+      current();
+      onPhase?.("sending");
+    }
+    const ends = host.clock() + SEND_CAP;
+    const left = (): number => ends - host.clock();
     for (let tries = 1; ; tries += 1) {
       let receipt: ChatReceipt;
       try {
-        receipt = await within(host.chat.send(bot, wire === undefined ? rest : { ...rest, quote: wire }, host.token()), Math.min(ATTEMPT_CAP, left()));
+        receipt = await within(host.chat.send(bot, body, host.token(), chain), Math.min(ATTEMPT_CAP, left()));
       } catch (error) {
         current();
+        if (error instanceof Refused && error.message === CHAT_WORDS.expired) for (const file of files ?? []) kept.delete(file);
         if (!passing(error)) throw error;
         const found = error instanceof NotConfirmed && left() > 0 ? await foundSent(bot, outgoing.clientId, left()) : null;
         current();
@@ -310,6 +373,11 @@ export function createServerChat(host: ChatHost): ChatPart {
         current();
         if (later) return sentOf(later);
         if (left() <= 0) throw error;
+        if (chain) {
+          chain = { csrf: null };
+          await host.credits(3);
+          current();
+        }
         continue;
       }
       current();
@@ -429,6 +497,7 @@ export function createServerChat(host: ChatHost): ChatPart {
     wanted = false;
     poked.clear();
     staleAt = null;
+    limits = null;
   }
 
   const api: ServerChatApi = {

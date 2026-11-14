@@ -3,7 +3,7 @@ import type { InspectedFile, PrepareFiles } from "../domain/file-inspection";
 import { EMPTY_MAIL_QUERY, type MailQuery } from "../domain/mail-query";
 import type { PageQuery } from "../domain/pages";
 import { EMPTY_QUERY, type QueueQuery } from "../domain/query";
-import type { Attachment, Quote } from "./chat-types";
+import type { Attachment, Quote, SendPhase } from "./chat-types";
 
 const values = new Map<string, unknown>();
 const listeners = new Map<string, Set<() => void>>();
@@ -57,7 +57,7 @@ export function attachChatFiles(botId: string, files: File[], prepare: PrepareFi
   const at = generation;
   const add = async () => {
     const before = readSession(key, EMPTY_DRAFT);
-    const { accepted, refused } = await prepare(files, before.files.length);
+    const { accepted, refused } = await prepare(files, before.files.length, before.files.reduce((total, item) => total + item.file.size, 0));
     if (accepted.length && at === generation) {
       const current = readSession(key, EMPTY_DRAFT);
       const additions = accepted.map((file) => ({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file) }));
@@ -74,7 +74,7 @@ export function attachChatFiles(botId: string, files: File[], prepare: PrepareFi
   return queued;
 }
 
-export type PendingSend = { clientId: string; text: string; quote: Quote | null; files: InspectedFile[]; previews: Attachment[]; failed: boolean; at: string; after: string | null; reason?: string | null; retry?: boolean };
+export type PendingSend = { clientId: string; text: string; quote: Quote | null; files: InspectedFile[]; previews: Attachment[]; failed: boolean; at: string; after: string | null; reason?: string | null; retry?: boolean; phase?: SendPhase };
 
 const NO_PENDING: PendingSend[] = [];
 

@@ -3,7 +3,7 @@ import { goTo, postForm, type Pages } from "../platform/navigate";
 import { readJson, writeJson } from "../platform/storage";
 import { schedule as later, type Schedule } from "../platform/timer";
 import { pageVisibility, type Visibility } from "../platform/visibility";
-import { NotFound, SIGN_IN_PATH, SIGN_OUT_PATH, type AnswerSent, type ApiClient, type CardEvent, type CardListing, type CardRead, type ListedCard, type TokenList } from "./api-client";
+import { NotFound, SIGN_IN_PATH, SIGN_OUT_PATH, type AnswerSent, type ApiClient, type CardEvent, type CardListing, type CardRead, type ListedCard, type SessionRequest, type TokenList } from "./api-client";
 import type * as MailModule from "./mail-client";
 import type { MailListed, MailRead } from "./mail-client";
 import type { ChatApi, ServerChatApi } from "./chat-types";
@@ -202,6 +202,42 @@ export function createServerSource(client: ApiClient, clock: () => number = Date
     return now + 60_000;
   }
 
+  const waits = new Set<(error: Error) => void>();
+
+  function creditsBack(cost: number, automatic: boolean): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const end = (error: Error): void => {
+        cancel();
+        waits.delete(end);
+        reject(error);
+      };
+      waits.add(end);
+      const cancel = schedule(() => {
+        waits.delete(end);
+        resolve();
+      }, Math.max(0, budgetAt(cost, automatic) - clock()));
+    });
+  }
+
+  function endWaits(): void {
+    for (const end of [...waits]) end(new SignInRequired());
+  }
+
+  function afterWait(mine: number, kind: SessionRequest["kind"]): void {
+    expire();
+    if (mine !== generation || paused) throw new SignInRequired();
+    if (unconfirmed && kind !== "list" && kind !== "token") throw new SessionUnconfirmed();
+  }
+
+  async function chatCredits(cost: number): Promise<void> {
+    const mine = generation;
+    if (paused) throw new SignInRequired();
+    while (budgetAt(cost, false) > clock()) {
+      await creditsBack(cost, false);
+      afterWait(mine, "post");
+    }
+  }
+
   const spaced = (): number => (chatOn ? Math.max(lastListAt, lastMailAt, lastChatAt) : Math.max(lastListAt, lastMailAt)) + 5_000;
 
   function closeEvents(): void {
@@ -274,6 +310,7 @@ export function createServerSource(client: ApiClient, clock: () => number = Date
     clearPrivate();
     forgetSession();
     closeEvents();
+    endWaits();
     const error = new SignInRequired();
     pending?.reject(error);
     current?.reject(error);
@@ -501,7 +538,11 @@ export function createServerSource(client: ApiClient, clock: () => number = Date
       if (paused && !job?.probe) throw new SignInRequired();
       if (unconfirmed && meta.kind !== "list" && meta.kind !== "token") throw new SessionUnconfirmed();
       const cost = meta.kind === "post" ? 2 : 1;
-      if (budgetAt(cost, meta.automatic) > clock()) throw new RateLimited();
+      while (budgetAt(cost, meta.automatic) > clock()) {
+        if (!meta.wait) throw new RateLimited();
+        await creditsBack(cost, meta.automatic);
+        afterWait(mine, meta.kind);
+      }
       const sent = clock();
       meta.sent = sent;
       credits.push({ at: sent, cost });
@@ -768,7 +809,7 @@ export function createServerSource(client: ApiClient, clock: () => number = Date
       if (chatPart) return Promise.resolve(chatPart);
       chatLoad ??= import("./server-chat").then((lib) => {
         if (!client.chat) throw new Refused(NOT_BUILT);
-        const host: ChatHost = { chat: client.chat, clock, schedule, access, read, live: () => !paused && !unconfirmed && !away && listeners.size > 0, arm, republish, token: () => takeToken(generation, privateEpoch), generation: () => generation, epoch: () => privateEpoch };
+        const host: ChatHost = { chat: client.chat, clock, schedule, access, read, live: () => !paused && !unconfirmed && !away && listeners.size > 0, arm, republish, token: () => takeToken(generation, privateEpoch), generation: () => generation, epoch: () => privateEpoch, credits: chatCredits };
         chatPart = lib.createServerChat(host);
         return chatPart;
       });
@@ -791,7 +832,7 @@ export function createServerSource(client: ApiClient, clock: () => number = Date
       openThread: (bot) => loadChat().then((part) => part.api.openThread(bot)),
       subscribe: (bot, onChange) => watch((part) => part.api.subscribe(bot, onChange)),
       older: (bot) => loadChat().then((part) => part.api.older(bot)),
-      send: (bot, message) => loadChat().then((part) => part.api.send(bot, message)),
+      send: (bot, message, onPhase) => loadChat().then((part) => part.api.send(bot, message, onPhase)),
     };
   }
 
@@ -829,6 +870,7 @@ export function createServerSource(client: ApiClient, clock: () => number = Date
       cancelCheck?.();
       cancelCheck = null;
       generation += 1;
+      endWaits();
       pending?.reject(new SignInRequired());
       current?.reject(new SignInRequired());
       pending = null;
@@ -857,6 +899,7 @@ export function createServerSource(client: ApiClient, clock: () => number = Date
     async signOut() {
       const csrf = await client.signOutToken().catch(() => null);
       forgetLocal();
+      endWaits();
       if (csrf !== null) {
         pages.postForm(SIGN_OUT_PATH, { csrf });
         return new Promise<never>(() => undefined);

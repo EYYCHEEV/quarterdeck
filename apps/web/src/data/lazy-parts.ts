@@ -43,7 +43,7 @@ export function lazyChat(load: () => Promise<BrowserChatApi>): BrowserChatApi {
     uploadBoundary: "browser-stand-in",
     listChats: async () => (await open()).listChats(),
     openThread: async (botId) => (await open()).openThread(botId),
-    send: async (botId, message) => (await open()).send(botId, message),
+    send: async (botId, message, onPhase) => (await open()).send(botId, message, onPhase),
     watchChats: (onChange) => whenReady((chat) => chat.watchChats(onChange)),
     subscribe: (botId, onChange) => whenReady((chat) => chat.subscribe(botId, onChange)),
   };

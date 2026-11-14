@@ -19,8 +19,93 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  build-web:
+    name: Build the web bundle twice and compare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ inputs.version }}
+      COMMIT: ${{ inputs.commit }}
+    steps:
+      - name: Check the inputs
+        run: |
+          set -eu
+          printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'
+          printf '%s' "$COMMIT" | grep -Eq '^[0-9a-f]{40}$'
+
+      - name: Checkout the named commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Confirm the commit, the branch and the version
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$COMMIT"
+          git merge-base --is-ancestor "$COMMIT" origin/main
+          grep -Fq "\"version\": \"$VERSION\"" omp-quarterdeck/package.json
+          grep -Fxq "## $VERSION" CHANGELOG.md
+
+      - name: Fetch the pinned Node
+        run: python3 tools/ci/fetch-pinned node
+
+      - name: Put the pinned Node first on the path
+        run: echo "$RUNNER_TEMP/pinned/node-v22.21.0-linux-x64/bin" >> "$GITHUB_PATH"
+
+      - name: Make two clean folders from the named commit
+        run: |
+          set -euo pipefail
+          for n in 1 2; do
+            mkdir "web-$n" "out-$n"
+            git archive --format=tar "$COMMIT" | tar -x -C "web-$n"
+          done
+
+      - name: Install the web dependencies from the lock file
+        run: |
+          set -eu
+          for n in 1 2; do
+            (cd "web-$n/apps/web" && npm ci --ignore-scripts)
+          done
+
+      - name: Verify registry signatures
+        run: |
+          set -eu
+          for n in 1 2; do
+            (cd "web-$n/apps/web" && npm audit signatures)
+          done
+
+      - name: Build the web bundle twice with chat on
+        run: |
+          set -eu
+          for n in 1 2; do
+            (cd "web-$n/apps/web" && npm run build:app -- --server --chat)
+            tar --sort=name --mtime='1970-01-01 00:00:00 UTC' --owner=0 --group=0 --numeric-owner --mode='u=rwX,go=rX' -cf "out-$n/quarterdeck-web-$VERSION.tar" -C "web-$n/apps/web/dist" .
+          done
+
+      - name: Fail if the two builds differ
+        run: cmp "out-1/quarterdeck-web-$VERSION.tar" "out-2/quarterdeck-web-$VERSION.tar"
+
+      - name: Print the hash of the web bundle
+        run: |
+          set -eu
+          sum=$(sha256sum "out-1/quarterdeck-web-$VERSION.tar" | cut -d' ' -f1)
+          printf 'web bundle built with --server --chat for %s: sha256 %s\n' "$COMMIT" "$sum" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the web bundle for the build job
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: web-bundle
+          path: out-1/
+          if-no-files-found: error
+          retention-days: 7
+
   build:
     name: Build twice, compare, and test the built files
+    needs: build-web
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -110,15 +195,15 @@ jobs:
           source, destination = sys.argv[1], sys.argv[2]
           if source.endswith(".whl"):
               unpack_zip(source, destination)
-          elif source.endswith(".tar.gz"):
+          elif source.endswith((".tar.gz", ".tar")):
               unpack_tar(source, destination)
           else:
               refuse("unknown archive type")
           PY
 
-      - name: Build both files twice in two clean folders
+      - name: Build the wheel, the wake archive and the server package twice in two clean folders
         run: |
-          set -eu
+          set -euo pipefail
           for n in 1 2; do
             mkdir "build-$n" "out-$n"
             git archive --format=tar "$COMMIT" | tar -x -C "build-$n"
@@ -126,6 +211,14 @@ jobs:
             tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner \
               --transform "s,^omp-quarterdeck,quarterdeck-omp-wake-$VERSION," \
               -cf - -C "build-$n" omp-quarterdeck | gzip -n -9 > "out-$n/quarterdeck-omp-wake-$VERSION.tar.gz"
+            scratch="$(mktemp -d)"
+            python3 -B "build-$n/deploy/server_lane.py" --assemble-only "$scratch/tree" > /dev/null
+            (cd "$scratch/tree/qd-web/qd-web" && find . -mindepth 1) | LC_ALL=C sort > "$scratch/present"
+            { jq -r '.files | keys[] | "./" + .' "build-$n/deploy/qd-web/package-manifest.json"; echo ./package-manifest.json; } | LC_ALL=C sort > "$scratch/wanted"
+            cmp "$scratch/wanted" "$scratch/present"
+            tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --mode='u=rwX,go=rX' \
+              --transform "s,^qd-web,quarterdeck-server-qd-web-$VERSION," \
+              -cf - -C "$scratch/tree/qd-web" qd-web | gzip -n -9 > "out-$n/quarterdeck-server-qd-web-$VERSION.tar.gz"
           done
 
       - name: Fail if the two builds differ
@@ -133,6 +226,13 @@ jobs:
           set -eu
           cmp "out-1/quarterdeck_mcp-$VERSION-py3-none-any.whl" "out-2/quarterdeck_mcp-$VERSION-py3-none-any.whl"
           cmp "out-1/quarterdeck-omp-wake-$VERSION.tar.gz" "out-2/quarterdeck-omp-wake-$VERSION.tar.gz"
+          cmp "out-1/quarterdeck-server-qd-web-$VERSION.tar.gz" "out-2/quarterdeck-server-qd-web-$VERSION.tar.gz"
+
+      - name: Download the web bundle
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: web-bundle
+          path: web
 
       - name: Test the wheel after unpacking it into an empty folder
         run: |
@@ -194,12 +294,138 @@ jobs:
           point 0.0.0
           test "$(python3 "$base/current/qd.py")" = "stand-in older version"
 
-      - name: Write the sums and the release notes
+      - name: Test the server package after unpacking it into an empty folder
+        run: |
+          set -euo pipefail
+          unpacked="$(mktemp -d)/server"
+          python3 "$RUNNER_TEMP/safe_unpack.py" "out-1/quarterdeck-server-qd-web-$VERSION.tar.gz" "$unpacked"
+          test "$(ls -A "$unpacked")" = "quarterdeck-server-qd-web-$VERSION"
+          package="$unpacked/quarterdeck-server-qd-web-$VERSION"
+          manifest=build-1/deploy/qd-web/package-manifest.json
+          (cd "$package" && find . -mindepth 1) | LC_ALL=C sort > "$unpacked.present"
+          { jq -r '.files | keys[] | "./" + .' "$manifest"; echo ./package-manifest.json; } | LC_ALL=C sort > "$unpacked.wanted"
+          cmp "$unpacked.wanted" "$unpacked.present"
+          cmp "$manifest" "$package/package-manifest.json"
+          python3 -I -B - "$package" build-1/apps/server/qd-web/package_plan.py <<'PY'
+          import importlib.util
+          import pathlib
+          import sys
+
+          package, source = sys.argv[1], sys.argv[2]
+          spec = importlib.util.spec_from_file_location("commit_package_plan", source)
+          plan = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(plan)
+          plan.verify_manifest(pathlib.Path(package) / "package-manifest.json")
+          sys.path.insert(0, package)
+          import bundle
+          import cards
+          import server
+          import webapp
+          PY
+          python3 -B build-1/deploy/package_guard.py "$package"
+
+      - name: Test the web bundle from its unpacked archive, served by the unpacked server package
+        run: |
+          set -eu
+          unpacked="$(mktemp -d)"
+          python3 "$RUNNER_TEMP/safe_unpack.py" "web/quarterdeck-web-$VERSION.tar" "$unpacked/web"
+          python3 "$RUNNER_TEMP/safe_unpack.py" "out-1/quarterdeck-server-qd-web-$VERSION.tar.gz" "$unpacked/server"
+          python3 -I -B - "$unpacked/web" "$unpacked/server/quarterdeck-server-qd-web-$VERSION" <<'PY'
+          import hashlib
+          import os
+          import sys
+          from html.parser import HTMLParser
+
+          web, package = sys.argv[1], sys.argv[2]
+          sys.path.insert(0, package)
+          import approval_app
+          import bundle
+
+
+          class Names(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.found = []
+
+              def handle_starttag(self, tag, attributes):
+                  self.found.extend(value for key, value in attributes if key in ("href", "src") and value)
+
+
+          def ask(path):
+              return site.serve(approval_app.Request("GET", path, {}, bytearray(), "release-check"))
+
+
+          with open(os.path.join(web, "index.html"), "rb") as handle:
+              page = handle.read()
+          names = Names()
+          names.feed(page.decode("utf-8"))
+          assert "/app.js" in names.found and "/app.css" in names.found, names.found
+          site = bundle.Bundle.load(web)
+          answer = ask("/index.html")
+          headers = dict(answer.headers)
+          assert answer.status == 200 and answer.body == page, "index.html is not served whole"
+          assert headers["Cache-Control"] == "no-store" and "ETag" not in headers, headers
+          for name in names.found:
+              assert name.startswith("/") and os.path.isfile(os.path.join(web, name[1:])), name
+              with open(os.path.join(web, name[1:]), "rb") as handle:
+                  data = handle.read()
+              answer = ask(name)
+              assert answer is not None and answer.status == 200 and answer.body == data, name
+              assert dict(answer.headers)["ETag"] == '"' + hashlib.sha256(data).hexdigest() + '"', name
+          PY
+
+      - name: Write the sums, the parts list and the release notes
         run: |
           set -eu
           mkdir release
-          cp "out-1/quarterdeck_mcp-$VERSION-py3-none-any.whl" "out-1/quarterdeck-omp-wake-$VERSION.tar.gz" release/
-          (cd release && sha256sum "quarterdeck_mcp-$VERSION-py3-none-any.whl" "quarterdeck-omp-wake-$VERSION.tar.gz" > SHA256SUMS)
+          cp "out-1/quarterdeck_mcp-$VERSION-py3-none-any.whl" "out-1/quarterdeck-omp-wake-$VERSION.tar.gz" "web/quarterdeck-web-$VERSION.tar" "out-1/quarterdeck-server-qd-web-$VERSION.tar.gz" release/
+          python3 -I -B - release "$VERSION" "$COMMIT" <<'PY'
+          import hashlib
+          import json
+          import pathlib
+          import posixpath
+          import sys
+          import tarfile
+          import zipfile
+
+          release, version, commit = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+
+
+          def digest(data):
+              return hashlib.sha256(data).hexdigest()
+
+
+          def inside(path):
+              found = {}
+              if path.name.endswith(".whl"):
+                  with zipfile.ZipFile(path) as archive:
+                      for member in archive.infolist():
+                          if not member.is_dir():
+                              found[member.filename] = digest(archive.read(member))
+                  return found
+              with tarfile.open(path) as archive:
+                  for member in archive.getmembers():
+                      if member.isreg():
+                          found[posixpath.normpath(member.name)] = digest(archive.extractfile(member).read())
+              return found
+
+
+          parts = []
+          for name, file in (
+              ("bot-tools-wheel", f"quarterdeck_mcp-{version}-py3-none-any.whl"),
+              ("wake-extension", f"quarterdeck-omp-wake-{version}.tar.gz"),
+              ("web-bundle", f"quarterdeck-web-{version}.tar"),
+              ("server-qd-web", f"quarterdeck-server-qd-web-{version}.tar.gz"),
+          ):
+              path = release / file
+              part = {"name": name, "file": file, "sha256": digest(path.read_bytes()), "files": inside(path)}
+              if name == "web-bundle":
+                  part["buildFlags"] = ["--server", "--chat"]
+              parts.append(part)
+          document = {"format": 1, "version": version, "commit": commit, "parts": parts}
+          (release / "PARTS.json").write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          PY
+          (cd release && sha256sum "quarterdeck_mcp-$VERSION-py3-none-any.whl" "quarterdeck-omp-wake-$VERSION.tar.gz" "quarterdeck-web-$VERSION.tar" "quarterdeck-server-qd-web-$VERSION.tar.gz" PARTS.json > SHA256SUMS)
           awk -v v="$VERSION" '$0 == "## " v { found = 1; next } /^## / && found { exit } found' CHANGELOG.md > release/RELEASE-NOTES.md
           test -s release/RELEASE-NOTES.md
 
@@ -231,15 +457,47 @@ jobs:
           name: release-files
           path: release
 
-      - name: Check the sums again
-        run: cd release && sha256sum --check SHA256SUMS
+      - name: Check the sums and the parts list again
+        run: |
+          set -eu
+          cd release
+          sha256sum --check --strict SHA256SUMS
+          python3 -I -B - "$VERSION" "$COMMIT" <<'PY'
+          import hashlib
+          import json
+          import os
+          import sys
+
+          version, commit = sys.argv[1], sys.argv[2]
+          files = [
+              f"quarterdeck_mcp-{version}-py3-none-any.whl",
+              f"quarterdeck-omp-wake-{version}.tar.gz",
+              f"quarterdeck-web-{version}.tar",
+              f"quarterdeck-server-qd-web-{version}.tar.gz",
+          ]
+          names = ["bot-tools-wheel", "wake-extension", "web-bundle", "server-qd-web"]
+          present = sorted(os.listdir("."))
+          assert present == sorted([*files, "PARTS.json", "RELEASE-NOTES.md", "SHA256SUMS"]), present
+          with open("SHA256SUMS", encoding="utf-8") as handle:
+              listed = [line.partition("  ")[2] for line in handle.read().splitlines()]
+          assert listed == [*files, "PARTS.json"], listed
+          with open("PARTS.json", encoding="utf-8") as handle:
+              document = json.load(handle)
+          assert document["format"] == 1 and document["version"] == version and document["commit"] == commit
+          assert [part["name"] for part in document["parts"]] == names
+          assert [part["file"] for part in document["parts"]] == files
+          assert document["parts"][2]["buildFlags"] == ["--server", "--chat"]
+          for part in document["parts"]:
+              with open(part["file"], "rb") as handle:
+                  assert part["sha256"] == hashlib.sha256(handle.read()).hexdigest(), part["file"]
+          PY
 
       - name: Create the annotated tag
         run: |
           set -eu
           tag_object="$(gh api "repos/$GITHUB_REPOSITORY/git/tags" \
             -f tag="v$VERSION" \
-            -f message="Quarterdeck bot tools v$VERSION" \
+            -f message="Quarterdeck v$VERSION" \
             -f object="$COMMIT" \
             -f type=commit \
             -f "tagger[name]=$TAGGER_NAME" \
@@ -247,18 +505,23 @@ jobs:
             --jq .sha)"
           gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/v$VERSION" -f sha="$tag_object"
 
-      - name: Draft the release with the two files and the sums
+      - name: Draft the release with the four parts, the parts list and the sums
         run: |
           set -eu
           gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" --draft --verify-tag \
-            --title "Quarterdeck bot tools v$VERSION" --notes-file release/RELEASE-NOTES.md \
-            "release/quarterdeck_mcp-$VERSION-py3-none-any.whl" "release/quarterdeck-omp-wake-$VERSION.tar.gz" release/SHA256SUMS
+            --title "Quarterdeck v$VERSION" --notes-file release/RELEASE-NOTES.md \
+            "release/quarterdeck_mcp-$VERSION-py3-none-any.whl" "release/quarterdeck-omp-wake-$VERSION.tar.gz" \
+            "release/quarterdeck-web-$VERSION.tar" "release/quarterdeck-server-qd-web-$VERSION.tar.gz" \
+            release/PARTS.json release/SHA256SUMS
 
       - name: Check that exactly one draft with exactly those files exists
         run: |
           set -eu
           gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" | jq -e \
             --arg tag "v$VERSION" \
+            --arg title "Quarterdeck v$VERSION" \
             --arg wheel "quarterdeck_mcp-$VERSION-py3-none-any.whl" \
             --arg archive "quarterdeck-omp-wake-$VERSION.tar.gz" \
-            '[.[] | select(.tag_name == $tag)] | length == 1 and .[0].draft == true and ([.[0].assets[].name] | sort) == ([$wheel, $archive, "SHA256SUMS"] | sort)'
+            --arg web "quarterdeck-web-$VERSION.tar" \
+            --arg server "quarterdeck-server-qd-web-$VERSION.tar.gz" \
+            '[.[] | select(.tag_name == $tag)] | length == 1 and .[0].draft == true and .[0].name == $title and ([.[0].assets[].name] | sort) == ([$wheel, $archive, $web, $server, "PARTS.json", "SHA256SUMS"] | sort)'

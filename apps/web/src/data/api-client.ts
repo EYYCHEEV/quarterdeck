@@ -4,7 +4,7 @@ import { schedule as later, type Schedule } from "../platform/timer";
 import { answerBody, answerReceiptOf, checkAnswer, checkComment, commentBody, commentReceiptOf, tokenOf, type AnswerPost, type CommentPost, type CommentReceipt } from "./answer-body";
 import type { CardFields } from "./card";
 import type { MailListing, MailRead } from "./mail-client";
-import type { ChatListed, ChatRead, ChatReceipt } from "./chat-client";
+import type { ChatList, ChatRead, ChatReceipt, UploadReceipt } from "./chat-client";
 import type { WireOutgoing } from "./chat-types";
 import { FreshSignInRequired, NotConfirmed, RateLimited, Refused, SignInRequired, TimedOut } from "./source";
 export { SignInRequired } from "./source";
@@ -51,7 +51,7 @@ export type Send = (path: string, init: RequestInit) => Promise<Response>;
 
 export type AnswerSent = { message: string; stale: boolean; rev: number };
 
-export type SessionRequest = { kind: "list" | "card" | "token" | "mail" | "chat" | "bots" | "post"; automatic: boolean; sent?: number };
+export type SessionRequest = { kind: "list" | "card" | "token" | "mail" | "chat" | "bots" | "post"; automatic: boolean; sent?: number; wait?: boolean };
 
 export type TokenList = (listing: CardListing, sent: number | undefined) => void;
 
@@ -61,12 +61,16 @@ export type SessionControl = {
   request: (request: SessionRequest, send: () => Promise<Response>) => Promise<Response>;
 };
 
+export type ChatChain = { csrf: string | null };
+
 export type ChatClient = {
-  rows: (automatic: boolean) => Promise<ChatListed[]>;
+  rows: (automatic: boolean) => Promise<ChatList>;
   thread: (bot: string, before: string | undefined, automatic: boolean) => Promise<ChatRead>;
   newer: (bot: string, after: string, automatic: boolean) => Promise<ChatRead>;
-  send: (bot: string, outgoing: WireOutgoing, onList?: TokenList) => Promise<ChatReceipt>;
+  send: (bot: string, outgoing: WireOutgoing, onList?: TokenList, chain?: ChatChain) => Promise<ChatReceipt>;
   read: (bot: string, upTo: string, onList?: TokenList) => Promise<void>;
+  token: (onList?: TokenList) => Promise<string>;
+  upload: (file: File, csrf: string) => Promise<UploadReceipt>;
 };
 
 export type ApiClient = {
@@ -96,7 +100,9 @@ export const SIGN_OUT_PATH = "/captain/logout";
 const CHATS_PATH = "/captain/api/chats";
 const CHAT_PATH = "/captain/api/chat";
 const CHAT_READ_PATH = CHAT_PATH + "/read";
+const FILES_PATH = "/captain/api/files";
 const POST_TIMEOUT = 20_000;
+const UPLOAD_TIMEOUT = 180_000;
 const chatOn = typeof __QD_CHAT__ !== "undefined" && __QD_CHAT__ === "on";
 
 const isRecord = (value: unknown): value is Raw => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -356,10 +362,10 @@ export function createApiClient(options: { send?: Send; openEvents?: (address: s
     return refusal(status, mine);
   }
 
-  async function tokenRead(): Promise<{ csrf: string; listing: CardListing; sent: number | undefined }> {
+  async function tokenRead(wait = false): Promise<{ csrf: string; listing: CardListing; sent: number | undefined }> {
     const began = generation;
     csrf = null;
-    const meta: SessionRequest = { kind: "token", automatic: false };
+    const meta: SessionRequest = wait ? { kind: "token", automatic: false, wait } : { kind: "token", automatic: false };
     const response = await get(LIST_PATH, {}, false, "token", meta);
     if (began !== generation) throw new SignInRequired();
     if (response.status !== 200) throw refusal(response.status, began);
@@ -375,18 +381,24 @@ export function createApiClient(options: { send?: Send; openEvents?: (address: s
 
   const signOutToken = async (): Promise<string> => (await tokenRead()).csrf;
 
-  type Submit = { limit?: number; refuse?: (response: Response, mine: number) => Promise<Error>; cut?: () => Error };
+  type Submit = { limit?: number; refuse?: (response: Response, mine: number) => Promise<Error>; cut?: () => Error; chain?: ChatChain };
 
   async function submit<T extends CommentReceipt>(path: string, check: () => void, bodyOf: (token: string) => string, receiptOf: (raw: unknown) => T, onList?: TokenList, more: Submit = {}): Promise<T> {
     check();
-    const read = await tokenRead();
-    onList?.(read.listing, read.sent);
-    const body = bodyOf(read.csrf);
+    const wait = more.chain !== undefined;
+    let token = more.chain?.csrf ?? null;
+    if (token === null) {
+      const read = await tokenRead(wait);
+      onList?.(read.listing, read.sent);
+      token = read.csrf;
+    }
+    const body = bodyOf(token);
     const mine = generation;
     const controller = new AbortController();
-    const stop = (options.schedule ?? later)(() => controller.abort(), POST_TIMEOUT);
+    let stop = (): void => undefined;
     try {
-      const response = await request({ kind: "post", automatic: false }, async () => {
+      const response = await request(wait ? { kind: "post", automatic: false, wait } : { kind: "post", automatic: false }, async () => {
+        stop = (options.schedule ?? later)(() => controller.abort(), POST_TIMEOUT);
         csrf = null;
         try {
           return await send(path, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json" }, body, credentials: "same-origin", redirect: "manual", signal: controller.signal });
@@ -409,13 +421,13 @@ export function createApiClient(options: { send?: Send; openEvents?: (address: s
 
   let chatClient: ChatClient | undefined;
   if (typeof __QD_CHAT__ !== "undefined" && __QD_CHAT__ === "on") {
-    async function rows(automatic: boolean): Promise<ChatListed[]> {
+    async function rows(automatic: boolean): Promise<ChatList> {
       const lib = await import("./chat-client");
       const mine = generation;
       const response = await get(CHATS_PATH, {}, automatic, "chat");
       if (mine !== generation) throw new SignInRequired();
       if (response.status !== 200) throw refusal(response.status, mine);
-      const listed = lib.parseChatRows(await jsonOf(response));
+      const listed = lib.parseChatList(await jsonOf(response));
       if (mine !== generation) throw new SignInRequired();
       return listed;
     }
@@ -434,25 +446,69 @@ export function createApiClient(options: { send?: Send; openEvents?: (address: s
       return read;
     }
 
-    async function errorIs(response: Response, name: string): Promise<boolean> {
+    async function errorOf(response: Response): Promise<string | null> {
       const body = await jsonOf(response, 256).catch(() => null);
-      return typeof body === "object" && body !== null && !Array.isArray(body) && Object.keys(body).join() === "error" && "error" in body && body.error === name;
+      return isRecord(body) && Object.keys(body).join() === "error" && typeof body.error === "string" ? body.error : null;
     }
+
+    const errorIs = async (response: Response, name: string): Promise<boolean> => (await errorOf(response)) === name;
 
     async function refuse(response: Response, mine: number): Promise<Error> {
       const { CHAT_WORDS } = await import("./chat-client");
       const status = response.status;
       if (status === 429) return new RateLimited();
       if (status === 401 || status === 403) return refusal(status, mine);
-      if (status === 422) return new Refused((await errorIs(response, "quote")) ? CHAT_WORDS.quoteGone : CHAT_WORDS.bot);
+      if (status === 422) {
+        const error = await errorOf(response);
+        return new Refused(error === "quote" ? CHAT_WORDS.quoteGone : error === "files" ? CHAT_WORDS.expired : CHAT_WORDS.bot);
+      }
       if (status === 400) return new Refused(CHAT_WORDS.text);
       if (status === 502 || (status < 500 && status >= 400)) return new Refused(CHAT_WORDS.mail);
       return new NotConfirmed();
     }
 
-    async function sendChat(bot: string, outgoing: WireOutgoing, onList?: TokenList): Promise<ChatReceipt> {
+    async function sendChat(bot: string, outgoing: WireOutgoing, onList?: TokenList, chain?: ChatChain): Promise<ChatReceipt> {
       const lib = await import("./chat-client");
-      return submit(CHAT_PATH, () => lib.checkOutgoing(bot, outgoing), (token) => lib.chatBody(bot, outgoing, token), (raw) => lib.chatReceiptOf(raw, outgoing.clientId), onList, { limit: 16384, refuse });
+      return submit(CHAT_PATH, () => lib.checkOutgoing(bot, outgoing), (token) => lib.chatBody(bot, outgoing, token), (raw) => lib.chatReceiptOf(raw, outgoing.clientId), onList, { limit: 16384, refuse, chain });
+    }
+
+    async function chainToken(onList?: TokenList): Promise<string> {
+      const read = await tokenRead(true);
+      onList?.(read.listing, read.sent);
+      return read.csrf;
+    }
+
+    async function upload(file: File, token: string): Promise<UploadReceipt> {
+      const lib = await import("./chat-client");
+      const type = lib.uploadType(file);
+      const mine = generation;
+      const controller = new AbortController();
+      let stop = (): void => undefined;
+      try {
+        const response = await request({ kind: "post", automatic: false, wait: true }, async () => {
+          stop = (options.schedule ?? later)(() => controller.abort(), UPLOAD_TIMEOUT);
+          csrf = null;
+          try {
+            return await send(FILES_PATH, { method: "POST", headers: { Accept: "application/json", "Content-Type": type, "X-QD-File-Name": encodeURIComponent(file.name), "X-QD-Csrf": token }, body: file, credentials: "same-origin", redirect: "manual", signal: controller.signal });
+          } catch {
+            throw new NotConfirmed();
+          }
+        });
+        if (response.type === "opaqueredirect" || response.status === 303) throw new FreshSignInRequired();
+        if (response.status === 429) throw new RateLimited();
+        if (response.status === 401 || response.status === 403) throw refusal(response.status, mine);
+        if (response.status === 413) throw new Refused(lib.bigText(file.name));
+        if (response.status === 422) throw new Refused(lib.typeText(file.name));
+        if (response.status !== 200) throw new NotConfirmed();
+        const receipt = lib.uploadReceiptOf(await jsonOf(response, 4096, () => new NotConfirmed()));
+        if (mine === generation) {
+          csrf = receipt.csrf;
+          fresh = receipt.freshUntil;
+        }
+        return receipt;
+      } finally {
+        stop();
+      }
     }
 
     async function readChat(bot: string, upTo: string, onList?: TokenList): Promise<void> {
@@ -460,7 +516,7 @@ export function createApiClient(options: { send?: Send; openEvents?: (address: s
       await submit(CHAT_READ_PATH, () => lib.checkRead(bot, upTo), (token) => lib.readBody(bot, upTo, token), lib.readReceiptOf, onList);
     }
 
-    chatClient = { rows, thread, newer: (bot, after, automatic) => thread(bot, undefined, automatic, after), send: sendChat, read: readChat };
+    chatClient = { rows, thread, newer: (bot, after, automatic) => thread(bot, undefined, automatic, after), send: sendChat, read: readChat, token: chainToken, upload };
   }
 
   async function answer(id: string, input: AnswerPost, onList?: TokenList): Promise<AnswerSent> {
