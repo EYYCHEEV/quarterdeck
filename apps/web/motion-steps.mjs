@@ -46,7 +46,32 @@ export const blankSeen = (p) => p.evaluate(() => window.__qdBlank === true);
 
 export const motionReady = (page) => page.waitForFunction(() => document.querySelector('link[href$="motion.css"]')?.sheet);
 
-async function motionRun(browser, { size, still, steps, prepare, ignore, late }) {
+const otherLook = () => {
+  const root = document.documentElement;
+  const was = root.getAttribute("data-appearance");
+  root.setAttribute("data-appearance", was === "light" ? "dark" : "light");
+  return was;
+};
+
+const lookBack = (was) => {
+  const root = document.documentElement;
+  if (was === null) root.removeAttribute("data-appearance");
+  else root.setAttribute("data-appearance", was);
+};
+
+async function redrawPaneLayers(page) {
+  const was = await page.evaluate(otherLook);
+  await frames(page);
+  await settle(page);
+  await page.evaluate(lookBack, was);
+  await frames(page);
+  await settle(page);
+  await frames(page);
+}
+
+const leaveStyle = (selector) => document.querySelector(selector).style.setProperty("opacity", "0.98");
+
+async function motionRun(browser, { size, still, steps, prepare, ignore, late, leftover }) {
   const options = { colorScheme: "dark", ...size };
   const context = still ? await browser.newContext({ ...options, reducedMotion: "reduce" }) : await motionContext(browser, options);
   await countViewTransitions(context);
@@ -107,8 +132,13 @@ async function motionRun(browser, { size, still, steps, prepare, ignore, late })
       (still ? "with Reduce Motion" : "with motion") + ": once it settles nothing is marked, copied or held part way",
     );
     if (errors.length) throw new Error("console errors: " + errors.join(" | "));
+    if (leftover && !still) {
+      await page.evaluate(leaveStyle, leftover);
+      await settle(page);
+    }
     await page.evaluate(() => document.body.style.setProperty("will-change", "opacity"));
     await frames(page);
+    await redrawPaneLayers(page);
     return { picture: await page.screenshot(), starts: await viewTransitionCalls(page) };
   } finally {
     await context.close();
@@ -162,7 +192,7 @@ export async function motionPair(p, size, steps, extra = {}) {
   const still = await motionRun(browser, { size, still: true, steps, ...extra });
   same(still.starts, 0, "with Reduce Motion no view transition starts");
   if (moving.picture.equals(still.picture)) return;
-  const where = keepPictures(size, moving.picture, still.picture);
+  const where = extra.leftover ? "" : keepPictures(size, moving.picture, still.picture);
   const page = await browser.newPage();
   try {
     throw new Error("the end picture with motion differs from the Reduce Motion picture: " + (await page.evaluate(pixelsApart, [moving.picture.toString("base64"), still.picture.toString("base64")])) + where);

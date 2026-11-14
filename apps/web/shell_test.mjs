@@ -4112,6 +4112,19 @@ for (const [where, size] of [["the Mac", MAC], ["an iPad sideways", TOUCH_SIDEWA
     equal(await blankSeen(p), false, "the first visit to Mail never slid in the code-loading fallback");
   });
 
+it("Motion: on an iPad sideways, where each scrolling pane is drawn in a layer of its own, a style left on the card pane after the change still fails the end picture compare", TOUCH_SIDEWAYS, async (p) => {
+  const steps = async (page) => {
+    await open(page, "/queue");
+    await T(page, "card-pane").getByTestId("card-title").waitFor();
+    await settle(page);
+    await T(page, "card-row").nth(1).locator("a").tap();
+    await T(page, "card-title").getByText(QUEUE_ORDER[1], { exact: true }).waitFor();
+    await page.waitForFunction(() => document.documentElement.dataset.move === undefined, null, { polling: "raf" });
+  };
+  const thrown = await motionPair(p, TOUCH_SIDEWAYS, steps, { ...motionPage(), leftover: '[data-testid="card-pane"]' }).then(() => "nothing was thrown", (error) => String(error?.message ?? error));
+  equal(thrown.startsWith("the end picture with motion differs from the Reduce Motion picture: "), true, "a style left on the card pane fails the compare; thrown: " + thrown.split("\n")[0].slice(0, 160));
+});
+
 for (const [where, size, leave, focus] of [
   ["the Mac", MAC, async (p) => {
     await T(p, "settings-sections").getByRole("link").first().focus();
