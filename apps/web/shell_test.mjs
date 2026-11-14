@@ -6372,6 +6372,71 @@ it("Server Chat: a failed send among good ones keeps its row, words and Try Agai
   equal([await failed.getAttribute("data-message-id"), asked.posts.map((body) => body.clientId === asked.posts[0].clientId), await T(p, "chat-thread").getByText("Send A", { exact: true }).count(), await chatTimeline(p)], ["iris-m32", [true, true, true, false, true], 1, withRows("iris-m31", "iris-m32")], "A lands as its own row below B with its own clientId, once, and the whole list is in order");
 }, /502/);
 
+const busyLine = (seconds) => "Mail is busy. Sending again in " + seconds + (seconds === 1 ? " second" : " seconds");
+const busyAnswer = (route, seconds) => chatReply(route, 502, { error: "mail", retryAfter: seconds });
+const sendWhileBusy = async (p, tap) => {
+  await chatOpened(p);
+  await p.clock.pauseAt(await p.evaluate(() => Date.now() + 1_000));
+  await T(p, "chat-input").fill("Please send the sheet.");
+  if (tap) await T(p, "chat-send").tap();
+  else await T(p, "chat-send").click();
+  return bubble(p, "Please send the sheet.");
+};
+
+it("Server Chat on the Mac: a busy answer with a retry time of 5 seconds shows Mail is busy. Sending again in 5 seconds on his row with no Try Again, counts down once a second, keeps its count when he leaves the chat and comes back, and at the end sends once more with the same clientId and the words first sent, leaving his new draft in the box", MAC, async (p) => {
+  await p.clock.install({ time: new Date("2026-11-06T06:00:00Z") });
+  const asked = await serverBuildChat(p, { post: (route, body, n) => (n === 1 ? busyAnswer(route, 5) : chatReply(route, 200, chatSent(body, 1))) });
+  const row = await sendWhileBusy(p, false);
+  const line = row.getByTestId("chat-busy");
+  await line.getByText(busyLine(5), { exact: true }).waitFor();
+  equal([await row.getByRole("button", { name: "Try Again", exact: true }).count(), await row.getByRole("alert").count(), asked.posts.length], [0, 0, 1], "Try Again, failure lines and POSTs while it counts");
+  await T(p, "chat-input").fill("A new draft.");
+  for (const left of [4, 3]) {
+    await p.clock.runFor(1_000);
+    await line.getByText(busyLine(left), { exact: true }).waitFor();
+  }
+  await p.locator('[data-testid="chat-row"][data-id="alba"]').click();
+  await p.locator('[aria-label="Chat with alba"]').waitFor();
+  await p.clock.runFor(1_000);
+  await p.locator('[data-testid="chat-row"][data-id="iris"]').click();
+  await line.getByText(busyLine(2), { exact: true }).waitFor();
+  await p.clock.runFor(1_000);
+  await line.getByText(busyLine(1), { exact: true }).waitFor();
+  equal(asked.posts.length, 1, "POSTs one second before the count ends");
+  await p.clock.runFor(1_000);
+  await sendSettles(p.locator('[data-message-id="iris-m31"]'));
+  equal(
+    [asked.posts.length, asked.posts[1]?.clientId === asked.posts[0].clientId, asked.posts[1]?.text, await T(p, "chat-input").inputValue(), await T(p, "chat-busy").count(), await T(p, "chat-thread").getByText("Please send the sheet.", { exact: true }).count()],
+    [2, true, "Please send the sheet.", "A new draft.", 0, 1],
+    "POSTs, the same clientId, the words first sent, his draft, the busy line, his words shown once",
+  );
+}, /502/);
+
+it("Server Chat on a phone: when the page is hidden as the busy count ends, nothing is sent until the page shows again, and then his message goes out once with the same clientId", PHONE, async (p) => {
+  await tabVisibility(p);
+  await p.clock.install({ time: new Date("2026-11-06T06:00:00Z") });
+  const asked = await serverBuildChat(p, { post: (route, body, n) => (n === 1 ? busyAnswer(route, 3) : chatReply(route, 200, chatSent(body, 1))) });
+  const row = await sendWhileBusy(p, true);
+  await row.getByTestId("chat-busy").getByText(busyLine(3), { exact: true }).waitFor();
+  await p.evaluate(() => window.qdVisibility("hidden"));
+  await p.clock.runFor(10_000);
+  await p.waitForTimeout(250);
+  equal(asked.posts.length, 1, "POSTs while the page is hidden, 10 seconds after the busy answer");
+  await p.evaluate(() => window.qdVisibility("visible"));
+  await sendSettles(p.locator('[data-message-id="iris-m31"]'));
+  equal([asked.posts.length, asked.posts[1]?.clientId === asked.posts[0].clientId, await T(p, "chat-busy").count()], [2, true, 0], "POSTs, the same clientId, the busy line");
+}, /502/);
+
+it("Server Chat on the Mac: when the send after a busy count is refused too, his row shows Not Delivered with Try Again after two POSTs in all, and no second count", MAC, async (p) => {
+  await p.clock.install({ time: new Date("2026-11-06T06:00:00Z") });
+  const asked = await serverBuildChat(p, { post: (route) => busyAnswer(route, 2) });
+  const row = await sendWhileBusy(p, false);
+  await row.getByTestId("chat-busy").getByText(busyLine(2), { exact: true }).waitFor();
+  await p.clock.runFor(2_000);
+  await sendSettles(row.getByRole("alert").filter({ hasText: "Not Delivered" }));
+  equal([asked.posts.length, await row.getByRole("button", { name: "Try Again", exact: true }).count(), await row.getByTestId("chat-busy").count()], [2, 1, 0], "POSTs in all, Try Again, the busy line");
+}, /502/);
+
 it("Server Chat: a reopened thread read that answers after a newer read never takes back the bot reply the newer read showed, and his next message lands after it, each row once in time order", MAC, async (p) => {
   let arrived = false;
   const REPLY = { id: "iris-reply", from: "bot", text: "A reply after answer 30.", at: "2026-11-06T00:35:00-05:00", refs: [] };
