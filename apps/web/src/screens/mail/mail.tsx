@@ -52,7 +52,7 @@ const EMPTY = { paddingTop: 32 };
 const RULED = { background: "var(--color-line)" };
 
 const ACTION =
-  "inline-flex min-h-hit flex-none cursor-pointer items-center gap-s1 rounded-key border border-line-3 bg-panel px-s2 text-label font-strong text-ink-2 hover:text-ink";
+  "inline-flex min-h-hit flex-none cursor-pointer items-center justify-center gap-s1 rounded-key border border-line-3 bg-panel px-s2 text-label font-strong text-ink-2 hover:text-ink pointer-coarse:min-w-hit";
 const PICK = "flex min-h-hit w-full cursor-pointer items-center gap-s2 rounded-key px-s2 py-s1 text-left text-body hover:bg-raised";
 
 function RefChips({ codes, world }: { codes: string[]; world: World }) {
@@ -91,7 +91,7 @@ function AskMenu({ thread, mail, world, wide, onClose }: { thread: MailThread; m
         <Avatar name={bot.name} color={bot.color} size="sm" />
         <span className="min-w-0 [overflow-wrap:anywhere]" data-testid="ask-name">
           {bot.name}
-          {wrote && <span className="text-ink-3"> (wrote it)</span>}
+          {wrote && <span className="text-ink-2"> (wrote it)</span>}
         </span>
       </button>
     </li>
@@ -195,7 +195,8 @@ function ThreadRow({ thread, world, on, wide, motion }: { thread: MailThread; wo
       {thread.subject}
     </b>
   );
-  const time = <time className="flex-none text-label text-ink-3">{clockTime(new Date(lastMailAt(thread)).toISOString())}</time>;
+  const quiet = on ? "text-ink-2" : "text-ink-3";
+  const time = <time className={cx("flex-none text-label", quiet)}>{clockTime(new Date(lastMailAt(thread)).toISOString())}</time>;
   const code = <code className={cx("rounded-key bg-raised px-s1 py-nudge font-mono text-label text-ink-2", wide ? "flex-none" : "ml-auto")}>{thread.ref}</code>;
   const who = (
     <span className="min-w-0 flex-1 text-meta text-ink-2 [overflow-wrap:anywhere]" data-testid="mail-row-bots">
@@ -241,7 +242,7 @@ function ThreadRow({ thread, world, on, wide, motion }: { thread: MailThread; wo
                 {who}
                 {time}
               </span>
-              {place && <span className="text-meta text-ink-3">{place}</span>}
+              {place && <span className={cx("text-meta", quiet)}>{place}</span>}
             </>
           ) : (
             <>
@@ -250,7 +251,7 @@ function ThreadRow({ thread, world, on, wide, motion }: { thread: MailThread; wo
                 {time}
               </span>
               {who}
-              <span className="flex flex-wrap items-center gap-x-s2 gap-y-s1 text-meta text-ink-3">
+              <span className={cx("flex flex-wrap items-center gap-x-s2 gap-y-s1 text-meta", quiet)}>
                 {place}
                 {code}
               </span>

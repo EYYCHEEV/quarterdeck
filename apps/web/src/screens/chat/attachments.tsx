@@ -18,7 +18,7 @@ function PictureTile({ picture, onOpen }: { picture: Attachment; onOpen: Open })
     return (
       <div className="flex min-h-[112px] w-[112px] flex-col justify-between gap-s1 rounded-key border border-line bg-raised p-s2" data-testid="chat-picture-failed">
         <span className="text-meta font-strong [overflow-wrap:anywhere]">{picture.name}</span>
-        <span className="text-meta text-ink-3">This picture did not load.</span>
+        <span className="text-meta text-ink-2">This picture did not load.</span>
         {picture.url && (
           <LinkButton
             onClick={() => {
@@ -136,7 +136,7 @@ export function DraftStrip({ files, onRemove }: { files: DraftFile[]; onRemove: 
             <div className="flex min-h-[88px] w-[176px] max-w-full flex-col justify-end gap-hair rounded-key border border-line bg-raised p-s2">
               <Icon name="file" size="sm" className="mb-auto text-ink-3" />
               <span className="text-meta [overflow-wrap:anywhere]">{file.name}</span>
-              <span className="text-meta text-ink-3">{sizeText(file.size)}</span>
+              <span className="text-meta text-ink-2">{sizeText(file.size)}</span>
             </div>
           )}
           <button type="button" aria-label={"Remove " + file.name} onClick={() => onRemove(id)} className="absolute top-0 right-0 grid size-hit cursor-pointer place-items-center" data-remove={id}>

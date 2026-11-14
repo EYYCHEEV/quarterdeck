@@ -91,7 +91,7 @@ export function ArtifactScreen({ projectId, artifactRef }: { projectId: string; 
                     {users.map((user, n) => (
                       <Fragment key={user.to}>
                         {n > 0 && <span className="text-ink-2">·</span>}
-                        <Link to={user.to} className="inline-flex min-h-hit items-center text-inherit underline hover:text-hand">{user.name}</Link>
+                        <Link to={user.to} className="inline-flex min-h-hit items-center text-inherit underline hover:text-hand pointer-coarse:min-w-hit">{user.name}</Link>
                       </Fragment>
                     ))}
                   </dd>

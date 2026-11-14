@@ -47,7 +47,7 @@ function CiteMenu({ refs, onPick, onClose }: { refs: Ref[]; onPick: (code: strin
           >
             <code className="flex-none font-mono text-label text-ink">{ref.code}</code>
             <span className="min-w-0 [overflow-wrap:anywhere] text-ink-2">{ref.title}</span>
-            <span className="ml-auto flex-none text-label text-ink-3">{ref.kind}</span>
+            <span className="ml-auto flex-none text-label text-ink-2">{ref.kind}</span>
           </button>
         ))}
       </div>

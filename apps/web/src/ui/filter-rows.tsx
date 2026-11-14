@@ -59,7 +59,7 @@ function PickRow({
         <span className="w-[76px] flex-none text-ink-2">{group.title}</span>
         <span className="min-w-0 flex-1">
           <span className={cx("block truncate", label && "font-strong")}>{label ?? "All"}</span>
-          {hint && !label && <span className="block text-meta text-ink-3">{hint}</span>}
+          {hint && !label && <span className="block text-meta text-ink-2">{hint}</span>}
         </span>
         <Icon name={open ? "chevD" : "chevR"} size="sm" className="text-ink-3" />
       </button>

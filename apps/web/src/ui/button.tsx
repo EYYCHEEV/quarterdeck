@@ -38,7 +38,7 @@ export function LinkButton(props: Omit<ComponentProps<"button">, "className" | "
   return (
     <button
       type="button"
-      className="inline-flex min-h-hit cursor-pointer items-center px-s1 text-meta text-inherit underline hover:text-hand"
+      className="inline-flex min-h-hit cursor-pointer items-center px-s1 text-meta text-inherit underline hover:text-hand pointer-coarse:min-w-hit"
       {...props}
     />
   );

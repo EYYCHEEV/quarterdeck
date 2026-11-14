@@ -32,7 +32,7 @@ export function ChoiceRow({ on, label, detail, className, ...rest }: Omit<Compon
     >
       <span className="min-w-0 flex-1">
         {label}
-        {detail && <span className="block text-meta text-ink-3">{detail}</span>}
+        {detail && <span className="block text-meta text-ink-2">{detail}</span>}
       </span>
       <RadioMark on={on} neutral small />
     </button>
