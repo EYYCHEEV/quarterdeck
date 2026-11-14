@@ -6359,12 +6359,13 @@ it("Server Chat on the Mac: with files listed and no quote listed, Talk to puts 
   await talkTo(p, MAC);
   await p.waitForURL("**/chat/alba");
   equal(await draftReads(p, ALBA_1_LINE + "\n"), ALBA_1_LINE + "\n", "the box after the first Talk to");
+  await T(p, "chat-input").fill("Next thought.");
   await T(p, "pick-files").setInputFiles([{ name: "notes.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n") }]);
   await T(p, "draft-file").waitFor();
   await p.goBack();
   await talkTo(p, MAC);
   await p.waitForURL("**/chat/alba");
-  equal([await draftReads(p, ALBA_1_LINE + "\n"), await T(p, "draft-file").count()], [ALBA_1_LINE + "\n", 1], "the box and the files in the draft after the second Talk to");
+  equal([await draftReads(p, ALBA_1_LINE + "\nNext thought."), await T(p, "draft-file").count()], [ALBA_1_LINE + "\nNext thought.", 1], "the box once the quote has turned into the card line, and the files in the draft");
 });
 
 it("Server Chat: a failed send among good ones keeps its row, words and Try Again where it was, the next send turns Sent in its own row below it, and Try Again later lands as its own row", MAC, async (p) => {
