@@ -320,6 +320,30 @@ it("at 390 five chips take more than two rows, the strip then scrolls inside its
   }
 });
 
+for (const [label, size] of [["390 by 844", PHONE], ["390 by 500, the room a keyboard leaves", { viewport: { width: 390, height: 500 }, hasTouch: true, isMobile: true }]])
+  it("at " + label + ": twelve photos against a limit of five leave five chips and seven notes; the notes scroll inside two rows of their own with the first one in view, and the message box and Send stay on screen", size, async (p) => {
+    const asked = await serve(p);
+    await opened(p);
+    await T(p, "pick-files").setInputFiles(Array.from({ length: 12 }, (_, n) => photo("screenshot-number-" + (n + 1) + ".png")));
+    const notes = T(p, "draft-note");
+    await notes.nth(6).waitFor({ state: "attached" });
+    assert.deepEqual([await T(p, "draft-file").count(), await notes.count()], [5, 7], "chips and notes");
+    assert.equal(await squashed(notes.first().locator("p")), "Not added: screenshot-number-6.png. A message holds 5 files at most. Send these, then attach the rest.");
+    const held = await T(p, "draft-notes").evaluate((box) => {
+      const chip = document.querySelector('[data-testid="draft-file"]').getBoundingClientRect().height;
+      const gap = parseFloat(getComputedStyle(document.querySelector('[data-testid="draft-list"]')).rowGap);
+      const first = box.querySelector('[data-testid="draft-note"]').getBoundingClientRect();
+      const frame = box.getBoundingClientRect();
+      return { scrolls: box.scrollHeight > box.clientHeight, high: box.clientHeight, two: chip * 2 + gap, firstInView: first.top >= frame.top - 1 && first.top < frame.bottom };
+    });
+    assert.ok(held.scrolls && held.high <= held.two + 1 && held.firstInView, "the notes' own scroll: " + JSON.stringify(held));
+    for (const id of ["chat-input", "chat-send"]) {
+      const box = await T(p, id).boundingBox();
+      assert.ok(box.y >= 0 && box.y + box.height <= size.viewport.height, id + " on screen: " + JSON.stringify(box));
+    }
+    assert.equal(asked.uploads.length, 0);
+  });
+
 it("on the Mac, files dragged over the chat turn the composer's edge to a dashed line and show the server's limits in the composer, and the dropped file becomes a chip", MAC, async (p) => {
   const asked = await serve(p);
   await opened(p);
