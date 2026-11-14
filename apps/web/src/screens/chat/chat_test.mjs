@@ -2534,7 +2534,12 @@ it("Chat motion: when his send is confirmed during its rise, the row that was Se
 );
 
 const spaceUnder = (row) => row.evaluate((el) => el.getBoundingClientRect().bottom - el.querySelector("[data-message-text]").getBoundingClientRect().bottom);
-const rested = (row) => row.evaluate((el) => Promise.allSettled(el.getAnimations({ subtree: true }).map((one) => one.finished)).then(() => null));
+const REST_LIMIT = 5000;
+const rested = (row) => {
+  const limit = Promise.withResolvers();
+  const late = setTimeout(limit.reject, REST_LIMIT, new Error("something under the message is still moving after " + REST_LIMIT + " ms"));
+  return Promise.race([row.evaluate((el) => Promise.allSettled(el.getAnimations({ subtree: true }).map((one) => one.finished)).then(() => null)), limit.promise]).finally(() => clearTimeout(late));
+};
 const steppedLine = (row, name) =>
   row.evaluate((el, wanted) => {
     const motion = el.getAnimations({ subtree: true }).find((one) => one.animationName === wanted);
