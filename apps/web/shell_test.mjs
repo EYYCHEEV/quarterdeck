@@ -5764,7 +5764,7 @@ for (const [status, error, words, again] of [
   [400, "text", "Message is empty or too long.", false],
   [502, "mail", "Not Delivered", true],
 ])
-  it("Server Chat: a " + status + " " + error + " refusal shows Not Delivered" + (error === "mail" ? " after one quiet retry with the same clientId" : " over " + JSON.stringify(words)) + " on his row, never puts his words back in the box, and " + (again ? "Try Again resends the same clientId" : "offers no Try Again, so his next message goes out as a new send"), MAC, async (p) => {
+  it("Server Chat: a " + status + " " + error + " refusal shows Not Delivered" + (error === "mail" ? " after two quiet retries with the same clientId" : " over " + JSON.stringify(words)) + " on his row, never puts his words back in the box, and " + (again ? "Try Again resends the same clientId" : "offers no Try Again, so his next message goes out as a new send"), MAC, async (p) => {
     let refuse = true;
     const asked = await serverBuildChat(p, { post: (route, body) => (refuse ? chatReply(route, status, { error }) : chatReply(route, 200, chatSent(body, 1))) });
     await chatOpened(p);
@@ -5774,7 +5774,7 @@ for (const [status, error, words, again] of [
     const line = row.getByRole("alert").filter({ hasText: words });
     await sendSettles(line);
     const tries = asked.posts.length;
-    equal([await T(p, "chat-input").inputValue(), await line.getByText("Not Delivered", { exact: true }).count(), await row.getByRole("button", { name: "Try Again", exact: true }).count(), await row.getByText("Sending...", { exact: true }).count(), tries, new Set(asked.posts.map((body) => body.clientId)).size], ["", 1, again ? 1 : 0, 0, error === "mail" ? 2 : 1, 1], "after the refusal: the box, Not Delivered, Try Again, Sending, POSTs, clientIds");
+    equal([await T(p, "chat-input").inputValue(), await line.getByText("Not Delivered", { exact: true }).count(), await row.getByRole("button", { name: "Try Again", exact: true }).count(), await row.getByText("Sending...", { exact: true }).count(), tries, new Set(asked.posts.map((body) => body.clientId)).size], ["", 1, again ? 1 : 0, 0, error === "mail" ? 3 : 1, 1], "after the refusal: the box, Not Delivered, Try Again, Sending, POSTs, clientIds");
     refuse = false;
     if (again) {
       await row.getByRole("button", { name: "Try Again", exact: true }).click();
@@ -5890,19 +5890,19 @@ for (const [found, name] of [[true, "the re-read holds the clientId, so his row 
     );
   }, /ERR_FAILED/);
 
-it("Server Chat: when every POST's answer is lost and no read holds it, Not Delivered shows after one quiet retry with the same clientId, and when the thread holds it on his return his row reads Sent with no third POST", MAC, async (p) => {
+it("Server Chat: when every POST's answer is lost and no read holds it, Not Delivered shows after two quiet retries with the same clientId, and when the thread holds it on his return his row reads Sent with no fourth POST", MAC, async (p) => {
   const asked = await serverBuildChat(p, { post: (route) => route.abort() });
   await chatOpened(p);
   await T(p, "chat-input").fill("Please send the sheet.");
   await T(p, "chat-send").click();
   await sendSettles(bubble(p, "Please send the sheet.").getByRole("alert").filter({ hasText: "Not Delivered" }));
-  equal([asked.posts.length, new Set(asked.posts.map((body) => body.clientId)).size], [2, 1], "POSTs and clientIds when Not Delivered shows");
+  equal([asked.posts.length, new Set(asked.posts.map((body) => body.clientId)).size], [3, 1], "POSTs and clientIds when Not Delivered shows");
   asked.kept.push(Object.fromEntries(Object.entries(chatSent(asked.posts[0], 1)).filter(([key]) => ["id", "from", "text", "at", "refs", "clientId"].includes(key))));
   await p.locator('[data-testid="chat-row"][data-id="alba"]').click();
   await p.locator('[aria-label="Chat with alba"]').waitFor();
   await p.locator('[data-testid="chat-row"][data-id="iris"]').click();
   await p.locator('[data-message-id="iris-m31"]').waitFor();
-  equal([asked.posts.length, await T(p, "chat-thread").getByText("Please send the sheet.", { exact: true }).count(), await T(p, "chat-thread").getByRole("alert").count()], [2, 1, 0], "POSTs, his words shown once, failure lines");
+  equal([asked.posts.length, await T(p, "chat-thread").getByText("Please send the sheet.", { exact: true }).count(), await T(p, "chat-thread").getByRole("alert").count()], [3, 1, 0], "POSTs, his words shown once, failure lines");
 }, /ERR_FAILED/);
 
 it("Server Chat: a send whose sign-in token read fails because the phone is offline shows no failure, and when the network is back the app tries once more by itself after its pause, so his message lands with one POST", MAC, async (p) => {
@@ -5940,7 +5940,7 @@ for (const [name, size] of [["a phone", PHONE], ["the Mac", MAC]])
     await T(p, "chat-input").fill("An unsent message.");
     await T(p, "chat-send").click();
     const failed = T(p, "chat-thread").getByText("Not Delivered", { exact: true });
-    for (let step = 0; step < 20 && !(await failed.count()); step += 1) await p.clock.runFor(1_000);
+    for (let step = 0; step < 30 && !(await failed.count()); step += 1) await p.clock.runFor(1_000);
     await failed.waitFor();
     if (size === PHONE) {
       await holdBubble(p, "iris-m30");
@@ -6343,12 +6343,12 @@ for (const [status, error, words] of [
     refuse = false;
     await row.getByRole("button", { name: "Try Again", exact: true }).click();
     await p.locator('[data-message-id="iris-m31"]').waitFor();
-    equal([asked.posts.length, new Set(asked.posts.map((body) => body.clientId)).size, await T(p, "chat-input").inputValue()], [error === "mail" ? 3 : 2, 1, ALBA_1_LINE + "\nNext thought."], "POSTs, one clientId, the box left as it was");
+    equal([asked.posts.length, new Set(asked.posts.map((body) => body.clientId)).size, await T(p, "chat-input").inputValue()], [error === "mail" ? 4 : 2, 1, ALBA_1_LINE + "\nNext thought."], "POSTs, one clientId, the box left as it was");
   }, new RegExp(String(status)));
 
 it("Server Chat: a failed send among good ones keeps its row, words and Try Again where it was, the next send turns Sent in its own row below it, and Try Again later lands as its own row", MAC, async (p) => {
   await p.clock.install({ time: new Date("2026-11-06T06:00:00Z") });
-  const asked = await serverBuildChat(p, { post: (route, body, n) => (n <= 2 ? chatReply(route, 502, { error: "mail" }) : chatReply(route, 200, chatSent(body, n - 2))) });
+  const asked = await serverBuildChat(p, { post: (route, body, n) => (n <= 3 ? chatReply(route, 502, { error: "mail" }) : chatReply(route, 200, chatSent(body, n - 3))) });
   await chatOpened(p);
   const whole = await chatTimeline(p);
   const at = whole.lastIndexOf("iris-m30") + 1;
@@ -6363,12 +6363,12 @@ it("Server Chat: a failed send among good ones keeps its row, words and Try Agai
   await p.locator('[data-message-id="iris-m31"]').waitFor();
   equal(
     [await kept.evaluate((el) => el.isConnected), await failed.getByRole("button", { name: "Try Again", exact: true }).count(), await bubble(p, "Send B").getAttribute("data-message-id"), await chatTimeline(p), asked.posts.length],
-    [true, 1, "iris-m31", withRows("other", "iris-m31"), 3],
-    "A stays a failed row with its Try Again above B, B is the sent message, the whole list in order with its day labels, three POSTs (A and its quiet retry, then B)",
+    [true, 1, "iris-m31", withRows("other", "iris-m31"), 4],
+    "A stays a failed row with its Try Again above B, B is the sent message, the whole list in order with its day labels, four POSTs (A and its two quiet retries, then B)",
   );
   await failed.getByRole("button", { name: "Try Again", exact: true }).click();
   await p.locator('[data-message-id="iris-m32"]').waitFor();
-  equal([await failed.getAttribute("data-message-id"), asked.posts[1].clientId === asked.posts[0].clientId, asked.posts[3].clientId === asked.posts[0].clientId, asked.posts[2].clientId !== asked.posts[0].clientId, await T(p, "chat-thread").getByText("Send A", { exact: true }).count(), await chatTimeline(p)], ["iris-m32", true, true, true, 1, withRows("iris-m31", "iris-m32")], "A lands as its own row below B with its own clientId, once, and the whole list is in order");
+  equal([await failed.getAttribute("data-message-id"), asked.posts.map((body) => body.clientId === asked.posts[0].clientId), await T(p, "chat-thread").getByText("Send A", { exact: true }).count(), await chatTimeline(p)], ["iris-m32", [true, true, true, false, true], 1, withRows("iris-m31", "iris-m32")], "A lands as its own row below B with its own clientId, once, and the whole list is in order");
 }, /502/);
 
 it("Server Chat: a reopened thread read that answers after a newer read never takes back the bot reply the newer read showed, and his next message lands after it, each row once in time order", MAC, async (p) => {
