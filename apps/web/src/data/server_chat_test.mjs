@@ -837,7 +837,7 @@ for (const [label, reply, seconds] of RETRY_TIMES) {
     assert.deepEqual(phases, seconds === null ? [] : [["busy", seconds]]);
     await pass(h, 61_000);
     assert.equal(state.value?.clientId, "client-b5");
-    assert.deepEqual(h.requests(from), seconds === null ? [TOKEN, POST, THREAD("steward"), TOKEN, POST] : [TOKEN, POST, TOKEN, POST]);
+    assert.deepEqual(h.chatRequests(from), seconds === null ? [POST, THREAD("steward"), POST] : [POST, POST]);
     if (seconds !== null) settledNear(state, seconds * 1_000);
   });
 }
