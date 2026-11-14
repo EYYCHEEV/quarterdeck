@@ -18,7 +18,9 @@ Filled samples that follow this contract are in `apps/server/api/chat-v2/samples
 7. **`rev` keeps seen and working fresh.** Each chat row carries `rev`, a number that changes whenever that thread's seen mark, working state, unread mark or last message changes. The thread answer repeats it. The app re-reads the open thread only when `rev` differs. A missing `rev` means no extra reads. It may also change on a server restart, which costs one extra read. The list stays a bare array.
 8. **Strict and bounded.** A malformed new field makes the thread unreadable, as every field does. So **the server never emits a malformed field**: a bot-written quote that fails its checks becomes `null`, and the message still shows.
    - "Characters" means code points. A message quote's `from` is `"captain"` or `"bot"`.
-   - The app sends a quote of at most 280 code points and reads up to 4,000. The server refuses the owner's quote over 280, and passes a bot's quote up to 4,000 without cutting it.
+   - The app sends a quote of at most 280 code points. The server refuses the owner's quote over 280, and passes a bot's quote up to 4,000 without cutting it. The app has no length check of its own on a quote it reads; the 1,048,576 bytes it reads of one answer bound it.
+   - A message has no limit in characters. One send is at most 131,072 bytes as a request. The app refuses a longer message before it sends, with "Not sent: this message is too long. Shorten it or split it in two."
+   - A thread page holds at most 15 messages and may hold fewer. The server keeps the messages of one page under 786,432 bytes, so the answer stays under the 1,048,576 bytes the app reads. A page always holds at least one message, and `older` says whether more remain before it. A read with `after` answers 409 `{"error": "cursor"}` when the messages after that id would pass that size.
 
 ## A. Chat mail bodies
 
