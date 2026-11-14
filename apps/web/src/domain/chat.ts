@@ -81,12 +81,34 @@ export function cardLine(quote: CardQuote): string {
   return "About Task Card " + quote.cardId + ", version " + quote.version + ': "' + quote.title.replace(/\s+/g, " ").trim() + '"';
 }
 
-export function withCardLine(text: string, quote: CardQuote): string {
+function withTopLine(text: string, line: string, shape: RegExp, same: (found: RegExpExecArray) => boolean): string {
   const end = text.indexOf("\n");
   const first = end < 0 ? text : text.slice(0, end);
-  const found = CARD_LINE.exec(first);
-  if (found && found[1] === quote.cardId && Number(found[2]) === quote.version) return end < 0 ? text + "\n" : text;
-  return cardLine(quote) + "\n" + (found ? text.slice(first.length + 1) : text);
+  const found = shape.exec(first);
+  if (found && same(found)) return end < 0 ? text + "\n" : text;
+  return line + "\n" + (found ? text.slice(first.length + 1) : text);
+}
+
+export function withCardLine(text: string, quote: CardQuote): string {
+  return withTopLine(text, cardLine(quote), CARD_LINE, (found) => found[1] === quote.cardId && Number(found[2]) === quote.version);
+}
+
+const MAIL_LINE = /^About Mail (\S+): "/;
+
+export const isMailQuote = (quote: Quote): quote is NoteQuote => !isCardQuote(quote) && quote.to !== null && quote.messageId === undefined;
+
+export function mailLine(quote: NoteQuote): string {
+  return "About Mail " + quote.label + ': "' + (quote.title ?? "").replace(/\s+/g, " ").trim() + '"';
+}
+
+export function withMailLine(text: string, quote: NoteQuote): string {
+  return withTopLine(text, mailLine(quote), MAIL_LINE, (found) => found[1] === quote.label);
+}
+
+export function quoteAsText(text: string, quote: Quote, quotes: boolean): string | null {
+  if (isMailQuote(quote)) return withMailLine(text, quote);
+  if (quotes) return null;
+  return isCardQuote(quote) ? withCardLine(text, quote) : text;
 }
 
 export function cardQuoteAt(card: Card, version: number, world: CardWorld): CardQuote | null {
