@@ -355,6 +355,66 @@ class ChatThreadTests(unittest.TestCase):
         body = self.thread(env, "bot=bot-b&before=c%40qd.invalid")
         self.assertEqual([m["id"] for m in body["messages"]], ["a+b@qd.invalid"])
 
+    def long_fill(self, env, count, text, bot="bot-b"):
+        ids = []
+        for number in range(count):
+            identifier = f"long{number:03d}@qd.invalid"
+            env.mail.bot_says(bot, text, number, identifier=identifier)
+            ids.append(identifier)
+        env.refresh()
+        return ids
+
+    def page(self, env, query):
+        response = env.get("/captain/api/chat?" + query)
+        self.assertEqual(response.status, 200)
+        self.assertLess(len(response.body), 1048576, "the app reads at most 1 MiB")
+        return json.loads(response.body)
+
+    def test_a_page_of_long_messages_ends_early_under_the_byte_budget_with_older_true(self):
+        env = Env(self)
+        ids = self.long_fill(env, 15, "\U0001F600" * 20000)
+        body = self.page(env, "bot=bot-b")
+        self.assertEqual([m["id"] for m in body["messages"]], ids[6:])
+        self.assertIs(body["older"], True)
+        self.assertEqual(cards.CHAT_PAGE_BYTES, 786432)
+
+    def test_paging_back_through_long_messages_reaches_every_message_once(self):
+        env = Env(self)
+        ids = self.long_fill(env, 25, "\U0001F600" * 20000)
+        seen = []
+        query = "bot=bot-b"
+        for _ in range(25):
+            body = self.page(env, query)
+            shown = [m["id"] for m in body["messages"]]
+            self.assertTrue(shown)
+            seen[:0] = shown
+            if not body["older"]:
+                break
+            query = "bot=bot-b&before=" + shown[0]
+        self.assertEqual(seen, ids)
+
+    def test_a_read_after_an_id_that_would_pass_the_budget_answers_409_cursor(self):
+        env = Env(self)
+        ids = self.long_fill(env, 12, "\U0001F600" * 20000)
+        self.assertEqual(answer(env.get("/captain/api/chat?bot=bot-b&after=" + ids[1])), (409, {"error": "cursor"}))
+        body = self.page(env, "bot=bot-b&after=" + ids[2])
+        self.assertEqual([m["id"] for m in body["messages"]], ids[3:])
+
+    def test_the_largest_message_fits_in_one_page_under_the_apps_read_limit(self):
+        cases = (
+            ("the largest send", "\U0001F600" * 32768, 5),
+            ("a bot mail as large as the mail limit", "x" * 262144, 2),
+            ("a message larger than the budget", "x" * 800000, 1),
+        )
+        for label, text, expected in cases:
+            with self.subTest(message=label):
+                env = Env(self)
+                ids = self.long_fill(env, 5, text)
+                body = self.page(env, "bot=bot-b")
+                self.assertEqual([m["id"] for m in body["messages"]], ids[5 - expected:])
+                self.assertEqual(body["messages"][-1]["text"], text)
+                self.assertIs(body["older"], expected < 5)
+
     def test_a_thread_has_exactly_these_fields(self):
         env = Env(self)
         self.fill(env, 3)
