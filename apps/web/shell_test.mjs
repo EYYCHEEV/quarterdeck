@@ -351,7 +351,7 @@ it("Card keys on the Mac and sideways: a held Enter sends one card only", MAC, a
     });
     await p.keyboard.up("Enter");
     await p.keyboard.press("n");
-    await pane.getByTestId("send").getByText("Send: None of these", { exact: true }).waitFor();
+    await pane.getByTestId("send").getByText("Answer: None of these", { exact: true }).waitFor();
     await shown(p, "· 9 waiting");
   }
 });
@@ -505,19 +505,37 @@ it("Task Card: the owner line names the project and the due", PHONE, async (p) =
   equal(line, "Alba · quarterdeck Due Wed Nov 4, 5 PM ET, in 2 days", "owner line");
 });
 
-it("Task Card: Send A on a two-way pick sends in one tap and the next card opens with Got it", PHONE, async (p) => {
+it("Task Card: Answer A on a two-way pick sends in one tap and the next card opens with Got it", PHONE, async (p) => {
   await open(p, "/queue/alba-1");
+  equal([await nameOf(T(p, "send")), await T(p, "send").evaluate((el) => getComputedStyle(el, "::after").content)], ["Answer A", "none"], "the key's words, and no key cap on a phone");
   await T(p, "send").tap();
   await shown(p, "Got it: How many results should each Search group show, A, 10:00 AM");
   await shown(p, "Should the bridge retry a failed message?");
   await shown(p, "Queue · 9 waiting");
 });
 
-it("Task Card: None of these changes the note and Send, and the card shows under Answered", PHONE, async (p) => {
+it("Task Card on the Mac: the Answer key names the pick and carries the Enter cap", MAC, async (p) => {
+  await open(p, "/queue/alba-1");
+  const key = T(p, "card-pane").getByTestId("send");
+  await key.waitFor();
+  equal([await nameOf(key), await key.evaluate((el) => getComputedStyle(el, "::after").content)], ["Answer A", '"Enter"'], "the key's words and its cap");
+});
+
+it("Card keys on the Mac: the key list says Enter answer", MAC, async (p) => {
+  await open(p, "/queue/alba-1");
+  await T(p, "card-pane").getByTestId("talk-to").waitFor();
+  await p.keyboard.press("?");
+  const list = p.locator('[data-pop="keys"]');
+  await list.getByText("Talk to Alba", { exact: true }).waitFor();
+  const words = await list.locator("dt, dd").allInnerTexts();
+  equal(words[words.indexOf("Enter") + 1], "answer", "the words beside Enter");
+});
+
+it("Task Card: None of these changes the note and the Answer key, and the card shows under Answered", PHONE, async (p) => {
   await open(p, "/queue/alba-1");
   await T(p, "none-of-these").tap();
   await p.getByPlaceholder("Your own answer, or what would work instead").fill("Five on the Mac only.");
-  await shown(p, "Send: None of these");
+  await shown(p, "Answer: None of these");
   await T(p, "send").tap();
   await shown(p, "Got it: How many results should each Search group show, None of these, 10:00 AM. Waiting on Alba.");
   await p.getByRole("link", { name: "Queue · 9 waiting" }).tap();
@@ -4995,7 +5013,7 @@ const SIGN_IN_AGAIN = "Not sent. Sign in again, reload Quarterdeck, then send.";
 const SIGN_IN_AGAIN_HREF = "/captain/step-up?next=%2Fcaptain%2Fchat";
 const NOT_SURE = "Not sure it was sent. Check Answered before you try again.";
 const SEND_NOTE = "Five, if the keyboard still fits.";
-const SEND_KEPT = [SEND_NOTE, "true", false, false, "Send B"];
+const SEND_KEPT = [SEND_NOTE, "true", false, false, "Answer B"];
 const SEND_DOORS = [["one-way", "a one-way card's pick, through Confirm"], ["two-way", "a two-way card"]];
 const SEND_COMMENTS = [
   "I tried five rows on the iPhone with the keyboard open. The fifth row sits just above it.",

@@ -852,6 +852,7 @@ const { server, origin } = await startAppServer();
 
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 const MAC = { viewport: { width: 1512, height: 982 } };
+const IPAD_UPRIGHT = { viewport: { width: 744, height: 1133 }, hasTouch: true, isMobile: true };
 const T = (p, id) => p.locator(`[data-testid="${id}"]`);
 const shown = (p, text) => p.getByText(text, { exact: true }).first().waitFor();
 const namesOf = (keys) => keys.evaluateAll((list) => list.map((el) => el.getAttribute("aria-label") ?? el.textContent.replace(/\s+/g, " ").trim()));
@@ -2126,6 +2127,20 @@ it("Chat: the x takes the quote away and sends nothing", PHONE, async (p) => {
   assert.equal(await T(p, "chat-my-message").count(), before);
 });
 
+for (const [name, size, pane] of [["the Mac", MAC, true], ["a phone", PHONE, false], ["an iPad upright", IPAD_UPRIGHT, false]]) {
+  it("Chat on " + name + ": a talk opened from a card has a Back to card key in the quoted card, and it returns to that card with the hand on its Answer key", size, async (p) => {
+    await open(p, "/queue/alba-1");
+    if (pane) await T(p, "card-pane").getByTestId("talk-to").click();
+    else await T(p, "talk-to").first().tap();
+    await draftQuote(p).getByText("How many results should each Search group show?").waitFor();
+    const back = draftQuote(p).getByRole("button", { name: "Back to card", exact: true });
+    assert.equal(await back.count(), 1, "the Back to card key");
+    await back.click();
+    await T(p, "send").waitFor();
+    assert.deepEqual([new URL(p.url()).pathname, await focusedTestId(p)], ["/queue/alba-1", "send"]);
+  });
+}
+
 it("Chat: a bot that does not exist says there is no chat with it", PHONE, async (p) => {
   await open(p, "/chat/nobody");
   await shown(p, "No chat with this bot.");
@@ -2535,7 +2550,6 @@ it("Chat on a phone: Search from More opens, and closing it puts focus back on M
   assert.equal(await focusedTestId(p), "float-more");
 });
 
-const IPAD_UPRIGHT = { viewport: { width: 744, height: 1133 }, hasTouch: true, isMobile: true };
 const moreList = (p) => p.locator('[data-pop="more"]');
 
 it("Chat on the Mac: the three dots open a small menu under them, not a sheet", MAC, async (p) => {
