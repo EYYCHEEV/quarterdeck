@@ -256,6 +256,10 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--spacing-s2);
+}
+
+.chat-file-list,
+.chat-file-notes {
   max-height: calc(var(--spacing-file-h) * 2 + var(--spacing-s2));
   overflow-y: auto;
   overscroll-behavior: contain;

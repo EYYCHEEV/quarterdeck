@@ -223,7 +223,7 @@ export function DraftStrip({ files, limit, notes, onRemove, onDismiss }: { files
         </ul>
       )}
       {notes.length > 0 && (
-        <div role="alert" data-testid="draft-notes">
+        <div role="alert" className="chat-file-notes" data-testid="draft-notes">
           <ul className="grid gap-s1">
             {notes.map((note, at) => (
               <li key={refusalText(note)} className="chat-file-note" data-testid="draft-note">
