@@ -130,7 +130,7 @@ function serve(chatLib = lib, { post, rows, read, thread, cards, upload } = {}) 
     streams.push(stream);
     return stream;
   };
-  const source = chatLib.createServerSource(chatLib.createApiClient({ send, openEvents, schedule: time.schedule }), time.now, time.schedule, pages, visibility);
+  const source = chatLib.createServerSource(chatLib.createApiClient({ send, openEvents, schedule: time.schedule, now: time.now }), time.now, time.schedule, pages, visibility);
   const worlds = [];
   source.watch((failure) => {
     if (!failure) void source.load().then((world) => worlds.push(world)).catch(() => undefined);
@@ -328,23 +328,21 @@ test("a short page that says older messages remain pages back from its oldest me
   assert.deepEqual(h.requests(from).filter((one) => one.startsWith("GET /captain/api/chat?")), [THREAD("steward", "m104"), THREAD("steward", "m101")]);
 });
 
-test("a send reads a fresh token list, posts once, costs three credits and refreshes the Queue", async () => {
+test("a send after a card list read reads no token list: one POST with the token that read gave, two credits, and the thread shows the message", async () => {
   const h = serve();
   await h.boot();
   await h.source.chat.openThread("steward");
   const watcher = await h.watchThread("steward");
   const from = h.calls.length;
-  const worlds = h.worlds.length;
   const message = await h.source.chat.send("steward", { text: "hello there", clientId: "client-1" });
-  assert.deepEqual(h.requests(from), [TOKEN, POST]);
-  assert.equal(h.credits(from), 3);
-  assert.deepEqual(Object.keys(h.calls[from + 1].body), ["bot", "text", "clientId", "csrf"]);
-  assert.equal(h.calls[from + 1].body.csrf, "token-" + h.calls.filter((call) => call.path === "/captain/cards").length);
+  assert.deepEqual(h.requests(from), [POST]);
+  assert.equal(h.credits(from), 2);
+  assert.deepEqual(Object.keys(h.calls[from].body), ["bot", "text", "clientId", "csrf"]);
+  assert.equal(h.calls[from].body.csrf, "token-" + h.calls.filter((call) => call.path === "/captain/cards").length);
   assert.equal(message.from, "captain");
   assert.equal(message.clientId, "client-1");
   assert.equal(message.text, "hello there");
   assert.deepEqual(message.uploadVerdicts, []);
-  assert.ok(h.worlds.length > worlds);
   assert.ok(watcher.seen.at(-1).messages.some((one) => one.id === message.id));
 });
 
@@ -1732,7 +1730,7 @@ function v2(state) {
   };
 }
 
-test("a watched thread with read on and a firstUnread is marked read once: a token read and one POST naming the newest bot message, three credits, and the row's dot clears", async () => {
+test("a watched thread with read on and a firstUnread is marked read once: one POST naming the newest bot message, sent with the stored token and no token read, two credits, and the row's dot clears", async () => {
   const state = marking();
   const h = serve(lib, v2(state));
   await h.boot();
@@ -1744,8 +1742,8 @@ test("a watched thread with read on and a firstUnread is marked read once: a tok
   await h.watchThread("steward");
   await h.time.advance(1_000);
   await tick();
-  assert.deepEqual(h.requests(from), [TOKEN, READ]);
-  assert.equal(h.credits(from), 3);
+  assert.deepEqual(h.requests(from), [READ]);
+  assert.equal(h.credits(from), 2);
   const [mark] = marks(h);
   assert.deepEqual(Object.keys(mark.body), ["bot", "upTo", "csrf"]);
   assert.deepEqual([mark.body.bot, mark.body.upTo], ["steward", "m3"]);
@@ -1756,25 +1754,20 @@ test("a watched thread with read on and a firstUnread is marked read once: a tok
   assert.equal((await h.source.chat.listChats()).find((one) => one.bot.id === "steward").unread, false);
 });
 
-test("a send pressed while a mark-read's token read hangs goes out once that read is cut at twenty seconds, instead of waiting for ever", async () => {
-  let stuck = false;
-  const stall = (init) => new Promise((resolve, reject) => init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))));
-  const h = serve(lib, { ...v2(marking()), cards: (init) => (stuck ? stall(init) : null) });
+test("a send pressed while a mark-read's POST is unanswered goes out at once with a token of its own, and does not wait for the mark-read", async () => {
+  const h = serve(lib, v2(marking({ answer: never })));
   await h.boot();
   await h.source.chat.openThread("steward");
-  stuck = true;
   const from = h.calls.length;
   await h.watchThread("steward");
   await h.time.advance(1_000);
   await tick();
-  assert.deepEqual(h.requests(from), [TOKEN], "the mark-read's token read went out and hangs");
+  assert.deepEqual(h.requests(from), [READ], "the mark-read went out with the stored token and hangs");
   const sent = watchSend(h, h.source.chat.send("steward", { text: "hello", clientId: "client-h1" }));
-  await pass(h, 18_000);
-  assert.equal(sent.done, false);
-  assert.deepEqual(POSTS(h, from), []);
-  stuck = false;
-  await pass(h, 3_000);
+  await pass(h, 1_000);
   assert.equal(sent.value?.clientId, "client-h1", String(sent.error));
+  assert.deepEqual(h.requests(from).filter((line) => [READ, TOKEN, POST].includes(line)), [READ, TOKEN, POST]);
+  assert.notEqual(posts(h).at(-1).body.csrf, marks(h)[0].body.csrf);
   assert.equal(h.threads.get("steward").filter((one) => one.clientId === "client-h1").length, 1);
 });
 
@@ -2428,4 +2421,149 @@ test("a send with files whose uploads are done and whose post waits for credits 
   assert.equal(chatPosts(h, lapse).length, 0, "the send posted after the session lapsed");
   assert.equal(uploads(h, lapse).length, 0, "an upload went out after the session lapsed");
   assert.equal(state.error?.name, "SessionUnconfirmed");
+});
+
+function tokenServer() {
+  const clock = { at: NOW };
+  const kept = [];
+  const calls = [];
+  const landed = [];
+  const server = { notModified: false, hold: null, answer: null };
+  let serial = 0;
+  const issue = () => {
+    serial += 1;
+    kept.push({ token: "t-" + serial, at: clock.at });
+    if (kept.length > 8) kept.shift();
+    return "t-" + serial;
+  };
+  const spend = (token) => {
+    const at = kept.findIndex((one) => one.token === token && clock.at - one.at < 300_000);
+    if (at < 0) return false;
+    kept.splice(at, 1);
+    return true;
+  };
+  const send = async (path, init) => {
+    const body = typeof init.body === "string" && init.body ? JSON.parse(init.body) : null;
+    const call = { line: init.method + " " + path, csrf: body?.csrf ?? null, clientId: body?.clientId ?? null, conditional: new Headers(init.headers ?? {}).has("If-None-Match") };
+    calls.push(call);
+    if (path === "/captain/cards") {
+      if (call.conditional && server.notModified) return new Response(null, { status: 304 });
+      return json({ ...structuredClone(LISTING), csrf: issue() }, 200, { ETag: '"list-' + serial + '"' });
+    }
+    if (init.method !== "POST") return json("{}", 404);
+    await server.hold?.(call);
+    const made = server.answer?.(call);
+    if (made) return made;
+    if (!spend(call.csrf)) return json({ error: "request refused" }, 403);
+    landed.push(call);
+    const next = { csrf: issue(), freshUntil: Math.floor(NOW / 1000) + 1800 };
+    return path === "/captain/api/chat/read" ? json(next) : json({ id: "m" + serial, from: "captain", text: body.text, at: stamp(serial), refs: [], clientId: body.clientId, uploadVerdicts: [], ...next });
+  };
+  const client = lib.createApiClient({ send, openEvents: () => ({ readyState: 0, addEventListener() {}, close() {} }), schedule: () => () => undefined, now: () => clock.at });
+  return {
+    client, calls, landed, clock, server,
+    lines: (from = 0) => calls.slice(from).map((call) => call.line),
+    elsewhere(count) { for (let n = 0; n < count; n += 1) issue(); },
+    expire() { for (const one of kept) one.at -= 300_000; },
+  };
+}
+
+const hello = (client, n = 1) => client.chat.send("steward", { text: "hello " + n, clientId: "client-t" + n });
+const POSTERS = [
+  ["a send", (client) => hello(client), POST],
+  ["a mark-read", (client) => client.chat.read("steward", "m3"), READ],
+];
+
+test("with a stored token under 240 s old, two sends and a mark-read make no token read: each POST carries the token the answer before it gave, the card list's first", async () => {
+  const s = tokenServer();
+  await s.client.cards();
+  s.clock.at += 239_999;
+  await hello(s.client, 1);
+  await hello(s.client, 2);
+  await s.client.chat.read("steward", "m3");
+  assert.deepEqual(s.lines(1), [POST, POST, READ]);
+  assert.deepEqual(s.calls.slice(1).map((call) => call.csrf), ["t-1", "t-2", "t-3"]);
+  assert.equal(s.landed.length, 3);
+});
+
+for (const [what, act, line] of POSTERS)
+  test("a stored token 240 s old is not used by " + what + ": one token read with no If-None-Match, then the POST with the token that read gave", async () => {
+    const s = tokenServer();
+    await s.client.cards();
+    s.clock.at += 240_000;
+    await act(s.client);
+    assert.deepEqual(s.lines(1), [TOKEN, line]);
+    assert.deepEqual(s.calls.slice(1).map((call) => [call.csrf, call.conditional]), [[null, false], ["t-2", false]]);
+  });
+
+for (const [what, act, line] of POSTERS)
+  for (const [why, lose] of [["the server dropped for eight newer ones", (s) => s.elsewhere(8)], ["has expired at the server", (s) => s.expire()]])
+    test("a stored token that " + why + " is refused for " + what + ": then one token read with no If-None-Match and one retry, with the same client id, and it lands", async () => {
+      const s = tokenServer();
+      await s.client.cards();
+      lose(s);
+      await act(s.client);
+      assert.deepEqual(s.lines(1), [line, TOKEN, line]);
+      const [first, read, again] = s.calls.slice(1);
+      assert.deepEqual([first.csrf, read.conditional, again.clientId], ["t-1", false, first.clientId]);
+      assert.notEqual(again.csrf, "t-1");
+      assert.deepEqual(s.landed, [again]);
+    });
+
+test("the fallback never relies on a 304: with an ETag held and a server that answers 304 to every conditional list read, the read after a refused stored token is not conditional, and the retry lands", async () => {
+  const s = tokenServer();
+  await s.client.cards();
+  s.server.notModified = true;
+  await s.client.cards();
+  s.expire();
+  await hello(s.client);
+  assert.deepEqual(s.lines(1), [TOKEN, POST, TOKEN, POST]);
+  assert.deepEqual(s.calls.slice(1).map((call) => call.conditional), [true, false, false, false]);
+  assert.equal(s.landed.length, 1);
+});
+
+test("a second refusal, after the retry, takes the path a refusal takes today: sign in again, and no third POST", async () => {
+  const s = tokenServer();
+  await s.client.cards();
+  s.server.answer = () => json({ error: "request refused" }, 403);
+  await assert.rejects(hello(s.client), named("SignInRequired"));
+  assert.deepEqual(s.lines(1), [POST, TOKEN, POST]);
+});
+
+test("a 403 that is not a token refusal, to a POST sent with a stored token, takes today's path at once: sign in again, no token read and no retry", async () => {
+  for (const answer of [() => json({ error: "session" }, 403), () => new Response("", { status: 403 })]) {
+    const s = tokenServer();
+    await s.client.cards();
+    s.server.answer = answer;
+    await assert.rejects(hello(s.client), named("SignInRequired"));
+    assert.deepEqual(s.lines(1), [POST]);
+  }
+});
+
+test("a send pressed while a mark-read's POST is unanswered reads its own token and lands, and the two POSTs carry different tokens", async () => {
+  const s = tokenServer();
+  await s.client.cards();
+  let release = () => {};
+  s.server.hold = (call) => (call.line === READ ? new Promise((resolve) => { release = resolve; }) : undefined);
+  const marking = s.client.chat.read("steward", "m3");
+  for (let n = 0; n < 10; n += 1) await tick();
+  const receipt = await hello(s.client);
+  assert.equal(receipt.clientId, "client-t1");
+  assert.deepEqual(s.lines(1), [READ, TOKEN, POST]);
+  assert.deepEqual([s.calls[1].csrf, s.calls[3].csrf], ["t-1", "t-2"]);
+  assert.deepEqual(s.landed.map((call) => call.line), [POST]);
+  release();
+  await marking;
+  assert.deepEqual(s.landed.map((call) => call.line), [POST, READ]);
+});
+
+test("a token is never used by two POSTs in flight: two sends and a mark-read started together carry three different tokens, the stored one only once", async () => {
+  const s = tokenServer();
+  await s.client.cards();
+  await Promise.all([hello(s.client, 1), hello(s.client, 2), s.client.chat.read("steward", "m3")]);
+  const tokens = s.calls.filter((call) => call.line !== TOKEN).map((call) => call.csrf);
+  assert.equal(new Set(tokens).size, 3, tokens.join(", "));
+  assert.equal(tokens.filter((one) => one === "t-1").length, 1, tokens.join(", "));
+  assert.equal(s.lines(1).filter((line) => line === TOKEN).length, 2);
+  assert.equal(s.landed.length, 3);
 });
