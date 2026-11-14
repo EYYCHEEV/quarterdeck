@@ -5117,12 +5117,13 @@ for (const [door, what] of SEND_DOORS) {
   it("Server Task Card on a phone: a send on " + what + " whose session can't be confirmed while its token read is out ends Sending, and after Retry the card says Not sent. Try again. with Try again and his pick and note", PHONE, async (p) => {
     const server = await answerServer(p, door);
     await answerReady(p);
-    await p.clock.runFor(40_000);
+    server.lists = "down";
+    await p.clock.runFor(53_000);
     server.lists = "hold-one";
     const asked = p.waitForRequest((request) => new URL(request.url()).pathname === "/captain/cards");
     await sendPick(p, door);
     await asked;
-    await p.clock.runFor(21_000);
+    await p.clock.runFor(9_000);
     const hidden = p.getByRole("alert").filter({ has: p.getByRole("button", { name: "Retry", exact: true }) });
     await hidden.waitFor();
     equal(await T(p, "task-card").count(), 0, "the card hidden while the session can't be confirmed");
@@ -5155,17 +5156,16 @@ for (const [door, what] of SEND_DOORS) {
     await failedLine(p, "Not sent. Try again.", true);
   }, /503 \(Service Unavailable\)/);
 
-  it("Server Task Card on a phone: a send on " + what + " whose token read never answers ends at 45 seconds with " + NOT_SURE + " and no Try again, his pick and note kept and nothing posted", PHONE, async (p) => {
+  it("Server Task Card on a phone: a send on " + what + " whose token read never answers ends at 20 seconds with Not sent. Try again. and Try again, his pick and note kept and nothing posted", PHONE, async (p) => {
     const server = await answerServer(p, door);
     await answerReady(p);
     server.lists = "hold";
     await sendPick(p, door);
-    await p.clock.runFor(44_000);
-    equal(await nameOf(T(p, "send")), "Sending B ...", "Send before 45 seconds");
+    await p.clock.runFor(19_000);
+    equal(await nameOf(T(p, "send")), "Sending B ...", "Send before 20 seconds");
     await p.clock.runFor(1_000);
-    await failedLine(p, NOT_SURE, false);
+    await failedLine(p, "Not sent. Try again.", true);
     equal([await keptOnCard(p), server.posts.length], [SEND_KEPT, 0], "his pick and note on the card, and posts");
-    if (door === "two-way") await sendShot(p, "not-sure-390");
   });
 
   it("Server Task Card on a phone: a send on " + what + " whose post gets no reply is cut at 20 seconds and says " + NOT_SURE + " with no Try again, his pick and note kept", PHONE, async (p) => {
@@ -5179,6 +5179,7 @@ for (const [door, what] of SEND_DOORS) {
     await (await checked).finished();
     await failedLine(p, NOT_SURE, false);
     equal([await keptOnCard(p), server.posts.length], [SEND_KEPT, 1], "his pick and note on the card, and posts");
+    if (door === "two-way") await sendShot(p, "not-sure-390");
   });
 }
 
