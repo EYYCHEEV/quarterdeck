@@ -5,7 +5,7 @@ import { card, task } from "./fixture.mjs";
 
 const { workingStatus, QUIET_AFTER_MS, readableText, messageQuote, cardQuote, cardQuoteAt, cardQuoteLabel, resolveQuote, isVersionRef, isThreadQuote, mailQuote, threadQuote, SEND_RATE_TEXT, SEND_FAILED_TEXT, SEND_RETRY_TEXT, DELIVERED_TEXT, readText, cardLine, withCardLine } = await loadTs("src/domain/chat.ts");
 const { failedText } = await loadTs("src/domain/card-words.ts");
-const { withinLimit, MESSAGE_LIMIT, SEND_LONG_TEXT, QUOTE_LIMIT, quoteInside, cutQuote, wireQuote } = await loadTs("src/domain/chat.ts");
+const { fitsSend, SEND_CEILING, SEND_LONG_TEXT, QUOTE_LIMIT, quoteInside, cutQuote, wireQuote } = await loadTs("src/domain/chat.ts");
 
 const at = (hhmm, seconds = 0) => Date.parse("2026-11-02T" + hhmm + ":" + String(seconds).padStart(2, "0") + "-05:00");
 const WORKING = { since: "2026-11-02T09:57:00-05:00", updatedAt: "2026-11-02T09:57:00-05:00" };
@@ -40,10 +40,18 @@ test("his latest message says Delivered, then Read with the time on the same day
   );
 });
 
-test("a message is within the limit up to 4,000 characters counted as code points, and the refusal says so", () => {
-  assert.equal(MESSAGE_LIMIT, 4000);
-  assert.deepEqual([withinLimit("x".repeat(4000)), withinLimit("x".repeat(4001)), withinLimit("\u{1F600}".repeat(4000)), withinLimit("\u{1F600}".repeat(4001))], [true, false, true, false]);
-  assert.equal(SEND_LONG_TEXT, "Not sent: the message is over 4,000 characters.");
+test("a chat message has no character limit: 4,001 and 20,000 characters fit, also as four-byte characters", () => {
+  assert.deepEqual([fitsSend("x".repeat(4000)), fitsSend("x".repeat(4001)), fitsSend("x".repeat(20_000)), fitsSend("\u{1F600}".repeat(4001)), fitsSend("\u{1F600}".repeat(20_000))], [true, true, true, true, true]);
+});
+
+test("only the size of the request refuses a message: its text as JSON must fit in 128 KiB less the 16 KiB kept for the other fields, counted in bytes", () => {
+  assert.equal(SEND_CEILING, 131_072);
+  const room = 131_072 - 16_384 - 2;
+  assert.deepEqual([fitsSend("x".repeat(room)), fitsSend("x".repeat(room + 1))], [true, false]);
+  assert.deepEqual([fitsSend("\n".repeat(room / 2)), fitsSend("\n".repeat(room / 2 + 1))], [true, false], "a line break is two bytes in the request");
+  assert.deepEqual([fitsSend("\u{1F600}".repeat(Math.floor(room / 4))), fitsSend("\u{1F600}".repeat(Math.floor(room / 4) + 1))], [true, false], "four bytes each");
+  assert.deepEqual([fitsSend("\u00e9".repeat(room / 2)), fitsSend("\u00e9".repeat(room / 2 + 1))], [true, false], "two bytes each");
+  assert.equal(SEND_LONG_TEXT, "Not sent: this message is too long. Shorten it or split it in two.");
 });
 
 const ALBA_1 = { cardId: "alba-1", version: 3, label: "Task Card", title: "How many results should each Search group show?", priority: "", recap: [] };

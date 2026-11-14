@@ -956,17 +956,30 @@ test("the session end clears the held rows and bots, so the next open after sign
   assert.deepEqual(h.chatRequests(from), [LIST]);
 });
 
-test("checks before a send refuse empty or long text, a bad clientId, files and a quote and send nothing", async () => {
+test("checks before a send refuse empty text, a text too big for the request, a bad clientId, files and a quote and send nothing", async () => {
   const h = serve();
   await h.boot();
   await h.source.chat.openThread("steward");
   const from = h.calls.length;
   await assert.rejects(h.source.chat.send("steward", { text: "", clientId: "client-9" }), refusedWith("Message is empty or too long."));
-  await assert.rejects(h.source.chat.send("steward", { text: "x".repeat(4001), clientId: "client-9" }), refusedWith("Message is empty or too long."));
+  await assert.rejects(h.source.chat.send("steward", { text: "x".repeat(114_687), clientId: "client-9" }), refusedWith("Not sent: this message is too long. Shorten it or split it in two."));
   await assert.rejects(h.source.chat.send("steward", { text: "hello", clientId: "has space" }), named("Refused"));
   await assert.rejects(h.source.chat.send("steward", { text: "hello", clientId: "client-9", files: [{ name: "a.png" }] }), named("Refused"));
   await assert.rejects(h.source.chat.send("steward", { text: "hello", clientId: "client-9", quote: { text: "x" } }), named("Refused"));
   assert.equal(h.calls.length, from);
+});
+
+test("a 20,000 character message is posted whole, also as four-byte characters", async () => {
+  const h = serve();
+  await h.boot();
+  await h.source.chat.openThread("steward");
+  for (const [n, text] of [["1", "x".repeat(20_000)], ["2", "\u{1F600}".repeat(20_000)]]) {
+    const from = h.calls.length;
+    const sent = watchSend(h, h.source.chat.send("steward", { text, clientId: "client-long-" + n }));
+    await pass(h, 2_000);
+    assert.equal(sent.value?.clientId, "client-long-" + n, String(sent.error));
+    assert.equal(h.calls.slice(from).find((call) => call.method === "POST").body.text, text);
+  }
 });
 
 test("with the app's own cap reached a send and a thread open are refused before any request", async () => {

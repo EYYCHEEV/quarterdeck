@@ -128,8 +128,9 @@ test("seenUpTo, seenAt and working take their filled values, and a malformed one
   const parsed = (extra) => parseChatThread(thread("steward", [message(1)], false, extra));
   const got = parsed({ seenUpTo: "m1", seenAt: STAMP, working: { ...WORKING, more: true } });
   assert.deepEqual([got.seenUpTo, got.seenAt, got.working], ["m1", STAMP, WORKING]);
-  const bads = [{ seenUpTo: 5 }, { seenUpTo: "" }, { seenAt: 5 }, { seenAt: "" }, { seenAt: "never" }, { working: "busy" }, { working: [] }, { working: { note: "x" } }, { working: { ...WORKING, note: 5 } }, { working: { ...WORKING, since: "soon" } }, { working: { ...WORKING, updatedAt: "" } }, { working: { ...WORKING, note: "x".repeat(4001) } }];
+  const bads = [{ seenUpTo: 5 }, { seenUpTo: "" }, { seenAt: 5 }, { seenAt: "" }, { seenAt: "never" }, { working: "busy" }, { working: [] }, { working: { note: "x" } }, { working: { ...WORKING, note: 5 } }, { working: { ...WORKING, since: "soon" } }, { working: { ...WORKING, updatedAt: "" } }];
   for (const bad of bads) assert.throws(() => parsed(bad), unreadable, JSON.stringify(bad));
+  assert.equal(parsed({ working: { ...WORKING, note: "x".repeat(20_000) } }).working.note.length, 20_000, "a working note has no character limit");
 });
 
 test("firstUnread is a message id or null, and missing is null", async () => {
@@ -183,10 +184,15 @@ test("a message's quote is null or missing, a message quote or a card quote, and
   assert.deepEqual(quoted({ ...mine, from: "bot", more: 1 }).quote, { ...mine, from: "bot" });
   assert.deepEqual(quoted({ cardId: "Q176", version: 3 }).quote, { cardId: "Q176", version: 3 });
   assert.deepEqual(quoted({ cardId: "a1", version: 1, more: 1 }).quote, { cardId: "a1", version: 1 });
-  assert.equal(quoted({ ...mine, text: "x".repeat(4000) }).quote.text.length, 4000);
-  assert.equal(quoted({ ...mine, text: "\u{1F600}".repeat(4000) }).quote.text.length, 8000);
-  const bads = ["x", [], {}, { text: "x" }, { ...mine, from: "someone" }, { ...mine, id: "" }, { ...mine, at: "soon" }, { ...mine, at: "" }, { ...mine, text: 5 }, { ...mine, text: "x".repeat(4001) }, { ...mine, text: "\u{1F600}".repeat(4001) }, { id: "m0", text: "x" }, { cardId: "Q176" }, { cardId: "Q176", version: 0 }, { cardId: "Q176", version: 1.5 }, { cardId: "Q176", version: "3" }, { cardId: "", version: 1 }, { cardId: "a/b", version: 1 }, { cardId: "-x", version: 1 }, { cardId: "x".repeat(65), version: 1 }, { ...mine, cardId: "Q176", version: 3 }];
+  assert.equal(quoted({ ...mine, text: "x".repeat(20_000) }).quote.text.length, 20_000);
+  assert.equal(quoted({ ...mine, text: "\u{1F600}".repeat(20_000) }).quote.text.length, 40_000);
+  const bads = ["x", [], {}, { text: "x" }, { ...mine, from: "someone" }, { ...mine, id: "" }, { ...mine, at: "soon" }, { ...mine, at: "" }, { ...mine, text: 5 }, { id: "m0", text: "x" }, { cardId: "Q176" }, { cardId: "Q176", version: 0 }, { cardId: "Q176", version: 1.5 }, { cardId: "Q176", version: "3" }, { cardId: "", version: 1 }, { cardId: "a/b", version: 1 }, { cardId: "-x", version: 1 }, { cardId: "x".repeat(65), version: 1 }, { ...mine, cardId: "Q176", version: 3 }];
   for (const bad of bads) assert.throws(() => quoted(bad), unreadable, JSON.stringify(bad));
+});
+
+test("a 20,000 character reply reads whole, also as four-byte characters", async () => {
+  const { parseChatThread } = await load();
+  for (const text of ["y".repeat(20_000), "\u{1F600}".repeat(20_000)]) assert.equal(parseChatThread(thread("steward", [message(1, { from: "bot", text })])).messages[0].text, text);
 });
 
 test("a message's files are missing or empty, or a list whose bad items are dropped: a blocked item has no url, ids run to 255 characters, at most 50 are kept, and only files that are not a list are unreadable", async () => {
@@ -269,15 +275,15 @@ test("the mark-read answer is exactly csrf and freshUntil, other keys are ignore
   }
 });
 
-test("the checks before a send refuse empty or long text, a bad clientId, files and a quote with plain words", async () => {
+test("the checks before a send refuse empty text, a text too big for the request, a bad clientId, files and a quote with plain words", async () => {
   const { checkOutgoing, CHAT_WORDS } = await load();
+  const LONG = "Not sent: this message is too long. Shorten it or split it in two.";
   const ok = { text: "hello", clientId: "client-1" };
   assert.doesNotThrow(() => checkOutgoing("steward", ok));
-  assert.doesNotThrow(() => checkOutgoing("steward", { ...ok, text: "x".repeat(4000) }));
-  assert.doesNotThrow(() => checkOutgoing("steward", { ...ok, text: "\u{1F600}".repeat(4000) }));
+  for (const text of ["x".repeat(4000), "x".repeat(4001), "x".repeat(20_000), "\u{1F600}".repeat(4001), "\u{1F600}".repeat(20_000), "x".repeat(114_686)]) assert.doesNotThrow(() => checkOutgoing("steward", { ...ok, text }), text.length + " units");
   assert.throws(() => checkOutgoing("steward", { ...ok, text: "" }), refusedWith(CHAT_WORDS.text));
-  assert.throws(() => checkOutgoing("steward", { ...ok, text: "x".repeat(4001) }), refusedWith(CHAT_WORDS.text));
-  assert.throws(() => checkOutgoing("steward", { ...ok, text: "\u{1F600}".repeat(4001) }), refusedWith(CHAT_WORDS.text));
+  assert.throws(() => checkOutgoing("steward", { ...ok, text: "x".repeat(114_687) }), refusedWith(LONG));
+  assert.throws(() => checkOutgoing("steward", { ...ok, text: "\u{1F600}".repeat(28_672) }), refusedWith(LONG));
   for (const clientId of ["", "has space", "x".repeat(81), "a/b"]) assert.throws(() => checkOutgoing("steward", { ...ok, clientId }), /^Refused|Not sent/, clientId);
   assert.throws(() => checkOutgoing("steward", { ...ok, files: [{ name: "a.png" }] }), refusedWith(CHAT_WORDS.files));
   assert.throws(() => checkOutgoing("steward", { ...ok, files: ["a/b"] }), refusedWith(CHAT_WORDS.files));
@@ -299,12 +305,17 @@ test("the words are the ones section D gives, and the mail refusal is the chat's
   assert.deepEqual([CHAT_WORDS.mail, SEND_FAILED_TEXT], ["Not Delivered", "Not Delivered"]);
 });
 
-test("the request body holds exactly the bot, text, clientId and token, and stays under 16 KiB", async () => {
-  const { chatBody, CHAT_WORDS } = await load();
+test("the request body holds exactly the bot, text, clientId and token, and stays under 128 KiB", async () => {
+  const { chatBody } = await load();
+  const LONG = "Not sent: this message is too long. Shorten it or split it in two.";
   const body = chatBody("steward", { text: "hello", clientId: "client-1" }, "token-1");
   assert.deepEqual(Object.keys(JSON.parse(body)), ["bot", "text", "clientId", "csrf"]);
   assert.deepEqual(JSON.parse(body), { bot: "steward", text: "hello", clientId: "client-1", csrf: "token-1" });
-  assert.throws(() => chatBody("steward", { text: "\u0001".repeat(4000), clientId: "client-1" }, "token-1"), refusedWith(CHAT_WORDS.text));
+  assert.equal(JSON.parse(chatBody("steward", { text: "\u0001".repeat(4000), clientId: "client-1" }, "token-1")).text.length, 4000, "24,000 bytes of text, over the old 16 KiB, go whole");
+  const whole = chatBody("steward", { text: "\u{1F600}".repeat(20_000), clientId: "client-1" }, "token-1");
+  assert.equal(JSON.parse(whole).text, "\u{1F600}".repeat(20_000));
+  assert.ok(new TextEncoder().encode(whole).length <= 131_072);
+  assert.throws(() => chatBody("steward", { text: "x".repeat(131_072), clientId: "client-1" }, "token-1"), refusedWith(LONG));
   assert.throws(() => chatBody("steward", { text: "hello", clientId: "client-1" }, ""), /Not sent/);
 });
 
