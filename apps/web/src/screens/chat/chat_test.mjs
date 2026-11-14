@@ -2534,6 +2534,7 @@ it("Chat motion: when his send is confirmed during its rise, the row that was Se
 );
 
 const spaceUnder = (row) => row.evaluate((el) => el.getBoundingClientRect().bottom - el.querySelector("[data-message-text]").getBoundingClientRect().bottom);
+const rested = (row) => row.evaluate((el) => Promise.allSettled(el.getAnimations({ subtree: true }).map((one) => one.finished)).then(() => null));
 const steppedLine = (row, name) =>
   row.evaluate((el, wanted) => {
     const motion = el.getAnimations({ subtree: true }).find((one) => one.animationName === wanted);
@@ -2572,6 +2573,7 @@ it("Chat motion: when he sends again, the Read line under his older message fold
     const older = mine(page, "Fold check one");
     const line = older.locator('[data-testid="chat-seen"]');
     await line.waitFor();
+    await rested(older);
     const height = await line.evaluate((el) => el.scrollHeight);
     const before = await spaceUnder(older);
     await T(page, "chat-input").fill("Fold check two");
@@ -2611,7 +2613,7 @@ it("Chat motion: when his message is delivered, the line under it grows in at th
     const before = await spaceUnder(row);
     await page.clock.runFor(400);
     const line = row.locator('[data-testid="chat-delivered"]');
-    await line.waitFor();
+    await line.waitFor({ state: "attached" });
     const height = await line.evaluate((el) => el.scrollHeight);
     const after = await spaceUnder(row);
     if (m.still) assert.ok(after - before >= height, `with Reduce Motion the line is there at once (${before} to ${after} px, a ${height} px line)`);
