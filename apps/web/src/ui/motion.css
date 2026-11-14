@@ -45,6 +45,15 @@
   animation: fold --theme(--transition-duration-quick inline) --theme(--ease-leave inline) both;
 }
 
+[data-row="in"][data-line] {
+  overflow: hidden;
+  animation: unfold --theme(--transition-duration-standard inline) --theme(--ease-arrive inline);
+}
+
+[data-row="out"][data-line] {
+  animation-duration: --theme(--transition-duration-standard inline);
+}
+
 .leave {
   animation: leave --theme(--transition-duration-quick inline) --theme(--ease-leave inline) both;
 }
@@ -82,6 +91,17 @@
     border-block-width: 0;
     margin-block-end: var(--fold-gap, 0);
     opacity: 0;
+  }
+}
+
+@keyframes unfold {
+  from {
+    height: 0;
+    margin-block-start: var(--fold-gap, 0);
+  }
+
+  to {
+    height: var(--fold-h);
   }
 }
 

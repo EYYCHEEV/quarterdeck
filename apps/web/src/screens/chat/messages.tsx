@@ -14,7 +14,7 @@ import { Icon } from "../../ui/icon";
 import { Link } from "../../ui/link";
 import { LinkedText } from "../../ui/linked-text";
 import { Markdown } from "../../ui/markdown";
-import { ARRIVE, RISE } from "../../ui/motion";
+import { ARRIVE, lineMotion, RISE, useShown } from "../../ui/motion";
 import { RefChip } from "../../ui/reference";
 import { ErrorLine } from "../../ui/states";
 import { AttachmentList } from "./attachments";
@@ -27,6 +27,7 @@ const SECOND_MS = 1_000;
 const RETRY_UNDER = "max-upright:grid max-upright:grid-cols-[auto_minmax(0,1fr)] max-upright:[&>button]:col-span-2 max-upright:[&>button]:justify-self-end";
 
 const STATUS_LINE = "flex h-s4 items-center";
+const noteId = () => "note";
 
 type OnQuote = (selected: string | null) => void;
 
@@ -141,6 +142,8 @@ export function MyMessage({
 }) {
   const qd = useQd();
   const shownQuote = quote ? resolveQuote(quote, world, botName) : null;
+  const line = note === "read" ? { seen: true, text: readText(seenAt, qd.now()) } : note === "delivered" ? { seen: false, text: DELIVERED_TEXT } : null;
+  const lines = useShown(line ? [line] : [], noteId, "");
   return (
     <Actionable id={id} title={"You · " + clockTime(at)} copy={id && text ? text : undefined} onQuote={actions} align="end" className={cx("chat-my-message flex flex-col gap-s1", rise && RISE)} testId="chat-my-message">
       {shownQuote && <QuoteBlock quote={shownQuote} />}
@@ -175,8 +178,11 @@ export function MyMessage({
           <time>{clockTime(at)}</time>
         </p>
       )}
-      {note === "delivered" && <p className="text-label text-ink-2" data-testid="chat-delivered">{DELIVERED_TEXT}</p>}
-      {note === "read" && <p className="text-label text-ink-2" data-testid="chat-seen">{readText(seenAt, qd.now())}</p>}
+      {lines.shown.map((entry) => (
+        <p key={entry.id} className="text-label text-ink-2" data-testid={entry.leaving ? undefined : entry.item.seen ? "chat-seen" : "chat-delivered"} {...lineMotion(entry, lines.drop)}>
+          {entry.item.text}
+        </p>
+      ))}
     </Actionable>
   );
 }
