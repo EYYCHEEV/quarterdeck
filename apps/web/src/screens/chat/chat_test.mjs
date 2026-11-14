@@ -2533,66 +2533,97 @@ it("Chat motion: when his send is confirmed during its rise, the row that was Se
   }),
 );
 
-it("Chat motion: when he sends again, the Read line under his older message folds away at the standard speed, the space under that message closes by less than half a line in any one frame, and with Reduce Motion the line is gone at once", PHONE, (p) =>
+const spaceUnder = (row) => row.evaluate((el) => el.getBoundingClientRect().bottom - el.querySelector("[data-message-text]").getBoundingClientRect().bottom);
+const steppedLine = (row, name) =>
+  row.evaluate((el, wanted) => {
+    const motion = el.getAnimations({ subtree: true }).find((one) => one.animationName === wanted);
+    if (!motion) return null;
+    const space = () => el.getBoundingClientRect().bottom - el.querySelector("[data-message-text]").getBoundingClientRect().bottom;
+    const { duration } = motion.effect.getComputedTiming();
+    const spaces = [];
+    for (let frame = 0; (frame * 1000) / 60 < duration; frame += 1) {
+      motion.currentTime = (frame * 1000) / 60;
+      spaces.push(space());
+    }
+    motion.currentTime = duration;
+    spaces.push(space());
+    motion.currentTime = 0;
+    return { duration, spaces, line: motion.effect.target.scrollHeight };
+  }, name);
+const gentle = (motion, name, what) => {
+  assert.notEqual(motion, null, "an animation named " + name + " runs on " + what);
+  assert.equal(motion.duration, STANDARD, what + " moves at the standard speed");
+  const steps = motion.spaces.slice(1).map((space, at) => Math.abs(space - motion.spaces[at]));
+  assert.ok(Math.abs(motion.spaces.at(-1) - motion.spaces[0]) >= motion.line, `over its whole run the space changes by at least the line's ${motion.line} px: ${motion.spaces.map((space) => space.toFixed(1)).join(", ")}`);
+  assert.ok(Math.max(...steps) <= motion.line / 2, `at 60 frames a second no frame changes the space by more than half a line (${motion.line / 2} px): ${steps.map((step) => step.toFixed(1)).join(", ")}`);
+};
+
+it("Chat motion: when he sends again, the Read line under his older message folds away at the standard speed, by no more than half a line in any frame, and with Reduce Motion it is gone at once", PHONE, (p) =>
   motionPair(p, PHONE, async (page, m) => {
     await page.clock.install({ time: new Date("2026-11-02T15:00:00Z") });
     await open(page, "/chat/dale");
     await T(page, "chat-bot-message").first().waitFor();
     await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
     const replies = await T(page, "chat-bot-message").count();
-    const reply = (n) => T(page, "chat-bot-message").nth(replies + n);
     await T(page, "chat-input").fill("Fold check one");
     await T(page, "chat-send").tap();
     await page.clock.runFor(3600);
-    await reply(0).getByText("Seen. I will check it and come back with the details.").waitFor();
+    await T(page, "chat-bot-message").nth(replies).getByText("Seen. I will check it and come back with the details.").waitFor();
     const older = mine(page, "Fold check one");
     const line = older.locator('[data-testid="chat-seen"]');
     await line.waitFor();
-    await page.clock.resume();
-    await settle(page);
-    const height = await line.evaluate((el) => el.getBoundingClientRect().height);
-    await older.evaluate((row) => {
-      const bubble = row.querySelector("[data-message-text]");
-      const next = row.nextElementSibling;
-      window.qdFold = [];
-      const step = () => {
-        window.qdFold.push({
-          space: next.getBoundingClientRect().top - bubble.getBoundingClientRect().bottom,
-          top: next.getBoundingClientRect().top,
-          rows: row.parentElement.children.length,
-          moving: row.getAnimations({ subtree: true }).map((one) => one.effect.getComputedTiming().duration + " " + one.animationName),
-        });
-        window.qdFoldFrame = requestAnimationFrame(step);
-      };
-      window.qdFoldFrame = requestAnimationFrame(step);
-    });
+    const height = await line.evaluate((el) => el.scrollHeight);
+    const before = await spaceUnder(older);
     await T(page, "chat-input").fill("Fold check two");
+    const resume = await m.hold();
     await T(page, "chat-send").tap();
-    await reply(1).waitFor({ timeout: 10_000 });
-    const frames = await page.evaluate(() => {
-      cancelAnimationFrame(window.qdFoldFrame);
-      return window.qdFold;
-    });
+    await mine(page, "Fold check two").waitFor();
+    const after = await spaceUnder(older);
+    if (m.still) assert.ok(before - after >= height, `with Reduce Motion the space under the older message closes at once by its line (${before} to ${after} px, a ${height} px line)`);
+    else assert.ok(Math.abs(after - before) < 1, `at the Send press the space under the older message is still whole; it went from ${before} to ${after} px in one frame`);
+    await page.clock.resume();
+    await m.during("the old line", '[data-row="out"]', async () => gentle(await steppedLine(older, "fold"), "fold", "the old line"));
+    await resume();
+    await settle(page);
+    await T(page, "chat-bot-message").nth(replies + 1).waitFor({ timeout: 10_000 });
+    await settle(page);
     assert.deepEqual(
-      [await T(page, "chat-seen").count(), await older.locator('[data-testid="chat-seen"]').count(), await mine(page, "Fold check two").locator('[data-testid="chat-seen"]').count(), await page.locator('[data-row="out"]').count()],
+      [await T(page, "chat-seen").count(), await line.count(), await mine(page, "Fold check two").locator('[data-testid="chat-seen"]').count(), await page.locator('[data-row="out"]').count()],
       [1, 0, 1, 0],
       "at the end: Read lines in the thread, under the older message, under the newest, and lines still folding",
     );
-    const spaces = frames.map((frame) => frame.space);
-    const closed = spaces[0] - spaces.at(-1);
-    assert.ok(closed >= height, `the space under the older message closed by its Read line (${closed} px of a ${height} px line)`);
-    if (m.still) {
-      assert.deepEqual([...new Set(frames.flatMap((frame) => frame.moving))], [], "with Reduce Motion nothing in the older message moves");
-      assert.ok(new Set(spaces.map(Math.round)).size <= 2, "with Reduce Motion the space closes in one step: " + [...new Set(spaces.map(Math.round))].join(", "));
-      return;
-    }
-    const steps = spaces.slice(1).map((space, at) => Math.abs(space - spaces[at]));
-    const quiet = frames.slice(1).flatMap((frame, at) => (frame.rows === frames[at].rows ? [Math.abs(frame.top - frames[at].top)] : []));
-    assert.ok(
-      Math.max(...steps) <= height / 2,
-      `no frame closes the space by more than half a line (${height / 2} px); the steps over 1 px were ${steps.filter((step) => step > 1).map((step) => step.toFixed(1)).join(", ")}; for the record, with no row added or removed the row under it moved by up to ${Math.max(0, ...quiet).toFixed(1)} px in one frame`,
-    );
-    assert.ok(frames.some((frame) => frame.moving.includes(STANDARD + " fold")), "the line folds at the standard speed; seen moving: " + [...new Set(frames.flatMap((frame) => frame.moving))].join(", "));
+    assert.ok(before - (await spaceUnder(older)) >= height, "at the end the space under the older message is smaller by its line");
+  }),
+);
+
+it("Chat motion: when his message is delivered, the line under it grows in at the standard speed, by no more than half a line in any frame, and with Reduce Motion it is there at once", PHONE, (p) =>
+  motionPair(p, PHONE, async (page, m) => {
+    await page.clock.install({ time: new Date("2026-11-02T15:00:00Z") });
+    await open(page, "/chat/dale");
+    await T(page, "chat-bot-message").first().waitFor();
+    await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
+    const replies = await T(page, "chat-bot-message").count();
+    await T(page, "chat-input").fill("Grow check");
+    const resume = await m.hold();
+    await T(page, "chat-send").tap();
+    const row = mine(page, "Grow check");
+    await row.getByText("Sending...", { exact: true }).waitFor();
+    const before = await spaceUnder(row);
+    await page.clock.runFor(400);
+    const line = row.locator('[data-testid="chat-delivered"]');
+    await line.waitFor();
+    const height = await line.evaluate((el) => el.scrollHeight);
+    const after = await spaceUnder(row);
+    if (m.still) assert.ok(after - before >= height, `with Reduce Motion the line is there at once (${before} to ${after} px, a ${height} px line)`);
+    else assert.ok(Math.abs(after - before) < 1, `at delivery the space under his message is still as it was; it went from ${before} to ${after} px in one frame`);
+    await page.clock.resume();
+    await m.during("the new line", '[data-row="in"]', async () => gentle(await steppedLine(row, "unfold"), "unfold", "the new line"));
+    await resume();
+    await settle(page);
+    await T(page, "chat-bot-message").nth(replies).waitFor({ timeout: 10_000 });
+    await settle(page);
+    assert.deepEqual([await row.locator('[data-testid="chat-seen"]').count(), await T(page, "chat-delivered").count()], [1, 0], "at the end: the Read line under his message, and no Delivered line");
+    assert.ok((await spaceUnder(row)) - before >= height, "at the end the space under his message is larger by its line");
   }),
 );
 
