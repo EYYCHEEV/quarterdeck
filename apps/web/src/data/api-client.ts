@@ -558,7 +558,7 @@ export function createApiClient(options: { send?: Send; openEvents?: (address: s
         if (response.status !== 200) throw new NotConfirmed();
         const receipt = lib.uploadReceiptOf(await jsonOf(response, 4096, () => new NotConfirmed()));
         if (mine === generation) {
-          csrf = receipt.csrf;
+          keep(receipt.csrf);
           fresh = receipt.freshUntil;
         }
         return receipt;
