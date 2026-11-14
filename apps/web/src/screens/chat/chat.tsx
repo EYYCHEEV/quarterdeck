@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type RefObject } from "react";
 import { useThread } from "../../data/chat-hooks";
 import type { Attachment, ChatMessage, SendPhase } from "../../data/chat-types";
 import { useQd, useWorld } from "../../data/hooks";
@@ -17,7 +17,7 @@ import { AlertSwitch, Arrival, NotificationChoice, useArrival } from "./alerts";
 import { FileViewer, isPicture, PhotoTurn, usePhotoTurn } from "./attachments";
 import { Composer } from "./composer";
 import { ChatHeader } from "./header";
-import { SelectionQuote } from "./message-actions";
+import { SelectBar, Selecting, SelectionQuote } from "./message-actions";
 import { BotMessage, MyMessage, NewLine, WorkingLine } from "./messages";
 import { QuoteBlock } from "./quote";
 import { SecretCard, SecretLine } from "./secret-box";
@@ -92,6 +92,7 @@ export function ChatScreen({ botId, wide }: { botId: string; wide: boolean }) {
   const secrets = useSecrets(botId);
   const secretsReady = !secrets.loading && !secrets.failed;
   const [boxOpen, setBoxOpen] = useState(false);
+  const [selecting, setSelecting] = useState<{ botId: string; id: string } | null>(null);
   const bot = world?.bots.find((b) => b.id === botId) ?? (__QD_SOURCE__ === "server" && __QD_CHAT__ === "on" ? (thread.value?.bot ?? null) : null);
   const [arrival, dismissArrival] = useArrival(bot);
   const choices = (
@@ -103,6 +104,9 @@ export function ChatScreen({ botId, wide }: { botId: string; wide: boolean }) {
     </>
   );
   const messages = thread.value?.messages ?? [];
+  const selectingId = selecting?.botId === botId ? selecting.id : null;
+  const selectingMessage = selectingId === null ? undefined : messages.find((message) => message.id === selectingId);
+  const selectingValue = useMemo(() => ({ id: selectingId, set: (id: string | null) => setSelecting(id === null ? null : { botId, id }) }), [selectingId, botId]);
   if (thread.value && firstNew.current?.botId !== botId) firstNew.current = { botId, id: thread.value.firstUnread };
   const newId = firstNew.current?.botId === botId ? firstNew.current.id : null;
   const sentIds = new Set(messages.map((m) => m.clientId).filter(Boolean));
@@ -404,10 +408,14 @@ export function ChatScreen({ botId, wide }: { botId: string; wide: boolean }) {
                       <Empty>No messages yet.</Empty>
                     </li>
                   )}
-                  <PhotoTurn.Provider value={turn}>{rows}</PhotoTurn.Provider>
+                  <Selecting.Provider value={selectingValue}>
+                    <PhotoTurn.Provider value={turn}>{rows}</PhotoTurn.Provider>
+                  </Selecting.Provider>
                 </>
               ) : (
-                <PhotoTurn.Provider value={turn}>{rows}</PhotoTurn.Provider>
+                <Selecting.Provider value={selectingValue}>
+                  <PhotoTurn.Provider value={turn}>{rows}</PhotoTurn.Provider>
+                </Selecting.Provider>
               )}
               {working && <WorkingLine botName={bot.name} working={working} />}
               {secrets.loading && (
@@ -469,6 +477,7 @@ export function ChatScreen({ botId, wide }: { botId: string; wide: boolean }) {
                 }}
               />
             )}
+            {selectingMessage && <SelectBar key={selectingMessage.id} id={selectingMessage.id} onQuote={canReply ? (text) => quoteMessage(selectingMessage, text) : undefined} onEnd={() => setSelecting(null)} />}
           </div>
         }
       />

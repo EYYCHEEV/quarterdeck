@@ -182,6 +182,18 @@ const selectInFirstReply = async (vp, p) => {
   });
   await p.locator(T("selection-quote")).waitFor();
 };
+const selectLastReply = async (vp, p) => {
+  const reply = p.locator(T("chat-bot-message")).last();
+  await reply.locator("[data-message-text]").waitFor();
+  await reply.evaluate((el) => {
+    const box = el.getBoundingClientRect();
+    el.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "touch", bubbles: true, clientX: box.left + 60, clientY: box.top + 12 }));
+  });
+  const menu = p.locator('[data-pop="message-actions"]');
+  await menu.waitFor({ timeout: 3000 });
+  await press(vp, menu.locator("button").filter({ hasText: /^Select$/ }));
+  await p.locator(T("select-bar")).waitFor();
+};
 const picturesLoaded = async (vp, p) => {
   await p.locator(T("chat-picture")).first().waitFor();
   await p.waitForFunction(() => [...document.querySelectorAll('[data-testid="chat-picture"]')].every((img) => img.complete && img.naturalWidth > 0));
@@ -514,6 +526,7 @@ const STATES = [
   { name: "chat-actions-copy", route: "/chat/iris", shot: true, open: copyFirstReply, pop: (vp) => (vp.opts.hasTouch ? '[data-pop="message-actions"]' : T("message-actions")) },
   { name: "chat-message-quote", route: "/chat/iris", shot: true, open: quoteFirstReply },
   { name: "chat-selection", route: "/chat/iris", when: (vp) => !vp.opts.hasTouch, open: selectInFirstReply },
+  { name: "chat-select", route: "/chat/iris", shot: true, when: (vp) => vp.opts.hasTouch, open: selectLastReply },
   { name: "chat-return-newline", route: "/chat/iris", shot: true, when: (vp) => vp.opts.hasTouch, open: returnNewline },
   { name: "chat-plus", route: "/chat/iris", open: (vp, p) => tap(vp, p, T("plus-btn")), pop: () => '[data-pop="plus"]', closes: ["esc", "outside"] },
   { name: "chat-strip", route: "/chat/iris", shot: true, open: attachedFiles },
