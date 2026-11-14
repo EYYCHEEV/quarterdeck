@@ -83,6 +83,52 @@ test("a card line he has edited is his own words, so the new card line goes abov
   assert.equal(withCardLine(retitled, ALBA_1), retitled);
 });
 
+const { mailLine, withMailLine, isMailQuote, quoteAsText } = await loadTs("src/domain/chat.ts");
+const MAIL_103_2 = mailQuote({ ref: "MT-103.2", from: "Shelvorn", to: ["Alba", "Iris"], text: "Email and Log out only." });
+const MAIL_103_2_LINE = 'About Mail MT-103.2: "Shelvorn to Alba, Iris"';
+const THREAD_101 = threadQuote({ ref: "MT-101", subject: "Search group limit", mails: [{}, {}, {}, {}] }, ["Alba", "Dr. Kivo", "Iris"]);
+const THREAD_101_LINE = 'About Mail MT-101: "Search group limit"';
+const SAID = messageQuote({ id: "m1", who: "Alba", at: "2026-11-02T09:00:00-05:00", text: "Five rows.", selected: null });
+
+test("a mail line names the mail's reference and who wrote to whom, in the card line's shape, and a thread's line names its subject", () => {
+  assert.equal(mailLine(MAIL_103_2), MAIL_103_2_LINE);
+  assert.equal(mailLine(THREAD_101), THREAD_101_LINE);
+  assert.equal(mailLine({ ...THREAD_101, title: "  Search\ngroup\t limit " }), THREAD_101_LINE);
+});
+
+test("the mail line goes above his unsent words and keeps them as they are, and the same mail again adds no second line", () => {
+  assert.equal(withMailLine("", MAIL_103_2), MAIL_103_2_LINE + "\n");
+  const once = withMailLine("Half a thought\nand more ", MAIL_103_2);
+  assert.equal(once, MAIL_103_2_LINE + "\nHalf a thought\nand more ");
+  assert.equal(withMailLine(once, MAIL_103_2), once);
+  assert.equal(withMailLine(MAIL_103_2_LINE, MAIL_103_2), MAIL_103_2_LINE + "\n");
+});
+
+test("another mail replaces the first mail line and keeps his words, and a mail line and a card line stand one above the other", () => {
+  const once = withMailLine("Half a thought", MAIL_103_2);
+  assert.equal(withMailLine(once, THREAD_101), THREAD_101_LINE + "\nHalf a thought");
+  const carded = withCardLine("Why five?", ALBA_1);
+  assert.equal(withMailLine(carded, MAIL_103_2), MAIL_103_2_LINE + "\n" + carded);
+  assert.equal(withCardLine(once, ALBA_1), ALBA_1_LINE + "\n" + once);
+});
+
+test("only a quote that links to Mail and names no chat message is a Mail quote", () => {
+  assert.equal(isMailQuote(MAIL_103_2), true);
+  assert.equal(isMailQuote(THREAD_101), true);
+  assert.equal(isMailQuote(ALBA_1), false);
+  assert.equal(isMailQuote(SAID), false);
+  assert.equal(isMailQuote({ label: "Quoted by Alba; not found in this chat", title: null, text: "Five rows.", to: null }), false);
+});
+
+test("a Mail quote always leaves the draft as a line of text, because the server takes no Mail quote, while a card or message quote stays when the thread takes quotes", () => {
+  assert.equal(quoteAsText("Why?", MAIL_103_2, true), MAIL_103_2_LINE + "\nWhy?");
+  assert.equal(quoteAsText("Why?", MAIL_103_2, false), MAIL_103_2_LINE + "\nWhy?");
+  assert.equal(quoteAsText("Why?", ALBA_1, true), null);
+  assert.equal(quoteAsText("Why?", ALBA_1, false), ALBA_1_LINE + "\nWhy?");
+  assert.equal(quoteAsText("Why?", SAID, true), null);
+  assert.equal(quoteAsText("Why?", SAID, false), "Why?");
+});
+
 test("no word is reported once the bot has not updated for 10 minutes, not before", () => {
   assert.equal(QUIET_AFTER_MS, 10 * 60_000);
   assert.equal(workingStatus(WORKING, at("10:06", 59)).quiet, false);
