@@ -1327,7 +1327,7 @@ it("Chat: Copy says Copied only after the clipboard took the text, and says it f
   assert.equal(await T(p, "message-actions").getByRole("button", { name: "Copied" }).count(), 0);
 });
 
-it("Chat: pressing and holding a message on the phone opens Reply and Copy, and a quick tap does not", PHONE, async (p) => {
+it("Chat: pressing and holding a message on the phone opens Reply, Copy and Select, and a quick tap does not", PHONE, async (p) => {
   await p.clock.install();
   await open(p, "/chat/iris");
   const reply = T(p, "chat-bot-message").first();
@@ -1343,7 +1343,7 @@ it("Chat: pressing and holding a message on the phone opens Reply and Copy, and 
   await p.clock.runFor(600);
   const sheet = p.locator('[data-pop="message-actions"]');
   await sheet.waitFor();
-  assert.deepEqual(await namesOf(sheet.getByRole("button")), ["Done", "Reply", "Copy"]);
+  assert.deepEqual(await namesOf(sheet.getByRole("button")), ["Done", "Reply", "Copy", "Select"]);
   await sheet.getByRole("button", { name: "Reply" }).tap();
   await sheet.waitFor({ state: "detached" });
   await draftQuote(p).getByText("Iris · 8:30 AM").waitFor();

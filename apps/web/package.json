@@ -14,7 +14,7 @@
     "serve:app": "node tools/serve-app.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:app": "node shell_test.mjs",
-    "test:chat": "node src/screens/chat/chat_test.mjs && node src/screens/chat/chat_typing_test.mjs",
+    "test:chat": "node src/screens/chat/chat_test.mjs && node src/screens/chat/chat_typing_test.mjs && node src/screens/chat/chat_select_test.mjs",
     "test:taskcard": "node --test src/domain/card_test.mjs src/domain/answer_test.mjs",
     "test:data": "node --test src/data/*_test.mjs src/domain/*_test.mjs src/platform/*_test.mjs src/ui/*_test.mjs src/screens/page/*_test.mjs tools/*_test.mjs tools/lint/*_test.mjs",
     "design:check": "node tools/design-check.mjs --sizes=phone-390,ipad-744x1133,ipad-1133x744,mac-1512",

@@ -5417,7 +5417,7 @@ it("Server Chat on the Mac: no + button, no Quote by hover or by selection, and 
   equal(await T(p, "selection-quote").count(), 0, "selection Quote");
 });
 
-it("Server Chat on a phone: no + button, a held message offers Copy and no Quote, and a pasted or dropped file attaches nothing", PHONE, async (p) => {
+it("Server Chat on a phone: no + button, a held message offers Copy and Select and no Quote, and a pasted or dropped file attaches nothing", PHONE, async (p) => {
   await serverBuildChat(p);
   await chatOpened(p);
   equal(await T(p, "plus-btn").count(), 0, "+ button");
@@ -5427,7 +5427,7 @@ it("Server Chat on a phone: no + button, a held message offers Copy and no Quote
   });
   const sheet = p.locator('[data-pop="message-actions"]');
   await sheet.waitFor();
-  equal(await namesOf(sheet.getByRole("button")), ["Done", "Copy"], "held message actions");
+  equal(await namesOf(sheet.getByRole("button")), ["Done", "Copy", "Select"], "held message actions");
   await sheet.getByRole("button", { name: "Done" }).tap();
   await sheet.waitFor({ state: "detached" });
   const before = p.url();
@@ -5459,7 +5459,7 @@ const holdBubble = (p, id) =>
     el.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "touch", bubbles: true, clientX: box.left + 60, clientY: box.top + 12 }));
   });
 
-for (const [name, features, rows] of [["lists quote", ["quote"], ["Reply", "Copy"]], ["lists no quote", [], ["Copy"]]])
+for (const [name, features, rows] of [["lists quote", ["quote"], ["Reply", "Copy", "Select"]], ["lists no quote", [], ["Copy", "Select"]]])
   it("Server Chat on a phone: when the thread " + name + ", a held message opens the menu with " + rows.join(" then ") + " as icon rows", PHONE, async (p) => {
     await serverBuildChat(p, { shape: (body) => ({ ...body, features }) });
     await chatOpened(p);
@@ -5470,6 +5470,51 @@ for (const [name, features, rows] of [["lists quote", ["quote"], ["Reply", "Copy
     const shown = await sheet.getByRole("button").evaluateAll((list) => list.filter((el) => el.textContent !== "Done").map((el) => [el.textContent, el.querySelector("svg") !== null, el.getBoundingClientRect().height >= 48]));
     equal(shown, rows.map((row) => [row, true, true]), "each row: its words, an icon, at least 48 px tall");
   });
+
+const selectHeld = async (p, id) => {
+  await holdBubble(p, id);
+  const sheet = p.locator('[data-pop="message-actions"]');
+  await sheet.getByRole("button", { name: "Select", exact: true }).tap();
+  await sheet.waitFor({ state: "detached" });
+  await T(p, "select-bar").waitFor();
+};
+
+it("Server Chat on a phone: when the thread lists no quote, Select's bar offers Copy then Done, and Copy gives only the selected part", PHONE, async (p) => {
+  await p.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await serverBuildChat(p);
+  await chatOpened(p);
+  await selectHeld(p, "iris-m30");
+  const bar = T(p, "select-bar");
+  equal(await namesOf(bar.getByRole("button")), ["Copy", "Done"], "the bar's buttons");
+  await p.locator('[data-message-id="iris-m30"] [data-message-text]').evaluate((root) => {
+    const node = [...root.querySelectorAll("*"), root].flatMap((el) => [...el.childNodes]).find((one) => one.nodeType === Node.TEXT_NODE && one.textContent.includes("the export sheet"));
+    const at = node.textContent.indexOf("the export sheet");
+    const range = document.createRange();
+    range.setStart(node, at);
+    range.setEnd(node, at + "the export sheet".length);
+    getSelection().removeAllRanges();
+    getSelection().addRange(range);
+  });
+  await bar.getByRole("button", { name: "Copy", exact: true }).tap();
+  await bar.getByRole("button", { name: "Copied", exact: true }).waitFor();
+  equal(await p.evaluate(() => navigator.clipboard.readText()), "the export sheet", "what Copy put on the clipboard");
+});
+
+it("Server Chat on an iPad upright: Select makes only that message's text selectable, the thread stays unselectable, and Done puts it back", IPAD_UPRIGHT, async (p) => {
+  await serverBuildChat(p);
+  await chatOpened(p);
+  const selectable = () =>
+    p.evaluate(() => [
+      [...document.querySelectorAll("[data-message-text]")].filter((el) => getComputedStyle(el).userSelect === "text").map((el) => el.closest("[data-message-id]")?.getAttribute("data-message-id")),
+      getComputedStyle(document.querySelector('[data-testid="chat-thread"]')).userSelect,
+    ]);
+  equal(await selectable(), [[], "none"], "selectable message texts and the thread's user-select before Select");
+  await selectHeld(p, "iris-m30");
+  equal(await selectable(), [["iris-m30"], "none"], "selectable message texts and the thread's user-select while selecting");
+  await T(p, "select-bar").getByRole("button", { name: "Done", exact: true }).tap();
+  await T(p, "select-bar").waitFor({ state: "detached" });
+  equal(await selectable(), [[], "none"], "selectable message texts and the thread's user-select after Done");
+});
 
 it("Server Chat on the Mac: when the thread lists quote, hovering a message offers Reply then Copy", MAC, async (p) => {
   await serverBuildChat(p, { shape: (body) => ({ ...body, features: ["quote"] }) });
