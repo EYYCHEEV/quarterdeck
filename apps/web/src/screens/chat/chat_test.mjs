@@ -1616,12 +1616,15 @@ it("Chat: a name in the secret box that looks like a key is refused, and nothing
   assert.equal(await T(p, "secret-line").count(), 0);
 });
 
-it("Chat: Esc closes the secret box he opened, and nothing is saved", MAC, async (p) => {
+it("Chat: Esc leaves the secret box open with what he typed, and its Close key closes it with nothing saved", MAC, async (p) => {
   await open(p, "/chat/iris");
   const box = await openSecretBox(p);
   await box.getByTestId("secret-name-field").fill("R2_TOKEN");
   await box.getByTestId("secret-value").fill(SECRET_VALUE);
   await p.keyboard.press("Escape");
+  assert.equal(await box.count(), 1, "the box is still open after Esc");
+  assert.deepEqual([await box.getByTestId("secret-name-field").inputValue(), await box.getByTestId("secret-value").inputValue()], ["R2_TOKEN", SECRET_VALUE]);
+  await box.getByRole("button", { name: "Close the secret box" }).click();
   await box.waitFor({ state: "detached" });
   assert.equal(await T(p, "secret-line").count(), 0);
 });
@@ -2214,13 +2217,12 @@ it("Chat: Send anyway requires a fresh paste and ordinary Send, and permits only
   assert.equal(await mine(p, FAKE_PASTE).count(), 1);
 });
 
-for (const reset of ["Escape", "Dismiss", "chat change", "navigation", "harmless paste", "file paste"]) {
+for (const reset of ["Dismiss", "chat change", "navigation", "harmless paste", "file paste"]) {
   it("Chat: the one-paste bypass clears on " + reset, MAC, async (p) => {
     await open(p, "/chat/iris");
     await pasteText(p, FAKE_PASTE);
     await p.getByRole("button", { name: "Send anyway", exact: true }).click();
-    if (reset === "Escape") await p.keyboard.press("Escape");
-    else if (reset === "Dismiss") await T(p, "secret-paste-notice").getByRole("button", { name: "Dismiss" }).click();
+    if (reset === "Dismiss") await T(p, "secret-paste-notice").getByRole("button", { name: "Dismiss" }).click();
     else if (reset === "harmless paste") {
       await pasteText(p, "Harmless text");
       assert.equal(await T(p, "chat-input").inputValue(), "Harmless text");
@@ -2248,6 +2250,42 @@ for (const reset of ["Escape", "Dismiss", "chat change", "navigation", "harmless
     assert.equal(await T(p, "chat-input").inputValue(), "");
   });
 }
+
+it("Chat: Esc leaves a blocked paste warning in place, and Cancel removes it", MAC, async (p) => {
+  await open(p, "/chat/iris");
+  await pasteText(p, FAKE_PASTE);
+  await T(p, "secret-paste-warning").waitFor();
+  await T(p, "chat-input").focus();
+  await p.keyboard.press("Escape");
+  await p.keyboard.type("ok");
+  assert.equal(await T(p, "chat-input").inputValue(), "ok");
+  assert.equal(await T(p, "secret-paste-warning").count(), 1, "the warning is still shown after Esc");
+  await T(p, "secret-paste-warning").getByRole("button", { name: "Cancel" }).click();
+  assert.equal(await T(p, "secret-paste-warning").count(), 0);
+});
+
+it("Chat: Esc leaves the one-paste bypass and its note in place, and the next paste is added", MAC, async (p) => {
+  await open(p, "/chat/iris");
+  await pasteText(p, FAKE_PASTE);
+  await p.getByRole("button", { name: "Send anyway", exact: true }).click();
+  await T(p, "secret-paste-notice").waitFor();
+  await p.keyboard.press("Escape");
+  await p.keyboard.type("ok");
+  assert.equal(await T(p, "chat-input").inputValue(), "ok");
+  assert.equal(await T(p, "secret-paste-notice").count(), 1, "the note is still shown after Esc");
+  await T(p, "chat-input").fill("");
+  await pasteText(p, FAKE_PASTE);
+  assert.equal(await T(p, "chat-input").inputValue(), FAKE_PASTE);
+});
+
+it("Chat: Esc in an open chat changes nothing", MAC, async (p) => {
+  await open(p, "/chat/iris");
+  await T(p, "chat-input").fill("A draft he is still writing");
+  await p.keyboard.press("Escape");
+  await p.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur());
+  await p.keyboard.press("Escape");
+  assert.deepEqual([new URL(p.url()).pathname, await T(p, "chat-input").inputValue(), await p.locator("[data-pop]").count()], ["/chat/iris", "A draft he is still writing", 0]);
+});
 
 const PASTE_SIZES = [
   ["mac-1512", MAC],

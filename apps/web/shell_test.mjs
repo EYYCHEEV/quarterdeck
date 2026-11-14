@@ -310,6 +310,16 @@ it("Queue on the Mac and sideways: Esc in the card pane goes back to its row", M
   }
 });
 
+it("Queue on the Mac: the hint row prints no Esc, and Esc in the card pane still goes back to its row", MAC, async (p) => {
+  await open(p, "/queue");
+  await T(p, "card-pane").getByTestId("talk-to").waitFor();
+  const hints = await T(p, "key-hints").innerText();
+  equal([hints.includes("search"), hints.includes("Esc")], [true, false], "search printed, Esc printed");
+  await T(p, "card-pane").getByTestId("talk-to").focus();
+  await p.keyboard.press("Escape");
+  equal(await p.evaluate(() => document.activeElement?.closest('[data-testid="card-row"]') !== null && document.activeElement?.getAttribute("aria-current") === "true"), true, "focus on the open card's row");
+});
+
 it("Card keys on the Mac and sideways: a letter picks that option, n picks None of these, and Enter sends", MAC, async (p) => {
   for (const [width, height] of WIDE) {
     await p.setViewportSize({ width, height });
@@ -453,7 +463,18 @@ it("Card keys on the Mac: the key list on an approval card leaves out the letter
   await open(p, "/queue/c2");
   await T(p, "card-pane").getByTestId("talk-to").waitFor();
   await p.keyboard.press("?");
-  equal(await p.locator('[data-pop="keys"] kbd').allInnerTexts(), ["j / k", "t", "\u2318K", "Esc"], "keys");
+  equal(await p.locator('[data-pop="keys"] kbd').allInnerTexts(), ["j / k", "t", "\u2318K"], "keys");
+});
+
+it("Card keys on the Mac: the key list prints no Esc, and Esc still closes it", MAC, async (p) => {
+  await open(p, "/queue/alba-1");
+  await T(p, "card-pane").getByTestId("talk-to").waitFor();
+  await p.keyboard.press("?");
+  const list = p.locator('[data-pop="keys"]');
+  await list.getByText("Talk to Alba", { exact: true }).waitFor();
+  equal((await list.locator("kbd").allInnerTexts()).includes("Esc"), false, "Esc printed in the key list");
+  await p.keyboard.press("Escape");
+  await gone(list);
 });
 
 it("Card keys: the Keys button is hidden on a touch-only iPad held sideways", TOUCH_SIDEWAYS, async (p) => {
