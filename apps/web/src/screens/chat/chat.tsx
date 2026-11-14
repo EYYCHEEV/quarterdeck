@@ -191,7 +191,7 @@ export function ChatScreen({ botId, wide }: { botId: string; wide: boolean }) {
     useEffect(() => {
       if (!draft.quote || !thread.value) return;
       const text = quoteAsText(draft.text, draft.quote, canReply);
-      if (text !== null) setDraft({ text, quote: null, files: [] });
+      if (text !== null) setDraft({ ...draft, text, quote: null });
     }, [draft.quote, !thread.value, canReply]);
 
   useEffect(() => {
