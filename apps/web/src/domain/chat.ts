@@ -150,11 +150,15 @@ export function readText(seenAt: string | null | undefined, now: number): string
   return "Read " + (day === "Today" ? clockTime(seenAt) : day);
 }
 
-export const MESSAGE_LIMIT = 4000;
+export const SEND_CEILING = 131_072;
 
-export const SEND_LONG_TEXT = "Not sent: the message is over 4,000 characters.";
+const SEND_ROOM = SEND_CEILING - 16_384;
 
-export const withinLimit = (text: string): boolean => text.length <= MESSAGE_LIMIT || (text.length <= MESSAGE_LIMIT * 2 && [...text].length <= MESSAGE_LIMIT);
+export const SEND_LONG_TEXT = "Not sent: this message is too long. Shorten it or split it in two.";
+
+const utf8 = new TextEncoder();
+
+export const fitsSend = (text: string): boolean => text.length * 6 + 2 <= SEND_ROOM || (text.length + 2 <= SEND_ROOM && utf8.encode(JSON.stringify(text)).length <= SEND_ROOM);
 
 export const QUOTE_LIMIT = 280;
 

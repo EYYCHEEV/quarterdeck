@@ -5,7 +5,7 @@ import { useQd, useWorld } from "../../data/hooks";
 import { useSecrets } from "../../data/secret-hooks";
 import { attachChatFiles, updatePendingSends, useChatDraft, usePendingSends, type PendingSend } from "../../data/session";
 import { RateLimited, Refused } from "../../data/source";
-import { isCardQuote, messageQuote, SEND_FAILED_TEXT, SEND_LONG_TEXT, SEND_RATE_TEXT, withCardLine, withinLimit } from "../../domain/chat";
+import { fitsSend, isCardQuote, messageQuote, SEND_FAILED_TEXT, SEND_LONG_TEXT, SEND_RATE_TEXT, withCardLine } from "../../domain/chat";
 import { admit, pictureCaption } from "../../domain/chat-files";
 import { EXPIRED_TEXT, FILES_OFF_TEXT, serverAdmit } from "../../domain/files-r1";
 import { dayKey, dayLabel } from "../../domain/time";
@@ -210,7 +210,7 @@ export function ChatScreen({ botId }: { botId: string }) {
     if (!text && !draft.files.length) return false;
     if (__QD_SOURCE__ === "server" && __QD_CHAT__ === "on") {
       if (!thread.value) return false;
-      if (!withinLimit(text)) {
+      if (!fitsSend(text)) {
         setRefused([SEND_LONG_TEXT]);
         return false;
       }
