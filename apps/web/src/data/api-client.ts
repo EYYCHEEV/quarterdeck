@@ -511,6 +511,10 @@ export function createApiClient(options: { send?: Send; openEvents?: (address: s
         if (response.status === 401 || response.status === 403) throw refusal(response.status, mine);
         if (response.status === 413) throw new Refused(lib.bigText(file.name));
         if (response.status === 422) throw new Refused(lib.typeText(file.name));
+        if (response.status === 502) {
+          const seconds = await retryAfterOf(response);
+          throw seconds === null ? new NotConfirmed() : new MailBusy(seconds);
+        }
         if (response.status !== 200) throw new NotConfirmed();
         const receipt = lib.uploadReceiptOf(await jsonOf(response, 4096, () => new NotConfirmed()));
         if (mine === generation) {

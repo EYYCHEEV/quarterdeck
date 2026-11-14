@@ -306,7 +306,7 @@ export function createServerChat(host: ChatHost): ChatPart {
     return wire;
   }
 
-  async function uploadOne(file: File, given: string | null, current: () => void): Promise<UploadReceipt> {
+  async function uploadOne(file: File, given: string | null, current: () => void, waitOut: (seconds: number) => Promise<void>): Promise<UploadReceipt> {
     let token = given;
     for (let tries = 1; ; tries += 1) {
       try {
@@ -317,14 +317,17 @@ export function createServerChat(host: ChatHost): ChatPart {
         return receipt;
       } catch (error) {
         current();
-        if (!lost(error)) throw error;
-        if (tries === 2) throw new Refused(CHAT_WORDS.mail);
+        if (error instanceof MailBusy) await waitOut(error.seconds);
+        else {
+          if (!lost(error)) throw error;
+          if (tries >= 2) throw new Refused(CHAT_WORDS.mail);
+        }
         token = null;
       }
     }
   }
 
-  async function uploaded(files: File[], current: () => void): Promise<{ ids: string[]; csrf: string }> {
+  async function uploaded(files: File[], current: () => void, waitOut: (seconds: number) => Promise<void>): Promise<{ ids: string[]; csrf: string }> {
     const ids: string[] = [];
     let token: string | null = null;
     for (const file of files) {
@@ -333,7 +336,7 @@ export function createServerChat(host: ChatHost): ChatPart {
         ids.push(held.id);
         continue;
       }
-      const receipt = await uploadOne(file, token, current);
+      const receipt = await uploadOne(file, token, current, waitOut);
       kept.set(file, { id: receipt.id, at: host.clock() });
       ids.push(receipt.id);
       token = receipt.csrf;
@@ -355,11 +358,24 @@ export function createServerChat(host: ChatHost): ChatPart {
     const words = wire === undefined ? rest : { ...rest, quote: wire };
     let body: WireOutgoing = words;
     let chain: ChatChain | undefined;
+    let waited = false;
+    const busyWait = async (seconds: number): Promise<void> => {
+      if (waited) throw new Refused(CHAT_WORDS.mail);
+      waited = true;
+      onPhase?.("busy", seconds);
+      await pause(seconds * 1_000);
+      current();
+      if (host.away()) await shown();
+      current();
+    };
     if (files && files.length > 0) {
       if (!threads.get(bot)?.features.includes("files") || limits === null) throw new Refused(CHAT_WORDS.files);
       checkWords(bot, words, true);
       onPhase?.("uploading");
-      const sent = await uploaded(files, current);
+      const sent = await uploaded(files, current, async (seconds) => {
+        await busyWait(seconds);
+        onPhase?.("uploading");
+      });
       body = { ...words, files: sent.ids };
       chain = { csrf: sent.csrf };
       await host.credits(2);
@@ -377,13 +393,8 @@ export function createServerChat(host: ChatHost): ChatPart {
         current();
         if (error instanceof Refused && error.message === CHAT_WORDS.expired) for (const file of files ?? []) kept.delete(file);
         if (error instanceof MailBusy) {
-          if (resent) throw new Refused(CHAT_WORDS.mail);
+          await busyWait(error.seconds);
           resent = true;
-          onPhase?.("busy", error.seconds);
-          await pause(error.seconds * 1_000);
-          current();
-          if (host.away()) await shown();
-          current();
           onPhase?.("sending");
           ends = host.clock() + SEND_CAP;
         } else {
