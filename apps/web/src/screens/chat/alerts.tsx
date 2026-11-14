@@ -46,7 +46,7 @@ export function AlertChoices({ sound, onSound }: { sound: boolean; onSound: () =
         </button>
       )}
       {note && (
-        <p className="w-full text-small text-ink-2" role="status">
+        <p className="w-full text-meta text-ink-2" role="status">
           Notifications will be available when connected to Quarterdeck.
         </p>
       )}
@@ -92,10 +92,10 @@ export function useArrival(bot: Bot | null): [Bot | null, () => void] {
 export function Arrival({ from, onDismiss, children }: { from: Bot; onDismiss: () => void; children: ReactNode }) {
   return (
     <section className="chat-arrival" aria-label="New message" data-testid="chat-new-message">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-s3">
         <Avatar name={from.name} color={from.color} size="lg" />
-        <Link to={href.chat(from.id)} className="min-w-0 flex-1 py-2" onClick={onDismiss}>
-          <span className="block text-small text-ink-2">Bot chat</span>
+        <Link to={href.chat(from.id)} className="min-w-0 flex-1 py-s2" onClick={onDismiss}>
+          <span className="block text-meta text-ink-2">Bot chat</span>
           <strong className="text-body" role="status">
             New message from {from.name}
           </strong>

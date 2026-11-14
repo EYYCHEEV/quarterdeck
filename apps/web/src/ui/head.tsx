@@ -28,7 +28,7 @@ function MenuButton() {
 
 export function Head({ menu = true, className, children }: { menu?: boolean; className?: string; children: ReactNode }) {
   return (
-    <header className={cx("flex min-h-15 items-center gap-1.5 pt-[max(8px,env(safe-area-inset-top))]", className)}>
+    <header className={cx("flex min-h-[60px] items-center gap-s1 pt-[max(var(--spacing-s2),env(safe-area-inset-top))]", className)}>
       {menu && <MenuButton />}
       {children}
     </header>
@@ -36,7 +36,7 @@ export function Head({ menu = true, className, children }: { menu?: boolean; cla
 }
 
 export function Title(props: Omit<ComponentProps<"h1">, "className">) {
-  return <h1 className="min-w-0 text-screen font-bold tracking-[-.02em] wide:text-screen-wide" {...props} />;
+  return <h1 className="min-w-0 text-display font-strong" {...props} />;
 }
 
 export function BackLink({ to, children, className, onClick }: { to: string; children: ReactNode; className?: string; onClick?: () => void }) {
@@ -44,7 +44,7 @@ export function BackLink({ to, children, className, onClick }: { to: string; chi
     <Link
       to={to}
       onClick={onClick}
-      className={cx("inline-flex min-h-11 items-center gap-1 rounded-small pr-2 pl-1 text-note font-semibold whitespace-nowrap text-ink hover:bg-control", className)}
+      className={cx("inline-flex min-h-hit items-center gap-s1 rounded-key pr-s2 pl-s1 text-body font-strong whitespace-nowrap text-ink hover:bg-control", className)}
     >
       <Icon name="back" size="sm" />
       {children}

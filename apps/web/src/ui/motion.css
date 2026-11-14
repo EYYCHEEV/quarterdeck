@@ -32,7 +32,7 @@
   }
 
   .rise {
-    translate: 0 calc(var(--spacing) * 2);
+    translate: 0 var(--spacing-s2);
   }
 }
 
@@ -50,7 +50,7 @@
 }
 
 .sending-bar {
-  animation: sending 1200ms cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
+  animation: sending --theme(--dur-tick inline) --theme(--ease-sending inline) infinite alternate;
 }
 
 [data-leaving],
@@ -61,7 +61,7 @@
 @keyframes leave {
   to {
     opacity: 0;
-    translate: 0 4px;
+    translate: 0 var(--spacing-s1);
   }
 }
 
@@ -86,11 +86,11 @@
 }
 
 :root[data-move~="forward"] {
-  --move: 12px;
+  --move: var(--spacing-s3);
 }
 
 :root[data-move~="back"] {
-  --move: -12px;
+  --move: calc(var(--spacing-s3) * -1);
 }
 
 :root[data-move~="pane"],

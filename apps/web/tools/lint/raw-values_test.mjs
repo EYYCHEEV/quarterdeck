@@ -114,12 +114,28 @@ test("a listed name that nothing uses any more fails, so the list only shrinks",
   assert.match(found[0], /^tools\/lint\/raw-values-known\.json: max-w-\[720px\] /);
 });
 
-test("every entry of the real list is a bracketed measure and names the later stage that removes it", () => {
+const OLD_SHEETS = ["public/chat.css", "public/settings.css", "public/lanes.css", "public/document.css"];
+
+test("every entry of the real list is a bracketed measure or one of the four old screen sheets, and names the later stage that removes it", () => {
   const known = JSON.parse(fs.readFileSync(KNOWN, "utf8"));
   for (const [name, stage] of Object.entries(known)) {
-    assert.match(name, /^-?[a-z][a-z-]*-\[[^\]\s]+\]$/, name);
+    if (!OLD_SHEETS.includes(name)) assert.match(name, /^-?[a-z][a-z-]*-\[[^\]\s]+\]$/, name);
     assert.match(stage, /^stage [2-9]\b/, name);
   }
+});
+
+test("in a listed old sheet a raw length passes only on a size or place property, and a listed sheet with none left fails", async () => {
+  const { rawValueProblems } = await import("./raw-values.mjs");
+  const known = { "public/probe.css": "stage 3" };
+  const run = (rule) => rawValueProblems([{ name: "public/probe.css", text: sheet(rule) }], known);
+  assert.deepEqual(run("max-width: 760px; grid-template-columns: 44px minmax(0, 1fr); scroll-margin-top: 100px; height: 22px;"), []);
+  assert.equal(run("max-width: 760px; padding: 12px;").length, 1);
+  assert.equal(run("max-width: 760px; font-size: 13px;").length, 1);
+  assert.equal(run("max-width: 760px; color: #fff;").length, 1);
+  assert.equal(run("max-width: 760px; transition: opacity 200ms;").length, 1);
+  const none = run("padding: var(--spacing-s3);");
+  assert.equal(none.length, 1);
+  assert.match(none[0], /^tools\/lint\/raw-values-known\.json: public\/probe\.css /);
 });
 
 test("the real tree passes the script", () => {

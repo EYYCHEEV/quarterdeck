@@ -77,7 +77,7 @@ export function Dialog({
   useOverlay(box, onClose, returnTo);
   useLeave(frame);
   return (
-    <div ref={frame} className={cx("fixed inset-0 z-50 grid", compact ? "place-items-center p-4 upright:p-6" : "upright:place-items-center upright:p-6")}>
+    <div ref={frame} className={cx("fixed inset-0 z-50 grid", compact ? "place-items-center p-s4 upright:p-s5" : "upright:place-items-center upright:p-s5")}>
       <div className={cx("absolute inset-0 bg-scrim", ARRIVE)} aria-hidden="true" onClick={onClose} />
       <div
         ref={box}
@@ -89,7 +89,7 @@ export function Dialog({
         className={cx(
           "relative flex w-full flex-col overflow-hidden bg-panel outline-none",
           RISE,
-          compact ? "h-auto max-h-[calc(100dvh-32px)] max-w-[640px] rounded-card border border-line-2" : "h-dvh upright:h-auto upright:max-h-[calc(100dvh-48px)] upright:max-w-[640px] upright:rounded-card upright:border upright:border-line-2",
+          compact ? "h-auto max-h-[calc(100dvh_-_var(--spacing-s6))] max-w-[640px] rounded-panel border border-line" : "h-dvh upright:h-auto upright:max-h-[calc(100dvh_-_var(--spacing-s7))] upright:max-w-[640px] upright:rounded-panel upright:border upright:border-line",
         )}
       >
         {children}
@@ -100,9 +100,9 @@ export function Dialog({
 
 export function DialogHead({ title, onClose, closeLabel = "Close" }: { title: ReactNode; onClose: () => void; closeLabel?: string }) {
   return (
-    <div className="flex min-h-15 flex-none items-center gap-2 border-b border-line py-2 pr-2 pl-4 pt-[max(8px,env(safe-area-inset-top))] upright:pt-2">
-      <h2 className="min-w-0 flex-1 text-row font-semibold">{title}</h2>
-      <IconButton icon="x" label={closeLabel} onClick={onClose} className="rounded-full" />
+    <div className="flex min-h-[60px] flex-none items-center gap-s2 border-b border-line py-s2 pr-s2 pl-s4 pt-[max(var(--spacing-s2),env(safe-area-inset-top))] upright:pt-s2">
+      <h2 className="min-w-0 flex-1 text-body font-strong">{title}</h2>
+      <IconButton icon="x" label={closeLabel} onClick={onClose} className="rounded-round" />
     </div>
   );
 }
@@ -131,14 +131,14 @@ export function Sheet({
   useOverlay(box, onClose);
   useLeave(wide ? box : frame);
   const head = (
-    <div className="flex flex-none items-center gap-2 px-3 pt-1 pb-1">
-      <h2 className="min-w-0 flex-1 text-row font-semibold">{title}</h2>
+    <div className="flex flex-none items-center gap-s2 px-s3 pt-s1 pb-s1">
+      <h2 className="min-w-0 flex-1 text-body font-strong">{title}</h2>
       {onClear && (
-        <Button kind="ghost" className="min-h-11 border-transparent px-3 py-0" onClick={onClear}>
+        <Button kind="ghost" className="min-h-hit border-transparent px-s3 py-0" onClick={onClear}>
           Clear
         </Button>
       )}
-      <Button kind="plain" className="min-h-11 px-4 py-0" onClick={onClose} data-autofocus="">
+      <Button kind="plain" className="min-h-hit px-s4 py-0" onClick={onClose} data-autofocus="">
         Done
       </Button>
     </div>
@@ -154,16 +154,16 @@ export function Sheet({
           tabIndex={-1}
           data-pop={pop}
           className={cx(
-            "absolute top-[calc(100%+8px)] right-0 z-40 max-h-[min(70vh,560px)] overflow-y-auto rounded-panel border border-line-2 bg-control shadow-pop outline-none",
+            "absolute top-[calc(100%_+_var(--spacing-s2))] right-0 z-40 max-h-[min(70vh,560px)] overflow-y-auto rounded-panel border border-line bg-control shadow-lift outline-none",
             RISE,
-            menu ? "w-[320px] p-1.5" : "w-[340px] p-2",
+            menu ? "w-[320px] p-s1" : "w-[340px] p-s2",
           )}
         >
           {!menu && head}
           {children}
           {menu && onClear && (
-            <div className="mt-1 border-t border-line pt-1">
-              <Button kind="ghost" className="min-h-11 w-full border-transparent py-0" onClick={onClear}>
+            <div className="mt-s1 border-t border-line pt-s1">
+              <Button kind="ghost" className="min-h-hit w-full border-transparent py-0" onClick={onClear}>
                 Clear
               </Button>
             </div>
@@ -182,14 +182,14 @@ export function Sheet({
         aria-label={title}
         tabIndex={-1}
         data-pop={pop}
-        className={cx("absolute inset-x-0 bottom-0 mx-auto flex max-h-[85dvh] max-w-[720px] flex-col overflow-hidden rounded-t-card border-t border-line-2 bg-panel pt-3 outline-none", RISE)}
+        className={cx("absolute inset-x-0 bottom-0 mx-auto flex max-h-[85dvh] max-w-[720px] flex-col overflow-hidden rounded-t-sheet border-t border-line bg-panel pt-s3 outline-none", RISE)}
       >
         {head}
-        <div className="min-h-0 flex-1 overflow-y-auto px-2">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-s2">{children}</div>
         {footer ? (
-          <div className="flex-none border-t border-line px-3 pt-3 pb-[max(12px,env(safe-area-inset-bottom))]">{footer}</div>
+          <div className="flex-none border-t border-line px-s3 pt-s3 pb-[max(var(--spacing-s3),env(safe-area-inset-bottom))]">{footer}</div>
         ) : (
-          <div className="h-[max(12px,env(safe-area-inset-bottom))] flex-none" />
+          <div className="h-[max(var(--spacing-s3),env(safe-area-inset-bottom))] flex-none" />
         )}
       </div>
     </div>

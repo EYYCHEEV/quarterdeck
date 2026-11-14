@@ -5,15 +5,15 @@ import { Button, IconButton } from "../../ui/button";
 import { cx } from "../../ui/cx";
 import { Icon } from "../../ui/icon";
 
-const FIELD = "block min-h-12 w-full min-w-0 rounded-control border border-line-2 bg-page px-3.5 py-3 text-base leading-[1.4] text-ink outline-none focus:border-line-3";
+const FIELD = "block min-h-s7 w-full min-w-0 rounded-key border border-line bg-page px-s3 py-s3 text-body leading-snug text-ink outline-none focus:border-line-3";
 
 const NO_MANAGER = { "data-1p-ignore": "", "data-lpignore": "true", "data-form-type": "other" };
 
 function BotWords({ words, mono, testId }: { words: { label: string; quote: string }; mono?: boolean; testId: string }) {
   return (
-    <figure className="grid gap-0.5 text-meta" data-testid={testId}>
+    <figure className="grid gap-hair text-meta" data-testid={testId}>
       <figcaption className="text-ink-2">{words.label}</figcaption>
-      <blockquote className={cx("border-l-2 border-line-3 pl-2.5 text-ink [overflow-wrap:anywhere]", mono && "font-mono")}>{words.quote}</blockquote>
+      <blockquote className={cx("border-l-2 border-line-3 pl-s2 text-ink [overflow-wrap:anywhere]", mono && "font-mono")}>{words.quote}</blockquote>
     </figure>
   );
 }
@@ -74,12 +74,12 @@ export function SecretCard({ botId, botName, request, ready, onClose }: { botId:
           onClose();
         }
       }}
-      className="chat-secret-card grid gap-2.5 rounded-panel border border-line-3 bg-panel p-3.5"
+      className="chat-secret-card grid gap-s2 rounded-panel border border-line-3 bg-panel p-s3"
       data-testid={request ? "secret-request" : "secret-box"}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-s2">
         <Icon name="lock" size="sm" className="flex-none text-ink-2" />
-        <h3 id={titleId} className="min-w-0 flex-1 text-prose font-semibold [overflow-wrap:anywhere]">
+        <h3 id={titleId} className="min-w-0 flex-1 text-body font-strong [overflow-wrap:anywhere]">
           {secretText.card(botName)}
         </h3>
         {onClose && <IconButton icon="x" label="Close the secret box" onClick={onClose} />}
@@ -90,7 +90,7 @@ export function SecretCard({ botId, botName, request, ready, onClose }: { botId:
           <BotWords words={secretText.reason(botName, request.reason)} testId="secret-reason" />
         </>
       ) : (
-        <label className="grid gap-1 text-meta text-ink-2">
+        <label className="grid gap-s1 text-meta text-ink-2">
           Name
           <input
             ref={nameField}
@@ -109,7 +109,7 @@ export function SecretCard({ botId, botName, request, ready, onClose }: { botId:
           <span id={hintId}>{SECRET_TEXT.nameHint}</span>
         </label>
       )}
-      <form onSubmit={save} className="flex flex-wrap items-center gap-2" autoComplete="off">
+      <form onSubmit={save} className="flex flex-wrap items-center gap-s2" autoComplete="off">
         <input
           type="password"
           value={value}
@@ -135,11 +135,11 @@ export function SecretCard({ botId, botName, request, ready, onClose }: { botId:
         )}
       </form>
       {problem && (
-        <p role="alert" className="text-meta text-red [overflow-wrap:anywhere]" data-testid="secret-problem">
+        <p role="alert" className="text-meta text-stop [overflow-wrap:anywhere]" data-testid="secret-problem">
           {problem}
         </p>
       )}
-      <p id={noteId} className="text-small text-ink-2" data-testid="secret-note">
+      <p id={noteId} className="text-meta text-ink-2" data-testid="secret-note">
         {secretText.note}
       </p>
     </section>
@@ -148,8 +148,8 @@ export function SecretCard({ botId, botName, request, ready, onClose }: { botId:
 
 export function SecretLine({ event, botName }: { event: SecretEvent; botName: string }) {
   return (
-    <li className="flex items-start gap-1.5 self-center text-small text-ink-2 [overflow-wrap:anywhere]" data-testid="secret-line">
-      <Icon name="lock" size="xs" className="mt-[3px] flex-none" />
+    <li className="flex items-start gap-s1 self-center text-meta text-ink-2 [overflow-wrap:anywhere]" data-testid="secret-line">
+      <Icon name="lock" size="xs" className="mt-hair flex-none" />
       {event.kind === "saved" ? savedLine(event, botName) : event.kind === "declined" ? SECRET_TEXT.declined : secretText.ended(botName)}
     </li>
   );

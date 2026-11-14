@@ -11,7 +11,7 @@ const ENDLESS_CLASS = /(?<![\w-])animate-(?:spin|pulse|ping|bounce)\b/g;
 const INFINITE = /\binfinite\b|\biterations?\s*:\s*Infinity\b/g;
 const TIME = /(?<![A-Za-z0-9_.])(\d*\.?\d+)(ms|s)(?![\w-])/g;
 const MOTION_DECLARATION = /(?<![\w-])(?:transition|animation)(?:-(?:duration|delay|timing-function))?\s*:\s*([^;}]*)/g;
-const THEME_TIME_DECLARATION = /(--[a-z0-9-]*(?:duration|delay)[a-z0-9-]*)\s*:\s*([^;}]*)/gi;
+const THEME_TIME_DECLARATION = /(--[a-z0-9-]*(?:duration|delay|dur)[a-z0-9-]*)\s*:\s*([^;}]*)/gi;
 const THEME_EASING_DECLARATION = /--ease-[\w-]+\s*:[^;}]*/g;
 const EASING_FUNCTION = /\b(?:cubic-bezier|steps|linear)\(/g;
 const APPLY = /@apply\s+([^;}]*)/g;
@@ -23,8 +23,16 @@ const MOTION_NUMBER = [
 const MOTION_WORD = /transition|animation|animate|duration|delay|easing|\bease\b/i;
 const SECONDS = /(?<![A-Za-z0-9_.])\d*\.?\d+s\b/;
 const ENDLESS = "is an endless animation; none is allowed";
-const SENDING_SHEET = "src/ui/motion.css";
-const SENDING_RULE = ".sending-bar {\n  animation: sending 1200ms cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;\n}";
+const ENDLESS_SHEET = "src/ui/motion.css";
+const ENDLESS_RULES = [
+  ".sending-bar {\n  animation: sending --theme(--dur-tick inline) --theme(--ease-sending inline) infinite alternate;\n}",
+  ".cursor-blink {\n  animation: blink --theme(--dur-blink inline) --theme(--ease-blink inline) infinite;\n}",
+  ".working-tick {\n  animation: tick --theme(--dur-tick inline) --theme(--ease-tick inline) infinite;\n}",
+];
+const LONG_TIMES = new Map([
+  ["--dur-blink", 1060],
+  ["--dur-tick", 1200],
+]);
 
 const layerOf = (name) => name.replace(/^src\//, "").split("/")[0];
 
@@ -51,14 +59,16 @@ function classProblems(name, text, lineAt, allowed) {
 
 function cssProblems(name, source, allowed) {
   const found = [];
-  const text = name === SENDING_SHEET ? source.replace(SENDING_RULE, (kept) => kept.replace(/[^\n]/g, " ")) : source;
+  const text = name === ENDLESS_SHEET ? ENDLESS_RULES.reduce((kept, rule) => kept.replace(rule, (whole) => whole.replace(/[^\n]/g, " ")), source) : source;
   const say = (index, what) => found.push(`${name}:${lineOf(text, index)}: ${what}`);
   for (const match of text.matchAll(MOTION_DECLARATION)) {
     if ([...match[1].matchAll(TIME)].length) say(match.index, `${match[0].trim()} is a literal time in a transition or animation; read a --transition-duration-* value with var()`);
   }
   for (const match of text.matchAll(THEME_TIME_DECLARATION)) {
     for (const time of match[2].matchAll(TIME)) {
-      if (millis(time[1], time[2]) > LIMIT_MS) say(match.index, `${match[1]}: ${match[2].trim()} is a theme time over ${LIMIT_MS} ms`);
+      const ms = millis(time[1], time[2]);
+      const named = name === THEME_NAME && LONG_TIMES.get(match[1]) === ms;
+      if (ms > LIMIT_MS && !named) say(match.index, `${match[1]}: ${match[2].trim()} is a theme time over ${LIMIT_MS} ms`);
     }
   }
   const outside = text.replace(THEME_EASING_DECLARATION, (kept) => kept.replace(/[^\n]/g, " "));
@@ -122,5 +132,5 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     console.log(`motion-rules: FAIL, ${problems.length} problems against the theme's motion values`);
     process.exit(1);
   }
-  console.log(`motion-rules: PASS, ${files.length} files under ${ROOT}/ use only the theme's motion values but the sending bar's one rule, hold no theme time over ${LIMIT_MS} ms, run no endless animation but the sending bar and keep no millisecond number for motion in code`);
+  console.log(`motion-rules: PASS, ${files.length} files under ${ROOT}/ use only the theme's motion values, hold no theme time over ${LIMIT_MS} ms but the cursor's blink and the working tick, run no endless animation but the sending bar, the cursor and the working tick, and keep no millisecond number for motion in code`);
 }

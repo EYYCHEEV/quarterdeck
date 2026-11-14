@@ -41,7 +41,7 @@ function PhoneRow({ row, projectId }: { row: PageRow; projectId: string }) {
           <b>{row.title}</b>
           <span className="document-phone-meta">
             {row.meta.map((part, n) => (
-              <span key={n} className="inline-flex items-center gap-x-1.5">
+              <span key={n} className="inline-flex items-center gap-x-s1">
                 {n > 0 && <Dot />}
                 {part}
               </span>
@@ -52,7 +52,7 @@ function PhoneRow({ row, projectId }: { row: PageRow; projectId: string }) {
             {row.visibility === "Public" && <PublicMark />}
           </span>
         </span>
-        <Icon name="chevR" size="sm" className="mt-1 text-ink-2" />
+        <Icon name="chevR" size="sm" className="mt-s1 text-ink-2" />
       </Link>
     </li>
   );
@@ -88,7 +88,7 @@ function TableRow({ row, projectId }: { row: PageRow; projectId: string }) {
   return (
     <tr data-testid="page-row" data-id={row.ref}>
       <td>
-        <span className="flex flex-wrap items-center gap-x-3">
+        <span className="flex flex-wrap items-center gap-x-s3">
           <Link to={href.page(projectId, row.ref)} className="document-title-link">
             <span className="document-page-icon"><Icon name="page" /></span>
             <span className="document-title-copy">{row.title}<small>{row.ref}</small></span>
@@ -96,10 +96,10 @@ function TableRow({ row, projectId }: { row: PageRow; projectId: string }) {
           {row.live && <LiveMark />}
         </span>
       </td>
-      <td className="py-1 pr-3 text-ink-2 [overflow-wrap:anywhere]">{row.lane ?? "(no Lane)"}</td>
-      <td className="py-1 pr-3 text-ink-2">{row.by}</td>
-      <td className="py-1 pr-3 whitespace-nowrap text-ink-2">{row.updated}</td>
-      <td className="py-1 text-ink-2">{row.visibility}</td>
+      <td className="py-s1 pr-s3 text-ink-2 [overflow-wrap:anywhere]">{row.lane ?? "(no Lane)"}</td>
+      <td className="py-s1 pr-s3 text-ink-2">{row.by}</td>
+      <td className="py-s1 pr-s3 whitespace-nowrap text-ink-2">{row.updated}</td>
+      <td className="py-s1 text-ink-2">{row.visibility}</td>
     </tr>
   );
 }
@@ -108,9 +108,9 @@ function Table({ rows, pinned, projectId }: { rows: PageRow[]; pinned: number; p
   return (
     <table className="document-table" data-testid="pages-table">
       <thead>
-        <tr className="text-tag text-ink-2">
+        <tr className="text-label text-ink-2">
           {COLUMNS.map((name) => (
-            <th key={name} scope="col" className="pt-2 pr-3 pb-1.5 font-normal">
+            <th key={name} scope="col" className="pt-s2 pr-s3 pb-s1 font-regular">
               {name}
             </th>
           ))}
@@ -120,7 +120,7 @@ function Table({ rows, pinned, projectId }: { rows: PageRow[]; pinned: number; p
         <tbody>
           <tr>
             <th scope="colgroup" colSpan={COLUMNS.length} className="document-pin-heading">
-              <span className="inline-flex items-center gap-2"><Icon name="pin" size="xs" />Pinned</span>
+              <span className="inline-flex items-center gap-s2"><Icon name="pin" size="xs" />Pinned</span>
             </th>
           </tr>
           {rows.slice(0, pinned).map((row) => (
@@ -154,7 +154,7 @@ export function PagesScreen({ projectId, wide }: { projectId: string; wide: bool
     return (
       <div className="document-surface">
         {head}
-        <div className="px-4 pt-2 wide:px-8">
+        <div className="px-s4 pt-s2 wide:px-s6">
           {failed ? <ErrorLine onRetry={retry}>Could not load the Pages.</ErrorLine> : world ? <Empty>This project is not in the example data.</Empty> : <LoadingBars rows={3} height={80} />}
         </div>
       </div>
@@ -201,7 +201,7 @@ export function PagesScreen({ projectId, wide }: { projectId: string; wide: bool
           )
         ) : (
           <Empty
-            className="mt-3.5"
+            className="mt-s3"
             action={
               view.total > 0 && (
                 <Button kind="ghost" onClick={() => setQuery(EMPTY_PAGE_QUERY)}>

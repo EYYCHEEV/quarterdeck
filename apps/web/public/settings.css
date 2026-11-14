@@ -1,51 +1,50 @@
-.sheet{max-height:94dvh;border-top-left-radius:28px;border-top-right-radius:28px}
+.sheet{max-height:94dvh;border-top-left-radius:var(--radius-sheet);border-top-right-radius:var(--radius-sheet)}
 .sheet-narrow{max-width:480px}
 .sheet-wide{max-width:560px}
-.sheet-handle{height:var(--spacing);width:calc(var(--spacing)*10);background-color:var(--color-line-3)}
-.sheet-top{padding-top:calc(var(--spacing)*4)}
-.sheet-body{padding-bottom:max(20px,env(safe-area-inset-bottom))}
-.sheet-toast{top:max(16px,env(safe-area-inset-top));z-index:60}
-.sheet-danger{border-color:var(--color-red)}
-.join-code{font-size:var(--text-screen-wide);line-height:1.15;letter-spacing:.1em}
-:where(.settings-rows>:not(:last-child)){border-top-width:0;border-bottom:1px solid var(--color-line)}
-.settings-row{min-height:calc(var(--spacing)*13)}
+.sheet-handle{height:var(--spacing-s1);width:40px;background-color:var(--color-line-3)}
+.sheet-top{padding-top:var(--spacing-s4)}
+.sheet-body{padding-bottom:max(var(--spacing-s4),env(safe-area-inset-bottom))}
+.sheet-toast{top:max(var(--spacing-s4),env(safe-area-inset-top));z-index:60}
+.sheet-danger{border-color:var(--color-stop)}
+.join-code{font-size:var(--text-display);line-height:var(--leading-tight);letter-spacing:var(--tracking-brand)}
+:where(.settings-rows>:not(:last-child)){border-top-width:0;border-bottom:var(--line-w) solid var(--color-line)}
+.settings-row{min-height:52px}
 .settings-row-md{min-height:62px}
 .settings-row-lg{min-height:66px}
-.settings-badge{background-color:var(--color-brass-soft)}
+.settings-badge{background-color:var(--color-wait-tint)}
 .settings-switch{width:60px}
-.settings-track{height:calc(var(--spacing)*8);width:calc(var(--spacing)*14);padding:calc(var(--spacing)*.5)}
+.settings-track{height:32px;width:56px;padding:var(--spacing-hair)}
 .settings-knob{background-color:var(--color-ink-2)}
-.settings-knob.is-on{translate:calc(var(--spacing)*6) 0;background-color:var(--color-brass-ink)}
-.settings-choices{padding:var(--spacing)}
-.settings-columns{gap:calc(var(--spacing)*8)}
-.settings-files{padding-block:calc(var(--spacing)*3.5)}
-.settings-bar,.settings-bar>span{height:calc(var(--spacing)*2)}
+.settings-knob.is-on{translate:var(--spacing-s5) 0;background-color:var(--color-hand)}
+.settings-choices{padding:var(--spacing-s1)}
+.settings-columns{gap:var(--spacing-s6)}
+.settings-files{padding-block:var(--spacing-s3)}
+.settings-bar,.settings-bar>span{height:var(--spacing-s2)}
 .settings-bar>span{width:32%}
-.settings-toast{bottom:calc(var(--spacing)*6)}
+.settings-toast{bottom:var(--spacing-s5)}
 .settings-mac{grid-template-columns:256px minmax(0,1fr)}
-.settings-main{padding-inline:calc(var(--spacing)*8);padding-top:calc(var(--spacing)*6)}
+.settings-main{padding-inline:var(--spacing-s6);padding-top:var(--spacing-s5)}
 .settings-page{max-width:920px}
-.settings-lead{padding-bottom:calc(var(--spacing)*5)}
-.settings-title{padding-bottom:calc(var(--spacing)*5);font-size:var(--text-screen-wide)}
-.settings-crumb{margin-right:calc(var(--spacing)*2)}
+.settings-lead{padding-bottom:var(--spacing-s4)}
+.settings-title{padding-bottom:var(--spacing-s4);font-size:var(--text-display)}
+.settings-crumb{margin-right:var(--spacing-s2)}
 .settings-narrow{max-width:660px}
-.settings-phone{padding-bottom:calc(var(--spacing)*20)}
-.signed-out{padding-inline:calc(var(--spacing)*6)}
+.settings-phone{padding-bottom:var(--spacing-s7)}
+.signed-out{padding-inline:var(--spacing-s5)}
 .signed-out-box{max-width:360px}
-.signed-out-mark{width:calc(var(--spacing)*14);height:calc(var(--spacing)*14)}
+.signed-out-mark{width:56px;height:56px}
 @media not all and (min-width:700px){
 .sheet-act,.sheet-act-end,.sheet-act-start{width:100%}
 }
 @media(min-width:700px){
-.sheet{max-height:calc(100dvh - 48px);border-radius:var(--radius-card)}
+.sheet{max-height:calc(100dvh - var(--spacing-s7));border-radius:var(--radius-panel)}
 .sheet-handle{display:none}
 .sheet-act-end{justify-self:flex-end}
 .sheet-act-start{justify-self:flex-start}
-.settings-row{min-height:calc(var(--spacing)*16)}
-.settings-files{padding-block:calc(var(--spacing)*4)}
+.settings-row{min-height:64px}
+.settings-files{padding-block:var(--spacing-s4)}
 }
 @media(min-width:1000px){
 .settings-split{grid-template-columns:repeat(2,minmax(0,1fr))}
 .settings-span{grid-column:span 2/span 2}
-.settings-main{padding-inline:calc(var(--spacing)*10)}
 }

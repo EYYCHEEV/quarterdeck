@@ -3,6 +3,7 @@ import type { Loaded } from "../data/chat-hooks";
 import type { ChatRow } from "../data/chat-types";
 import { useJoinedBots } from "../data/bots-hooks";
 import { useQd, useWorld } from "../data/hooks";
+import { avatarColor } from "../domain/avatar";
 import { rankQueue } from "../domain/queue";
 import { href, type Route } from "../domain/routes";
 import { anyNew } from "../domain/seen";
@@ -23,10 +24,10 @@ function NavItem({ to, icon, label, on, count, dot }: { to: string; icon: IconNa
       to={to}
       aria-current={on ? "page" : undefined}
       aria-label={dot ? label + ", new activity" : undefined}
-      className={cx("flex min-h-11 items-center gap-[11px] rounded-[11px] px-2.5 text-body font-medium", on ? "bg-raised text-ink" : "text-ink-2 hover:bg-control hover:text-ink")}
+      className={cx("flex min-h-hit items-center gap-s3 rounded-key px-s2 text-body font-strong", on ? "bg-raised text-ink" : "text-ink-2 hover:bg-control hover:text-ink")}
     >
       <Icon name={icon} />
-      <span className="flex flex-1 items-center gap-2">
+      <span className="flex flex-1 items-center gap-s2">
         {label}
         {dot && <NewDot />}
       </span>
@@ -36,12 +37,12 @@ function NavItem({ to, icon, label, on, count, dot }: { to: string; icon: IconNa
 }
 
 function UnreadDot({ className }: { className?: string }) {
-  return <span role="img" aria-label="Unread" className={cx("size-[9px] flex-none rounded-full bg-brass", className)} />;
+  return <span role="img" aria-label="Unread" className={cx("size-mark-new flex-none bg-new", className)} />;
 }
 
 function Pinned({ rows, current }: { rows: ChatRow[]; current: string | null }) {
   return (
-    <div className={cx("flex gap-1.5 px-1 pt-1 pb-1.5", current && "chat-whole")}>
+    <div className={cx("flex gap-s1 px-s1 pt-s1 pb-s1", current && "chat-whole")}>
       {rows.map((row) => (
         <Link
           key={row.bot.id}
@@ -51,13 +52,13 @@ function Pinned({ rows, current }: { rows: ChatRow[]; current: string | null }) 
           aria-current={current === row.bot.id ? "page" : undefined}
           aria-label={row.bot.name + (row.unread && current !== row.bot.id ? ", unread" : "")}
           className={cx(
-            "relative flex w-[78px] flex-col items-center gap-[5px] rounded-control px-1 py-2 text-center text-tag font-semibold",
+            "relative flex w-[78px] flex-col items-center gap-s1 rounded-key px-s1 py-s2 text-center text-label font-strong",
             current === row.bot.id ? "bg-control text-ink" : "text-ink-2 hover:bg-control hover:text-ink",
           )}
         >
           <Avatar name={row.bot.name} color={row.bot.color} size="xl" />
           {row.bot.name}
-          {row.unread && current !== row.bot.id && <UnreadDot className="absolute top-2 right-4 size-3 border-2 border-side" />}
+          {row.unread && current !== row.bot.id && <UnreadDot className="absolute top-s2 right-s4 size-s3 border-2 border-side" />}
         </Link>
       ))}
     </div>
@@ -67,7 +68,7 @@ function Pinned({ rows, current }: { rows: ChatRow[]; current: string | null }) 
 function Chats({ rows, current, now }: { rows: ChatRow[]; current: string | null; now: number }) {
   const listed = useShown(rows, (row) => row.bot.id, "");
   return (
-    <ul className="grid min-w-0 grid-cols-1 gap-0.5" data-truncates="" data-testid="chats">
+    <ul className="grid min-w-0 grid-cols-1 gap-hair" data-truncates="" data-testid="chats">
       {listed.shown.map((entry) => {
         const row = entry.item;
         return (
@@ -77,20 +78,20 @@ function Chats({ rows, current, now }: { rows: ChatRow[]; current: string | null
               data-testid="chat-row"
               data-id={row.bot.id}
               aria-current={current === row.bot.id ? "page" : undefined}
-              className={cx("flex min-h-[52px] items-start gap-2.5 rounded-small px-2.5 py-2", current === row.bot.id ? "bg-control" : "hover:bg-control")}
+              className={cx("flex min-h-[52px] items-start gap-s2 rounded-key px-s2 py-s2", current === row.bot.id ? "bg-control" : "hover:bg-control")}
             >
               {current && <Avatar name={row.bot.name} color={row.bot.color} size="md" />}
               <span className="min-w-0 flex-1">
-                <span className="flex items-baseline gap-2">
-                  <span className="inline-flex flex-none items-center rounded-full border border-line-2 px-1.5 text-tag leading-[1.3] font-medium text-ink-3">Bot</span>
-                  <b className={cx("min-w-0 truncate text-prose font-semibold", current && "flex-1")}>{row.bot.name}</b>
-                  {!current && <span className="min-w-0 flex-1 truncate text-tag text-ink-3">{row.bot.role}</span>}
-                  {__QD_SOURCE__ === "server" && __QD_CHAT__ === "on" && !row.at ? null : <time className="flex-none text-xs text-ink-3">{listStamp(row.at, now)}</time>}
+                <span className="flex items-baseline gap-s2">
+                  <span className="inline-flex flex-none items-center rounded-round border border-line px-s1 text-label leading-snug font-strong text-ink-2">Bot</span>
+                  <b className={cx("min-w-0 truncate text-body font-strong", current && "flex-1")}>{row.bot.name}</b>
+                  {!current && <span className="min-w-0 flex-1 truncate text-label text-ink-2">{row.bot.role}</span>}
+                  {__QD_SOURCE__ === "server" && __QD_CHAT__ === "on" && !row.at ? null : <time className="flex-none text-label text-ink-2">{listStamp(row.at, now)}</time>}
                 </span>
-                {current && <span className="block text-tag text-ink-3">{row.bot.role}</span>}
-                <span className="mt-px flex items-start gap-2 text-small">
-                  <span className={cx("min-w-0 flex-1 truncate", row.unread && current !== row.bot.id ? "text-ink-2" : "text-ink-3")}>{__QD_SOURCE__ === "server" && __QD_CHAT__ === "on" && !row.at ? "No messages yet." : row.preview}</span>
-                  {row.unread && current !== row.bot.id && <UnreadDot className="mt-[5px]" />}
+                {current && <span className="block text-label text-ink-2">{row.bot.role}</span>}
+                <span className="mt-nudge flex items-start gap-s2 text-meta">
+                  <span className={cx("min-w-0 flex-1 truncate", row.unread && current !== row.bot.id ? "text-ink" : "text-ink-2")}>{__QD_SOURCE__ === "server" && __QD_CHAT__ === "on" && !row.at ? "No messages yet." : row.preview}</span>
+                  {row.unread && current !== row.bot.id && <UnreadDot className="mt-s1" />}
                 </span>
               </span>
             </Link>
@@ -135,37 +136,37 @@ export function Sidebar({
   const current = route.name === "chat" ? route.botId : null;
   const rows = chats.value ?? [];
   const joinedRows: ChatRow[] = useJoinedBots().map((bot, order) => ({
-    bot: { id: bot.id, name: bot.name, role: bot.role, color: "var(--color-avatar-1)", pinned: false, order: -1 - order },
+    bot: { id: bot.id, name: bot.name, role: bot.role, color: avatarColor(1), pinned: false, order: -1 - order },
     preview: "Joined just now",
     at: new Date(now()).toISOString(),
     unread: true,
   }));
   return (
     <nav aria-label="Quarterdeck" className={SIDEBAR}>
-      <div className="mb-2 flex items-center gap-1.5 pl-2.5">
-        <span className="flex-1 text-body font-semibold">Quarterdeck</span>
+      <div className="mb-s2 flex items-center gap-s1 pl-s2">
+        <span className="flex-1 text-body font-strong">Quarterdeck</span>
         <IconButton ref={searchButton} icon="search" label="Search" title="Search (⌘K)" onClick={onSearch} data-testid="search-btn" />
         {drawer && <IconButton icon="x" label="Close the menu" onClick={onClose} data-testid="pop-close" />}
       </div>
-      <div className="grid gap-0.5">
+      <div className="grid gap-hair">
         <NavItem
           to={href.queue()}
           icon="queue"
           label="Queue"
           on={route.name === "queue"}
-          count={waiting === null ? null : <span className="text-tag font-semibold text-ink-2">{waiting}</span>}
+          count={waiting === null ? null : <span className="text-label font-strong text-ink-2">{waiting}</span>}
         />
         <NavItem to={href.projects()} icon="projects" label="Projects" dot={fresh} on={route.name === "projects" || route.name === "lane" || route.name === "pages" || route.name === "page" || route.name === "artifact"} />
         <NavItem to={href.mail()} icon="mail" label="Mail" on={route.name === "mail"} />
       </div>
       {__QD_SOURCE__ !== "server" && (
-        <div className="mt-2 px-1">
+        <div className="mt-s2 px-s1">
           <button
             ref={addBotButton}
             type="button"
             onClick={onAddBot}
             data-testid="add-bot-btn"
-            className="inline-flex min-h-11 cursor-pointer items-center gap-[5px] rounded-full border border-line-3 bg-panel px-3 text-tag font-semibold text-ink-2 hover:text-ink"
+            className="inline-flex min-h-hit cursor-pointer items-center gap-s1 rounded-round border border-line-3 bg-panel px-s3 text-label font-strong text-ink-2 hover:text-ink"
           >
             <Icon name="plus" size="xs" />
             Add bot
@@ -173,19 +174,19 @@ export function Sidebar({
         </div>
       )}
       {chats.failed && !chats.value ? (
-        <ErrorLine className="mt-3" onRetry={chats.retry}>
+        <ErrorLine className="mt-s3" onRetry={chats.retry}>
           Could not load the chats.
         </ErrorLine>
       ) : chats.value ? (
         <>
           <Pinned rows={rows.filter((row) => row.bot.pinned).sort((a, b) => a.bot.order - b.bot.order)} current={current} />
-          {current && <p className="chat-whole eyebrow mt-4 px-2.5 pb-1.5">Chats</p>}
+          {current && <p className="chat-whole eyebrow mt-s4 px-s2 pb-s1">Chats</p>}
           <Chats rows={[...joinedRows, ...rows.filter((row) => !row.bot.pinned)]} current={current} now={now()} />
         </>
       ) : (
         <ChatsLoading />
       )}
-      <div className="mt-auto flex items-center gap-1 border-t border-line pt-2.5 text-note text-ink-2">
+      <div className="mt-auto flex items-center gap-s1 border-t border-line pt-s2 text-body text-ink-2">
         <button
           ref={accountButton}
           type="button"
@@ -194,9 +195,9 @@ export function Sidebar({
           aria-expanded={account}
           onClick={onAccount}
           data-testid="account-btn"
-          className="flex min-h-11 min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-small pl-2.5 text-left hover:bg-control hover:text-ink"
+          className="flex min-h-hit min-w-0 flex-1 cursor-pointer items-center gap-s2 rounded-key pl-s2 text-left hover:bg-control hover:text-ink"
         >
-          <Avatar name="Captain" color="var(--color-you)" size="md" />
+          <Avatar name="Captain" size="md" />
           <span className="flex-1">Captain</span>
         </button>
         <IconButton icon="settings" label="Settings" onClick={onSettings} data-testid="settings-btn" />

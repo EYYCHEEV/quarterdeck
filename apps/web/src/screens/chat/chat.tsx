@@ -262,7 +262,7 @@ export function ChatScreen({ botId }: { botId: string }) {
     return (
       <div className="chat-view flex min-h-dvh flex-col">
         {head}
-        <div className="chat-empty mx-auto w-full px-4 pt-5">
+        <div className="chat-empty mx-auto w-full px-s4 pt-s4">
           {world ? __QD_SOURCE__ === "server" && __QD_CHAT__ === "on" && !thread.failed ? <LoadingBars rows={3} height={80} /> : <Empty>No chat with this bot.</Empty> : <LoadingBars rows={3} height={80} />}
         </div>
       </div>
@@ -469,7 +469,7 @@ export function ChatScreen({ botId }: { botId: string }) {
       {gallery !== null && <Viewer items={pictures} start={gallery} label="Pictures in this chat" returnTo={opener} onClose={() => setGallery(null)} caption={(item) => item.caption} />}
       {dragging && (
         <div className="pointer-events-none fixed inset-0 z-30 grid place-items-center bg-scrim" data-testid="drop-hint">
-          <p role="status" className="rounded-panel border border-line-3 bg-panel px-5 py-3 text-body">
+          <p role="status" className="rounded-panel border border-line-3 bg-panel px-s4 py-s3 text-body">
             Drop to attach to {bot.name}
           </p>
         </div>

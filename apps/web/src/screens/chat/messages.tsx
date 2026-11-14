@@ -24,7 +24,7 @@ const TICK_MS = 15_000;
 
 const RETRY_UNDER = "max-upright:grid max-upright:grid-cols-[auto_minmax(0,1fr)] max-upright:[&>button]:col-span-2 max-upright:[&>button]:justify-self-end";
 
-const STATUS_LINE = "flex h-4 items-center";
+const STATUS_LINE = "flex h-s4 items-center";
 
 type OnQuote = (selected: string | null) => void;
 
@@ -45,7 +45,7 @@ export function BotMessage({ message, name, color, world, fresh, onQuote, onOpen
           <Markdown blocks={blocks} botName={name} className="text-lead" renderText={(text, key) => <LinkedText key={key} parts={linkedParts(text, world)} />} />
         </div>
         {message.attachments && message.attachments.length > 0 && (
-          <div className="mt-2.5">
+          <div className="mt-s2">
             <AttachmentList items={message.attachments} align="start" onOpen={onOpen} />
           </div>
         )}
@@ -54,13 +54,13 @@ export function BotMessage({ message, name, color, world, fresh, onQuote, onOpen
             <Icon name="queue" size="sm" />
             <span className="min-w-0">
               <span className="block">{message.cardUpdate.line}</span>
-              <strong className="mt-1 block">{world.cards.find((card) => card.id === message.cardUpdate?.cardId)?.title ?? "Open Task Card"}</strong>
+              <strong className="mt-s1 block">{world.cards.find((card) => card.id === message.cardUpdate?.cardId)?.title ?? "Open Task Card"}</strong>
             </span>
             <Icon name="chevR" size="sm" />
           </Link>
         )}
         {(message.refs.length > 0 || (message.cardRefs ?? []).length > 0) && (
-          <div className="mt-2.5 flex flex-wrap gap-2">
+          <div className="mt-s2 flex flex-wrap gap-s2">
             {(message.cardRefs ?? [])
               .filter((id) => id !== message.cardUpdate?.cardId)
               .flatMap((id) => {
@@ -122,7 +122,7 @@ export function MyMessage({
   const qd = useQd();
   const shownQuote = quote ? resolveQuote(quote, world, botName) : null;
   return (
-    <Actionable id={id} title={"You · " + clockTime(at)} copy={id && text ? text : undefined} onQuote={actions} align="end" className={cx("chat-my-message flex flex-col gap-[5px]", rise && RISE)} testId="chat-my-message">
+    <Actionable id={id} title={"You · " + clockTime(at)} copy={id && text ? text : undefined} onQuote={actions} align="end" className={cx("chat-my-message flex flex-col gap-s1", rise && RISE)} testId="chat-my-message">
       {shownQuote && <QuoteBlock quote={shownQuote} />}
       {attachments && attachments.length > 0 && <AttachmentList items={attachments} align="end" onOpen={onOpen} />}
       {text && (
@@ -133,22 +133,22 @@ export function MyMessage({
       {note === "failed" ? (
         <ErrorLine onRetry={onRetry} retryLabel={SEND_RETRY_TEXT} retryId="chat-retry" className={onRetry && RETRY_UNDER}>
           <span className="block">{SEND_FAILED_TEXT}</span>
-          {reason && <span className="block text-small text-ink-2">{reason}</span>}
+          {reason && <span className="block text-meta text-ink-2">{reason}</span>}
         </ErrorLine>
       ) : note === "sending" ? (
         <p className={cx(STATUS_LINE, "self-stretch")} data-testid="chat-sending-bar">
-          <span aria-hidden="true" data-progress="" className="relative h-0.5 w-full overflow-hidden rounded-full bg-line-2">
-            <span className="sending-bar absolute inset-y-0 left-0 w-2/5 rounded-full bg-chat-accent" />
+          <span aria-hidden="true" data-progress="" className="relative h-hair w-full overflow-hidden rounded-round bg-line">
+            <span className="sending-bar absolute inset-y-0 left-0 w-2/5 rounded-round bg-hand" />
           </span>
           <span className="sr-only">Sending...</span>
         </p>
       ) : (
-        <p className={cx(STATUS_LINE, "text-xs text-ink-3")}>
+        <p className={cx(STATUS_LINE, "text-label text-ink-3")}>
           <time>{clockTime(at)}</time>
         </p>
       )}
-      {note === "delivered" && <p className="text-xs text-ink-2" data-testid="chat-delivered">{DELIVERED_TEXT}</p>}
-      {note === "read" && <p className="text-xs text-ink-2" data-testid="chat-seen">{readText(seenAt, qd.now())}</p>}
+      {note === "delivered" && <p className="text-label text-ink-2" data-testid="chat-delivered">{DELIVERED_TEXT}</p>}
+      {note === "read" && <p className="text-label text-ink-2" data-testid="chat-seen">{readText(seenAt, qd.now())}</p>}
     </Actionable>
   );
 }
@@ -163,14 +163,14 @@ export function WorkingLine({ botName, working }: { botName: string; working: Wo
   }, [qd, working.updatedAt]);
   const { minutes, quiet } = workingStatus(working, now);
   return (
-    <li className="chat-working grid gap-0.5 text-small text-ink-2" data-testid="chat-working">
+    <li className="chat-working grid gap-hair text-meta text-ink-2" data-testid="chat-working">
       <p data-testid="chat-working-line">
         {botName} is working · {minutes} min
       </p>
       <p className="text-ink-3" aria-live="polite" data-testid="chat-working-note">
         {working.note}
       </p>
-      <p className="min-h-[1.4em] text-ink-3" data-testid="chat-working-quiet">
+      <p className="min-h-[1lh] text-ink-3" data-testid="chat-working-quiet">
         {quiet ? QUIET_TEXT : null}
       </p>
     </li>

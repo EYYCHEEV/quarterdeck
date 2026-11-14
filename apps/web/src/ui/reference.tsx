@@ -12,8 +12,8 @@ export function CopyButton({ value, label, done, className, testId }: { value: s
         onClick={() => copy(value)}
         data-testid={testId}
         className={cx(
-          "inline-flex min-h-11 flex-none cursor-pointer items-center gap-1.5 rounded-[10px] border bg-panel px-2.5 text-tag font-medium hover:text-ink",
-          state === "copied" ? "border-green/40 text-green" : "border-line-3 text-ink-2",
+          "inline-flex min-h-hit flex-none cursor-pointer items-center gap-s1 rounded-key border bg-panel px-s2 text-label font-strong hover:text-ink",
+          state === "copied" ? "border-line-3 text-ink" : "border-line-3 text-ink-2",
           className,
         )}
       >
@@ -21,7 +21,7 @@ export function CopyButton({ value, label, done, className, testId }: { value: s
         <span aria-live="polite">{state === "copied" ? done : label}</span>
       </button>
       {state === "failed" && (
-        <span role="alert" className="text-small text-red">
+        <span role="alert" className="text-meta text-stop">
           Could not copy. Select the reference.
         </span>
       )}
@@ -31,11 +31,11 @@ export function CopyButton({ value, label, done, className, testId }: { value: s
 
 export function ReferenceBar({ code, readOnly, className }: { code: string; readOnly?: boolean; className?: string }) {
   return (
-    <div className={cx("inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-small text-ink-2", className)}>
-      <code className="rounded-md bg-raised px-1.5 py-px font-mono text-xs whitespace-nowrap text-ink-2 select-all">{code}</code>
+    <div className={cx("inline-flex flex-wrap items-center gap-x-s2 gap-y-s1 text-meta text-ink-2", className)}>
+      <code className="rounded-key bg-raised px-s1 py-nudge font-mono text-label whitespace-nowrap text-ink-2 select-all">{code}</code>
       <CopyButton value={code} label="Copy reference" done={"Copied " + code} />
       {readOnly && (
-        <span className="inline-flex items-center gap-1.5">
+        <span className="inline-flex items-center gap-s1">
           <Icon name="lock" size="xs" />
           Read-only
         </span>
@@ -50,13 +50,13 @@ export function RefChip({ to, kind, code, title, className }: { to: string; kind
   return (
     <Link
       to={to}
-      className={cx("inline-flex max-w-full min-h-11 items-center gap-[7px] rounded-small border border-line-3 bg-panel px-2.5 py-1.5 text-meta text-ink", className)}
+      className={cx("inline-flex max-w-full min-h-hit items-center gap-s2 rounded-key border border-line-3 bg-panel px-s2 py-s1 text-meta text-ink", className)}
       data-testid="ref-chip"
     >
       <Icon name={KIND_ICON[kind] ?? "link"} size="sm" className="flex-none text-ink-3" />
-      <span className="flex-none text-xs text-ink-3">{kind}</span>
+      <span className="flex-none text-label text-ink-3">{kind}</span>
       <span className="min-w-0 [overflow-wrap:anywhere]">{title}</span>
-      <code className="flex-none font-mono text-xs whitespace-nowrap text-ink-3">{code}</code>
+      <code className="flex-none font-mono text-label whitespace-nowrap text-ink-3">{code}</code>
     </Link>
   );
 }

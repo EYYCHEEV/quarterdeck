@@ -33,21 +33,21 @@ function CiteMenu({ refs, onPick, onClose }: { refs: Ref[]; onPick: (code: strin
         aria-label="Cite a reference"
         tabIndex={-1}
         data-pop="cite"
-        className="absolute inset-x-0 bottom-[calc(100%+8px)] z-30 grid max-h-[50vh] gap-0.5 overflow-y-auto rounded-panel border border-line-2 bg-control p-2 shadow-pop outline-none"
+        className="absolute inset-x-0 bottom-[calc(100%_+_var(--spacing-s2))] z-30 grid max-h-[50vh] gap-hair overflow-y-auto rounded-panel border border-line bg-control p-s2 shadow-lift outline-none"
       >
-        <p className="eyebrow px-2 py-1.5">Cite a reference</p>
+        <p className="eyebrow px-s2 py-s1">Cite a reference</p>
         {refs.map((ref, n) => (
           <button
             key={ref.code}
             type="button"
             data-autofocus={n === 0 ? "" : undefined}
             onClick={() => onPick(ref.code)}
-            className="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-[10px] px-2 py-1.5 text-left text-note hover:bg-raised"
+            className="flex min-h-hit cursor-pointer items-center gap-s2 rounded-key px-s2 py-s1 text-left text-body hover:bg-raised"
             data-testid="cite-item"
           >
-            <code className="flex-none font-mono text-xs text-ink">{ref.code}</code>
+            <code className="flex-none font-mono text-label text-ink">{ref.code}</code>
             <span className="min-w-0 [overflow-wrap:anywhere] text-ink-2">{ref.title}</span>
-            <span className="ml-auto flex-none text-xs text-ink-3">{ref.kind}</span>
+            <span className="ml-auto flex-none text-label text-ink-3">{ref.kind}</span>
           </button>
         ))}
       </div>
@@ -77,7 +77,7 @@ function PlusMenu({ onPick, onClose }: { onPick: (id: MenuId) => void; onClose: 
         aria-label="Add to the message"
         tabIndex={-1}
         data-pop="plus"
-        className="absolute bottom-[calc(100%+8px)] left-0 z-30 grid w-56 gap-0.5 rounded-panel border border-line-2 bg-control p-2 shadow-pop outline-none"
+        className="absolute bottom-[calc(100%_+_var(--spacing-s2))] left-0 z-30 grid w-[224px] gap-hair rounded-panel border border-line bg-control p-s2 shadow-lift outline-none"
       >
         {SOURCES.map((source, n) => (
           <button
@@ -85,7 +85,7 @@ function PlusMenu({ onPick, onClose }: { onPick: (id: MenuId) => void; onClose: 
             type="button"
             data-autofocus={n === 0 ? "" : undefined}
             onClick={() => onPick(source.id)}
-            className="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-[10px] px-2.5 py-1.5 text-left text-body hover:bg-raised"
+            className="flex min-h-hit cursor-pointer items-center gap-s2 rounded-key px-s2 py-s1 text-left text-body hover:bg-raised"
             data-testid={"plus-" + source.id}
           >
             <Icon name={source.icon} size="sm" className="text-ink-2" />
@@ -229,7 +229,7 @@ export function Composer({
     }
   };
 
-  const round = "grid size-11 flex-none cursor-pointer place-items-center rounded-full text-ink-2 hover:bg-raised hover:text-ink";
+  const round = "grid size-hit flex-none cursor-pointer place-items-center rounded-round text-ink-2 hover:bg-raised hover:text-ink";
 
   return (
     <div className="chat-composer-dock">
@@ -242,9 +242,9 @@ export function Composer({
         {pasteBlocked && (
           <div data-testid="secret-paste-warning">
             <ErrorLine onRetry={() => { clearPaste(); inputRef.current?.focus(); }} retryLabel="Cancel">
-              <span className="grid gap-2">
+              <span className="grid gap-s2">
                 <span>{SECRET_TEXT.pasteWarning}</span>
-                <span className="flex flex-wrap gap-2">
+                <span className="flex flex-wrap gap-s2">
                   {!(__QD_SOURCE__ === "server" && __QD_CHAT__ === "on") && (
                     <Button
                       onClick={() => {
@@ -339,7 +339,7 @@ export function Composer({
                 event.preventDefault();
                 submit();
               }}
-              className="chat-compose-input min-h-11 min-w-0 flex-1 border-0 bg-transparent text-base leading-[1.4] text-ink outline-none"
+              className="chat-compose-input min-h-hit min-w-0 flex-1 border-0 bg-transparent text-body leading-snug text-ink outline-none"
               data-testid="chat-input"
             />
             <button
@@ -349,7 +349,7 @@ export function Composer({
               onMouseDown={(event) => event.preventDefault()}
               aria-label="Send"
               title="Send"
-              className={cx("chat-send grid size-11 flex-none cursor-pointer place-items-center rounded-full disabled:cursor-default", ready ? "chat-accent-fill" : "bg-raised text-ink-3")}
+              className={cx("chat-send grid size-hit flex-none cursor-pointer place-items-center rounded-round disabled:cursor-default", ready ? "chat-accent-fill" : "bg-raised text-ink-2")}
               data-testid="chat-send"
             >
               <Icon name="send" />

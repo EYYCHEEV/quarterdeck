@@ -47,7 +47,7 @@ type Overlay = "search" | "add-bot" | "account" | null;
 
 function Waiting() {
   return (
-    <div className="mx-auto w-full max-w-[720px] px-4 pt-[76px]" data-motion-wait="">
+    <div className="mx-auto w-full max-w-[720px] px-s4 pt-float-pad" data-motion-wait="">
       <LoadingBars rows={3} height={112} />
     </div>
   );
@@ -74,8 +74,8 @@ class ScreenBoundary extends Component<Guard, { failed: boolean; key: string }> 
 function ScreenFailed({ onRetry }: { onRetry: () => void }) {
   return (
     <div className="mx-auto w-full max-w-[720px]">
-      <Head className="px-2 wide:px-8">{null}</Head>
-      <div className="px-4 pt-2 wide:px-8">
+      <Head className="px-s2 wide:px-s6">{null}</Head>
+      <div className="px-s4 pt-s2 wide:px-s6">
         <ErrorLine onRetry={onRetry}>Could not load this screen.</ErrorLine>
       </div>
     </div>
@@ -85,8 +85,8 @@ function ScreenFailed({ onRetry }: { onRetry: () => void }) {
 function SessionHidden({ name, onRetry }: { name: string; onRetry: () => void }) {
   return (
     <div className="mx-auto w-full max-w-[720px]">
-      <Head className="px-2 wide:px-8">{null}</Head>
-      <div className="px-4 pt-2 wide:px-8">
+      <Head className="px-s2 wide:px-s6">{null}</Head>
+      <div className="px-s4 pt-s2 wide:px-s6">
         <ErrorLine onRetry={onRetry}>{"Your " + name + " is hidden until we can confirm it is still you."}</ErrorLine>
       </div>
     </div>
@@ -106,12 +106,12 @@ function DialogFailed({ onRetry, onClose, returnTo }: { onRetry: () => void; onC
         aria-label="Could not load this screen"
         tabIndex={-1}
         data-pop="dialog-failed"
-        className="fixed inset-x-0 top-0 z-50 mx-auto flex w-full max-w-[720px] items-start gap-2 p-4 outline-none"
+        className="fixed inset-x-0 top-0 z-50 mx-auto flex w-full max-w-[720px] items-start gap-s2 p-s4 outline-none"
       >
         <ErrorLine className="min-w-0 flex-1" onRetry={onRetry}>
           Could not load this screen.
         </ErrorLine>
-        <IconButton icon="x" label="Close" className="rounded-full border border-line-3 bg-panel" onClick={onClose} />
+        <IconButton icon="x" label="Close" className="rounded-round border border-line-3 bg-panel" onClick={onClose} />
       </div>
     </>
   );

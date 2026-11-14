@@ -77,21 +77,21 @@ export function ArtifactScreen({ projectId, artifactRef }: { projectId: string; 
           </section>
           <section className="document-artifact-reader" aria-label="Open Artifact">
             <h2>{artifact.name}</h2>
-            <p className="mt-2 text-meta text-ink-2">{kind} · {artifact.size} · {artifact.by} · {whenText(artifact.addedAt, qd.now())}</p>
-            <ReferenceBar code={artifact.ref} readOnly className="mt-2" />
+            <p className="mt-s2 text-meta text-ink-2">{kind} · {artifact.size} · {artifact.by} · {whenText(artifact.addedAt, qd.now())}</p>
+            <ReferenceBar code={artifact.ref} readOnly className="mt-s2" />
             <dl>
-              <div className="flex flex-wrap gap-x-1.5">
+              <div className="flex flex-wrap gap-x-s1">
                 <dt className="text-ink-2">Stored in:</dt>
                 <dd className="m-0 [overflow-wrap:anywhere]">{artifact.storage}</dd>
               </div>
               {users.length > 0 && (
-                <div className="flex flex-wrap items-center gap-x-1.5">
+                <div className="flex flex-wrap items-center gap-x-s1">
                   <dt className="text-ink-2">Used by:</dt>
-                  <dd className="m-0 flex flex-wrap items-center gap-x-1.5">
+                  <dd className="m-0 flex flex-wrap items-center gap-x-s1">
                     {users.map((user, n) => (
                       <Fragment key={user.to}>
                         {n > 0 && <span className="text-ink-2">·</span>}
-                        <Link to={user.to} className="inline-flex min-h-11 items-center text-link hover:underline">{user.name}</Link>
+                        <Link to={user.to} className="inline-flex min-h-hit items-center text-inherit underline hover:text-hand">{user.name}</Link>
                       </Fragment>
                     ))}
                   </dd>
@@ -99,7 +99,7 @@ export function ArtifactScreen({ projectId, artifactRef }: { projectId: string; 
               )}
             </dl>
             <div className="document-file" data-testid="artifact-box">
-              <div><span className="inline-flex items-center gap-2"><Icon name="terminal" size="xs" />{artifact.ref}</span><span>Read-only</span></div>
+              <div><span className="inline-flex items-center gap-s2"><Icon name="terminal" size="xs" />{artifact.ref}</span><span>Read-only</span></div>
               <pre tabIndex={0} aria-label={artifact.name}>{artifact.text}</pre>
             </div>
           </section>

@@ -32,8 +32,8 @@ import { Empty, ErrorLine, LoadingBars } from "../../ui/states";
 import { pageDocument } from "./page-document";
 import { useViewing } from "./use-viewing";
 
-const MENU_ROW = "inline-flex min-h-11 items-center gap-1.5 rounded-small px-2.5 text-tag font-medium text-ink-2 hover:bg-raised hover:text-ink";
-const PANEL = "grid gap-3";
+const MENU_ROW = "inline-flex min-h-hit items-center gap-s1 rounded-key px-s2 text-label font-strong text-ink-2 hover:bg-raised hover:text-ink";
+const PANEL = "grid gap-s3";
 
 type Opener = "more" | "update";
 
@@ -71,23 +71,23 @@ function PublicPanel({
   if (!line) return null;
   return (
     <section ref={panelRef} tabIndex={-1} className={PANEL + " document-public-panel outline-none"} aria-label="Public link" data-testid="public-panel">
-      <p className="flex flex-wrap items-center gap-x-2 font-semibold" data-testid="public-line">
+      <p className="flex flex-wrap items-center gap-x-s2 font-strong" data-testid="public-line">
         <Icon name="link" size="sm" className="flex-none text-ink-3" />
         {line.text}
       </p>
-      <code className="font-mono text-small [overflow-wrap:anywhere] text-ink-2 select-all">{line.link}</code>
+      <code className="font-mono text-meta [overflow-wrap:anywhere] text-ink-2 select-all">{line.link}</code>
       {!line.removing && (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-s2">
           <CopyButton value={line.link} label="Copy public link" done="Copied public link" />
-          <Button kind="plain" className="min-h-11 py-0" onClick={onPrivate} data-testid="make-private">
+          <Button kind="plain" className="min-h-hit py-0" onClick={onPrivate} data-testid="make-private">
             Make private
           </Button>
         </div>
       )}
       {line.newer && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1" data-testid="public-newer">
+        <div className="flex flex-wrap items-center gap-x-s3 gap-y-s1" data-testid="public-newer">
           <span className="min-w-0 flex-1 text-ink-2">{line.newer}</span>
-          <Button ref={updateRef} kind="plain" className="min-h-11 py-0" onClick={onUpdate} data-testid="update-public">
+          <Button ref={updateRef} kind="plain" className="min-h-hit py-0" onClick={onUpdate} data-testid="update-public">
             Update public version
           </Button>
         </div>
@@ -115,20 +115,20 @@ function Confirm({
 }) {
   return (
     <section role="group" aria-label="Make public" className={PANEL + " document-confirm"} data-testid="make-public-confirm">
-      <p className="flex items-center gap-2 font-semibold">
+      <p className="flex items-center gap-s2 font-strong">
         <Icon name="unblock" size="sm" />
         Make version {version} public?
       </p>
-      <ul className="grid gap-1 pl-6 text-ink">
+      <ul className="grid gap-s1 pl-s5 text-ink">
         {PUBLIC_WARNINGS.map((line) => (
           <li key={line}>{line}</li>
         ))}
       </ul>
-      <p className="flex items-center gap-2 text-ink">
-        <Icon name="check" size="sm" className="text-green" />
+      <p className="flex items-center gap-s2 text-ink">
+        <Icon name="check" size="sm" className="text-moving" />
         {PRIVATE_DATA_CHECK}
       </p>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-s2">
         <Button kind="ghost" onClick={onPreview}>
           Preview public version
         </Button>
@@ -140,9 +140,9 @@ function Confirm({
         </Button>
       </div>
       {newer !== null && (
-        <div className="border-t border-line pt-3">
+        <div className="border-t border-line pt-s3">
           <p>{newerLine(newer)}</p>
-          <Button kind="plain" className="min-h-11 py-0" onClick={onAskAgain}>
+          <Button kind="plain" className="min-h-hit py-0" onClick={onAskAgain}>
             {askAgainLabel(newer)}
           </Button>
         </div>
@@ -231,10 +231,10 @@ function Viewer({ page, projectId, laneName, wide }: { page: Page; projectId: st
         menu={
           menu && (
             <Sheet title="Page" pop={wide ? "page-menu" : "page-sheet"} wide={wide} onClose={() => setMenu(false)}>
-              <ul className="grid gap-1 pb-1" data-testid="page-menu-items">
+              <ul className="grid gap-s1 pb-s1" data-testid="page-menu-items">
                 {menuItems(page).map((item) => (
                   <li key={item.id} className="grid">
-                    {item.id === "copy-link" && <CopyButton value={direct} label={item.label} done="Copied link" className="w-full justify-start py-2" />}
+                    {item.id === "copy-link" && <CopyButton value={direct} label={item.label} done="Copied link" className="w-full justify-start py-s2" />}
                     {item.id === "open" && (
                       <a {...outsideLink(direct)} className={MENU_ROW}>
                         {item.label}
@@ -245,7 +245,7 @@ function Viewer({ page, projectId, laneName, wide }: { page: Page; projectId: st
                     {item.id === "make-public" && (
                       <Button
                         kind="ghost"
-                        className="min-h-11 justify-start py-0 text-tag"
+                        className="min-h-hit justify-start py-0 text-label"
                         onClick={() => {
                           setMenu(false);
                           setAsking({ version: page.current, opener: "more" });
@@ -254,11 +254,11 @@ function Viewer({ page, projectId, laneName, wide }: { page: Page; projectId: st
                         {item.label}
                       </Button>
                     )}
-                    {item.id === "copy-public" && page.public && <CopyButton value={page.public.link} label={item.label} done="Copied public link" className="w-full justify-start py-2" />}
+                    {item.id === "copy-public" && page.public && <CopyButton value={page.public.link} label={item.label} done="Copied public link" className="w-full justify-start py-s2" />}
                     {item.id === "make-private" && (
                       <Button
                         kind="ghost"
-                        className="min-h-11 justify-start py-0 text-tag"
+                        className="min-h-hit justify-start py-0 text-label"
                         onClick={() => {
                           setMenu(false);
                           void makePrivate();
@@ -277,14 +277,14 @@ function Viewer({ page, projectId, laneName, wide }: { page: Page; projectId: st
       <div className="document-body">
         <div className="document-reader-heading">
           <p className="document-kicker"><Icon name="page" size="sm" />Bot-made Page</p>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div className="flex flex-wrap items-center gap-x-s4 gap-y-s2">
             <h1>{page.title}</h1>
             <Marks page={page} />
           </div>
           <div className="document-reader-meta">
             <span className="document-reader-facts" data-testid="page-line">
               {headParts(page, laneName, qd.now()).map((part, n) => (
-                <span key={n} className="inline-flex items-center gap-x-1.5">
+                <span key={n} className="inline-flex items-center gap-x-s1">
                   {n > 0 && <Dot />}
                   {part}
                 </span>
@@ -309,27 +309,27 @@ function Viewer({ page, projectId, laneName, wide }: { page: Page; projectId: st
           />
         )}
         {notice && (
-          <p role="alert" className="mt-2 flex items-center gap-2 text-note text-red" data-testid="page-notice">
+          <p role="alert" className="mt-s2 flex items-center gap-s2 text-body text-stop" data-testid="page-notice">
             <Icon name="alert" size="sm" />
             {notice}
           </p>
         )}
         {ready !== null && (
           <div role="status" className="document-version" data-testid="version-ready">
-            <span className="min-w-0 flex-1 py-2">{readyLine(ready)}</span>
-            <Button kind="plain" className="min-h-11 py-0" onClick={show} disabled={trying && load.state === "loading"}>
+            <span className="min-w-0 flex-1 py-s2">{readyLine(ready)}</span>
+            <Button kind="plain" className="min-h-hit py-0" onClick={show} disabled={trying && load.state === "loading"}>
               Show
             </Button>
           </div>
         )}
         {load.state === "failed" && (
-          <ErrorLine className="mt-3" retryLabel="Try again" onRetry={retry}>
+          <ErrorLine className="mt-s3" retryLabel="Try again" onRetry={retry}>
             This Page did not load.
           </ErrorLine>
         )}
         <div className="document-frame-label"><span>Page</span><span>Version {viewing.shown}</span></div>
         {!hasFile ? (
-          <Empty className="mt-3.5" testId="no-file">
+          <Empty className="mt-s3" testId="no-file">
             No file yet
           </Empty>
         ) : (
@@ -379,7 +379,7 @@ export function PageScreen({ projectId, pageRef, wide }: { projectId: string; pa
       <div className="document-surface">
         <DocumentStyle />
         <DocumentTop to={href.projects(projectId)} label={project?.name ?? "Projects"} screen="Page" />
-        <div className="px-4 pt-2 wide:px-8">
+        <div className="px-s4 pt-s2 wide:px-s6">
           {failed ? <ErrorLine onRetry={retry}>Could not load this Page.</ErrorLine> : world ? <Empty>This Page is not in the example data.</Empty> : <LoadingBars rows={1} height={420} />}
         </div>
       </div>

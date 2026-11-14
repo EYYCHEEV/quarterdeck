@@ -21,7 +21,7 @@ function Marked({ mark, state }: { mark: string; state: Mark }) {
 
 function StepLine({ item }: { item: StepItem }) {
   return (
-    <li className={cx("flex items-baseline gap-2", item.state === "current" ? "font-semibold text-ink" : "text-ink-2")}>
+    <li className={cx("flex items-baseline gap-s2", item.state === "current" ? "font-strong text-ink" : "text-ink-2")}>
       <Marked mark={item.mark} state={item.state} />
       <span className="min-w-0 [overflow-wrap:anywhere]">{item.name}</span>
     </li>
@@ -30,23 +30,23 @@ function StepLine({ item }: { item: StepItem }) {
 
 function StageBlock({ stage }: { stage: StageItem }) {
   return (
-    <div className="grid gap-1 text-note" data-testid="stage-block">
-      <p className="flex items-baseline gap-2">
+    <div className="grid gap-s1 text-body" data-testid="stage-block">
+      <p className="flex items-baseline gap-s2">
         <Marked mark={stage.mark} state={stage.state} />
         <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
-          <b className="font-semibold">{stage.name}</b>
-          {stage.time && <span className="ml-2 text-small text-ink-2">{stage.time}</span>}
+          <b className="font-strong">{stage.name}</b>
+          {stage.time && <span className="ml-s2 text-meta text-ink-2">{stage.time}</span>}
         </span>
       </p>
       {stage.steps.length > 0 && (
-        <ul className="grid gap-0.5 pl-5 text-small">
+        <ul className="grid gap-hair pl-s4 text-meta">
           {stage.steps.map((row, n) =>
             row.kind === "step" ? (
               <StepLine key={n} item={row.item} />
             ) : (
               <li key={n}>
                 <Fold label={row.text}>
-                  <ul className="grid gap-0.5 pl-4">
+                  <ul className="grid gap-hair pl-s4">
                     {row.items.map((item, at) => (
                       <StepLine key={at} item={item} />
                     ))}
@@ -57,7 +57,7 @@ function StageBlock({ stage }: { stage: StageItem }) {
           )}
         </ul>
       )}
-      {stage.doneWhen && <p className="pl-5 text-small text-ink-2">Done when: {stage.doneWhen}</p>}
+      {stage.doneWhen && <p className="pl-s4 text-meta text-ink-2">Done when: {stage.doneWhen}</p>}
     </div>
   );
 }
@@ -65,13 +65,13 @@ function StageBlock({ stage }: { stage: StageItem }) {
 function StagesList({ view }: { view: StagesView }) {
   return (
     <section id="lane-stages" aria-label={view.title} className="stages-list" data-testid="stages-list">
-      <h3 className="text-meta font-semibold [overflow-wrap:anywhere]">{view.title}</h3>
-      <ol className="grid gap-2.5">
+      <h3 className="text-meta font-strong [overflow-wrap:anywhere]">{view.title}</h3>
+      <ol className="grid gap-s2">
         {view.rows.map((row, n) => (
           <li key={n}>
             {row.kind === "done" ? (
               <Fold label={row.text} testId="done-stages">
-                <div className="grid gap-2.5 pl-4">
+                <div className="grid gap-s2 pl-s4">
                   {row.stages.map((stage, at) => (
                     <StageBlock key={at} stage={stage} />
                   ))}
@@ -83,7 +83,7 @@ function StagesList({ view }: { view: StagesView }) {
           </li>
         ))}
       </ol>
-      <p className="text-small text-ink-2" data-testid="stages-changed">
+      <p className="text-meta text-ink-2" data-testid="stages-changed">
         {view.changed}
       </p>
     </section>
@@ -127,12 +127,12 @@ function TrackerBody({ tracker, lane, now, check }: { tracker: Tracker; lane: La
             {view.blockers.map((blocker) => (
               <li key={blocker.text} data-testid="blocker">
                 {blocker.card ? (
-                  <Link to={href.queue(blocker.card)} className="flex min-h-11 items-center gap-1.5 text-note font-semibold hover:underline hover:underline-offset-3">
+                  <Link to={href.queue(blocker.card)} className="flex min-h-hit items-center gap-s1 text-body font-strong hover:underline hover:underline-offset-3">
                     <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{blocker.text}</span>
                     <Icon name="chevR" size="xs" className="text-ink-3" />
                   </Link>
                 ) : (
-                  <p className="py-1.5 text-note font-semibold [overflow-wrap:anywhere]">{blocker.text}</p>
+                  <p className="py-s1 text-body font-strong [overflow-wrap:anywhere]">{blocker.text}</p>
                 )}
               </li>
             ))}
@@ -140,7 +140,7 @@ function TrackerBody({ tracker, lane, now, check }: { tracker: Tracker; lane: La
         </section>
       )}
       {view.doneLine && (
-        <p className="mt-2 text-note font-semibold" data-testid="done-line">
+        <p className="mt-s2 text-body font-strong" data-testid="done-line">
           {view.doneLine}
         </p>
       )}
@@ -148,7 +148,7 @@ function TrackerBody({ tracker, lane, now, check }: { tracker: Tracker; lane: La
         {view.updated}
       </p>
       {view.quiet && (
-        <p className="text-small font-semibold" data-testid="tracker-quiet">
+        <p className="text-meta font-strong" data-testid="tracker-quiet">
           {view.quiet}.
         </p>
       )}

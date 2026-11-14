@@ -53,23 +53,23 @@ function LaneLine({ row, waiting, fresh, now, world, selected }: { row: LaneRow;
 function PageLine({ page, now }: { page: Page; now: number }) {
   return (
     <li>
-      <Link to={href.page(page.projectId, page.ref)} className="group flex min-h-12 items-center gap-2.5 py-1.5 text-note" data-testid="page-row">
+      <Link to={href.page(page.projectId, page.ref)} className="group flex min-h-s7 items-center gap-s2 py-s1 text-body" data-testid="page-row">
         <Icon name="page" size="sm" className="text-ink-3" />
-        <span className="grid min-w-0 flex-1 gap-px">
-          <b className="font-semibold [overflow-wrap:anywhere] group-hover:underline group-hover:decoration-line-3 group-hover:underline-offset-3">{page.title}</b>
-          <span className="flex flex-wrap items-center gap-x-1.5 text-tag text-ink-2">
+        <span className="grid min-w-0 flex-1 gap-nudge">
+          <b className="font-strong [overflow-wrap:anywhere] group-hover:underline group-hover:decoration-line-3 group-hover:underline-offset-3">{page.title}</b>
+          <span className="flex flex-wrap items-center gap-x-s1 text-label text-ink-2">
             {page.by}
             <Dot />
             {page.file ? "updated " + whenText(page.updatedAt, now) : "No file yet"}
           </span>
         </span>
         {page.live && (
-          <span className="inline-flex flex-none items-center gap-1 rounded-full bg-green-soft px-2 py-px text-xs font-semibold text-green">
+          <span className="inline-flex flex-none items-center gap-s1 rounded-round bg-control px-s2 py-nudge text-label font-strong text-moving">
             <Icon name="live" size="xs" />
             Live
           </span>
         )}
-        <code className="flex-none rounded-md bg-raised px-1.5 py-px font-mono text-xs text-ink-2">{page.ref}</code>
+        <code className="flex-none rounded-key bg-raised px-s1 py-nudge font-mono text-label text-ink-2">{page.ref}</code>
       </Link>
     </li>
   );
@@ -79,20 +79,20 @@ function ArtifactLine({ artifact, world, now }: { artifact: Artifact; world: Wor
   const used = [...artifact.laneIds.map((id) => world.lanes.find((l) => l.id === id)?.name ?? id), ...artifact.cardIds.map((id) => world.cards.find((c) => c.id === id)?.title ?? id)];
   return (
     <li>
-      <Link to={href.artifact(artifact.projectId, artifact.ref)} className="group flex min-h-12 items-center gap-2.5 py-1.5 text-note" data-testid="artifact-row">
+      <Link to={href.artifact(artifact.projectId, artifact.ref)} className="group flex min-h-s7 items-center gap-s2 py-s1 text-body" data-testid="artifact-row">
         <Icon name={artifact.kind === "log" ? "terminal" : "file"} size="sm" className="text-ink-3" />
-        <span className="grid min-w-0 flex-1 gap-px">
-          <b className="font-semibold [overflow-wrap:anywhere] group-hover:underline">{artifact.name}</b>
-          <span className="flex flex-wrap items-center gap-x-1.5 text-tag text-ink-2">
+        <span className="grid min-w-0 flex-1 gap-nudge">
+          <b className="font-strong [overflow-wrap:anywhere] group-hover:underline">{artifact.name}</b>
+          <span className="flex flex-wrap items-center gap-x-s1 text-label text-ink-2">
             {capital(artifact.kind)}
             <Dot />
             {artifact.size}
             <Dot />
             {artifact.by}, {whenText(artifact.addedAt, now)}
           </span>
-          {used.length > 0 && <span className="text-tag [overflow-wrap:anywhere] text-ink-2">Used by {used.join(", ")}</span>}
+          {used.length > 0 && <span className="text-label [overflow-wrap:anywhere] text-ink-2">Used by {used.join(", ")}</span>}
         </span>
-        <code className="flex-none rounded-md bg-raised px-1.5 py-px font-mono text-xs text-ink-2">{artifact.ref}</code>
+        <code className="flex-none rounded-key bg-raised px-s1 py-nudge font-mono text-label text-ink-2">{artifact.ref}</code>
       </Link>
     </li>
   );
@@ -104,16 +104,16 @@ function Artifacts({ artifacts, world, now, open }: { artifacts: Artifact[]; wor
   return (
     <Fold
       label={
-        <span className="flex flex-1 items-center justify-between gap-2">
+        <span className="flex flex-1 items-center justify-between gap-s2">
           Artifacts<span className="text-ink-2">{view.count}</span>
         </span>
       }
       open={open}
-      className="mt-3 border-t border-line pt-1"
-      summaryClass="flex w-full text-tag"
+      className="mt-s3 border-t border-line pt-s1"
+      summaryClass="flex w-full text-label"
     >
-      <div className="mt-1 flex flex-wrap gap-1.5">
-        <SearchField value={query.text} onText={(text) => setQuery({ ...query, text })} label="Search artifacts" className="min-h-11 flex-[1_1_160px]" />
+      <div className="mt-s1 flex flex-wrap gap-s1">
+        <SearchField value={query.text} onText={(text) => setQuery({ ...query, text })} label="Search artifacts" className="min-h-hit flex-[1_1_160px]" />
         <label className="artifact-kind">
           <span>Kind</span>
           <select value={query.kind} onChange={(event) => setQuery({ ...query, kind: event.target.value })} aria-label="Artifact kind">
@@ -127,15 +127,15 @@ function Artifacts({ artifacts, world, now, open }: { artifacts: Artifact[]; wor
         </label>
       </div>
       {view.artifacts.length ? (
-        <ul className="mt-1">
+        <ul className="mt-s1">
           {view.artifacts.map((artifact) => (
             <ArtifactLine key={artifact.ref} artifact={artifact} world={world} now={now} />
           ))}
         </ul>
       ) : (
-        <p className="py-1.5 text-meta text-ink-2">No artifacts match.</p>
+        <p className="py-s1 text-meta text-ink-2">No artifacts match.</p>
       )}
-      <p className="mt-1.5 text-tag text-ink-2">Stored in the R2 bucket (cloud file storage).</p>
+      <p className="mt-s1 text-label text-ink-2">Stored in the R2 bucket (cloud file storage).</p>
     </Fold>
   );
 }
@@ -285,7 +285,7 @@ export function ProjectsScreen({ projectId: requestedProjectId, wide, mac, laneI
         </div>
         {view.chips.length > 0 && <FilterLine chips={view.chips} onRemove={(key) => key === "sort" ? setQuery({ ...query, sort: "activity" }) : pickFilter(key, undefined)} onClear={() => setQuery({ ...EMPTY_PROJECT_QUERY, text: query.text })} />}
         {!trackers && (
-          <ErrorLine onRetry={retryTrackers} className="mt-3.5">
+          <ErrorLine onRetry={retryTrackers} className="mt-s3">
             Could not load the Lane trackers.
           </ErrorLine>
         )}

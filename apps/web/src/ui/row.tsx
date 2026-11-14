@@ -5,7 +5,7 @@ import { Link } from "./link";
 import type { RowMotion } from "./motion";
 import { PriorityTile } from "./priority";
 
-const DOT = "size-2 flex-none rounded-full bg-violet";
+const DOT = "size-s2 flex-none bg-new";
 
 function ChangedDot({ label }: { label: string }) {
   return <span role="img" aria-label={label} className={DOT} data-testid="changed-dot" />;
@@ -17,7 +17,7 @@ export function NewDot() {
 
 export function NewMark({ count, className, testId = "new-mark" }: { count: number; className?: string; testId?: string }) {
   return (
-    <span className={cx("inline-flex items-center gap-1.5 font-semibold whitespace-nowrap text-violet", className)} data-testid={testId}>
+    <span className={cx("inline-flex items-center gap-s1 font-strong whitespace-nowrap text-new", className)} data-testid={testId}>
       <NewDot />
       {count} new
     </span>
@@ -50,23 +50,23 @@ export function CardRow({
   return (
     <li
       className={cx(
-        "relative flex items-start gap-3 rounded-panel border py-3.5 pr-3 pl-3.5 has-[a:focus-visible]:outline-2 has-[a:focus-visible]:outline-offset-2 has-[a:focus-visible]:outline-brass mac:px-4",
-        selected ? "border-brass-edge bg-control" : answered ? "border-line bg-transparent hover:border-line-2" : "border-line bg-panel hover:border-line-2 hover:bg-hover",
+        "relative flex items-start gap-s3 rounded-panel border py-s3 pr-s3 pl-s3 has-[a:focus-visible]:outline-2 has-[a:focus-visible]:outline-offset-2 has-[a:focus-visible]:outline-hand mac:px-s4",
+        selected ? "border-hand-edge bg-control" : answered ? "border-line bg-transparent hover:border-line" : "border-line bg-panel hover:border-line hover:bg-panel",
       )}
       {...motion}
       data-testid="card-row"
       data-id={id}
     >
-      <span className="-mt-[calc((1.5rem-1lh)/2)] flex h-6 flex-none items-center gap-2 text-row">
+      <span className="-mt-[calc((var(--spacing-s5)_-_1lh)/2)] flex h-s5 flex-none items-center gap-s2 text-body">
         <PriorityTile priority={priority} />
-        {changed ? <ChangedDot label={changed} /> : <span className="size-2 flex-none" />}
+        {changed ? <ChangedDot label={changed} /> : <span className="size-s2 flex-none" />}
       </span>
-      <span className="grid min-w-0 flex-1 gap-1.5">
+      <span className="grid min-w-0 flex-1 gap-s1">
         <Link
           to={to}
           onClick={onOpen}
           aria-current={selected ? "true" : undefined}
-          className={cx("stretch text-row font-semibold [overflow-wrap:anywhere] focus-visible:outline-none", answered ? "text-ink-2" : "text-ink")}
+          className={cx("stretch text-body font-strong [overflow-wrap:anywhere] focus-visible:outline-none", answered ? "text-ink-2" : "text-ink")}
         >
           {title}
         </Link>
@@ -77,7 +77,7 @@ export function CardRow({
 }
 
 export function RowLine({ children, className }: { children: ReactNode; className?: string }) {
-  return <span className={cx("flex flex-wrap items-center gap-x-1.5 text-small text-ink-2", className)}>{children}</span>;
+  return <span className={cx("flex flex-wrap items-center gap-x-s1 text-meta text-ink-2", className)}>{children}</span>;
 }
 
 export function WaitingLines({ unblocks, due, pastDue, owner, project }: { unblocks: string; due: string; pastDue: boolean; owner: string; project: string }) {
@@ -86,7 +86,7 @@ export function WaitingLines({ unblocks, due, pastDue, owner, project }: { unblo
       <RowLine>
         {unblocks && <span>{unblocks}</span>}
         {unblocks && <Dot />}
-        <span className={pastDue ? "text-red" : undefined}>{due}</span>
+        <span className={pastDue ? "text-stop" : undefined}>{due}</span>
       </RowLine>
       <RowLine>
         {owner && <span>{owner}</span>}
@@ -100,7 +100,7 @@ export function WaitingLines({ unblocks, due, pastDue, owner, project }: { unblo
 export function AnsweredLines({ line, waitingOn }: { line: string; waitingOn: string | null }) {
   return (
     <>
-      <RowLine className="text-green">
+      <RowLine className="text-moving">
         <Icon name="check" size="xs" />
         {line}
       </RowLine>
