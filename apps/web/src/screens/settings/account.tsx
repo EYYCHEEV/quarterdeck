@@ -8,7 +8,7 @@ import { useOverlay } from "../../ui/overlay";
 import { SheetDialog } from "../../ui/sheet-dialog";
 import { ErrorLine } from "../../ui/states";
 
-const ITEM = "min-h-11 w-full justify-start border-transparent py-0";
+const ITEM = "flex min-h-hit w-full cursor-pointer items-center rounded-key px-s4 text-left text-body font-strong hover:bg-raised";
 
 type Opener = RefObject<HTMLElement | null>;
 
@@ -31,14 +31,14 @@ function Menu({ onSettings, onSignOut, onClose, returnTo }: { onSettings: () => 
         tabIndex={-1}
         data-pop="account-menu"
         style={row && (row.top < window.innerHeight / 2 ? { left: row.left, top: row.bottom + 8 } : { left: row.left, bottom: window.innerHeight - row.top + 8 })}
-        className="fixed z-50 grid w-[320px] gap-1 rounded-panel border border-line-2 bg-control p-1.5 shadow-pop outline-none"
+        className="fixed z-50 grid w-[320px] gap-s1 rounded-panel border border-line bg-control p-s1 shadow-lift outline-none"
       >
-        <Button kind="ghost" className={ITEM} onClick={settings} data-autofocus="" data-testid="account-settings">
+        <button type="button" className={ITEM} onClick={settings} data-autofocus="" data-testid="account-settings">
           Settings
-        </Button>
-        <Button kind="ghost" className={ITEM} onClick={onSignOut} data-testid="account-sign-out">
+        </button>
+        <button type="button" className={ITEM} onClick={onSignOut} data-testid="account-sign-out">
           Sign out
-        </Button>
+        </button>
       </div>
     </>
   );
@@ -72,11 +72,11 @@ export function SignOutConfirm({ onClose, onSignedOut, returnTo }: { onClose: ()
   };
   return (
     <SheetDialog label="Sign out of Quarterdeck?" pop="sign-out-confirm" onClose={onClose} returnTo={returnTo}>
-      <div className="sheet-body grid min-h-0 flex-1 content-start gap-3 overflow-y-auto px-5 pt-5">
-        <h2 className="text-title leading-[1.25] font-bold tracking-[-.01em]">Sign out of Quarterdeck?</h2>
+      <div className="sheet-body grid min-h-0 flex-1 content-start gap-s3 overflow-y-auto px-s4 pt-s4">
+        <h2 className="text-title font-strong">Sign out of Quarterdeck?</h2>
         <p className="text-body text-ink-2">Unsent drafts on this device are removed.</p>
         {failed && <ErrorLine>Sign-out did not reach Quarterdeck. Try again.</ErrorLine>}
-        <div className="mt-2 grid grid-cols-2 gap-3">
+        <div className="mt-s2 grid grid-cols-2 gap-s3">
           <Button kind="plain" onClick={onClose} data-autofocus="">
             Cancel
           </Button>
@@ -102,12 +102,12 @@ export function SignedOut({ onSignIn }: { onSignIn: () => void }) {
   return (
     <main className="signed-out grid min-h-dvh place-items-center bg-page" data-testid="signed-out">
       <link rel="stylesheet" href="/settings.css" precedence="settings" />
-      <div className="signed-out-box grid w-full justify-items-center gap-5 text-center">
-        <span className="signed-out-mark grid place-items-center rounded-full border border-line-3 bg-panel text-ink-2">
+      <div className="signed-out-box grid w-full justify-items-center gap-s4 text-center">
+        <span className="signed-out-mark grid place-items-center rounded-round border border-line-3 bg-panel text-ink-2">
           <Icon name="lock" />
         </span>
-        <div className="grid gap-1.5">
-          <h1 ref={heading} tabIndex={-1} className="text-screen font-bold tracking-[-.02em] outline-none">
+        <div className="grid gap-s1">
+          <h1 ref={heading} tabIndex={-1} className="text-display font-strong outline-none">
             Signed out
           </h1>
           <p className="text-body text-ink-2">This device only.</p>

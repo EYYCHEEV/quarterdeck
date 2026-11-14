@@ -7,9 +7,9 @@ export function RadioMark({ on, pick, neutral, children, small }: { on: boolean;
     <span
       aria-hidden="true"
       className={cx(
-        "grid flex-none place-items-center rounded-full border-[1.5px] font-bold",
-        small ? "size-[26px] text-xs" : "size-8 text-sm",
-        on && neutral ? "border-ink-2 bg-raised text-ink" : on ? "brass-fill border-transparent" : pick ? "border-brass-edge text-brass" : "border-line-3 text-ink-2",
+        "grid flex-none place-items-center rounded-round border font-strong",
+        small ? "size-[26px] text-label" : "size-s6 text-meta",
+        on && neutral ? "border-ink-2 bg-raised text-ink" : on ? "border-transparent bg-hand text-on-hand" : pick ? "border-hand-edge text-hand" : "border-line-3 text-ink-2",
       )}
     >
       {children ?? (on ? <Icon name="check" size="xs" /> : null)}
@@ -24,7 +24,7 @@ export function ChoiceRow({ on, label, detail, className, ...rest }: Omit<Compon
       role="radio"
       aria-checked={on}
       className={cx(
-        "flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-small px-3 text-left text-body hover:bg-raised disabled:cursor-default disabled:text-ink-3 disabled:hover:bg-transparent",
+        "flex min-h-s7 w-full cursor-pointer items-center gap-s3 rounded-key px-s3 text-left text-body hover:bg-raised disabled:cursor-default disabled:text-ink-3 disabled:hover:bg-transparent",
         on ? "text-ink" : "text-ink-2",
         className,
       )}
@@ -32,7 +32,7 @@ export function ChoiceRow({ on, label, detail, className, ...rest }: Omit<Compon
     >
       <span className="min-w-0 flex-1">
         {label}
-        {detail && <span className="block text-small text-ink-3">{detail}</span>}
+        {detail && <span className="block text-meta text-ink-2">{detail}</span>}
       </span>
       <RadioMark on={on} neutral small />
     </button>

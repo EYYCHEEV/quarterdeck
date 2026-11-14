@@ -36,8 +36,8 @@ export function Fold({
     >
       <summary
         className={cx(
-          "inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-small font-medium [&::-webkit-details-marker]:hidden",
-          tone === "changed" ? "text-violet" : "text-ink-2 hover:text-ink",
+          "inline-flex min-h-hit cursor-pointer list-none items-center gap-s1 text-meta font-strong [&::-webkit-details-marker]:hidden",
+          tone === "changed" ? "text-new" : "text-ink-2 hover:text-ink",
           summaryClass,
         )}
       >

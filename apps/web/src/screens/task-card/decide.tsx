@@ -21,16 +21,16 @@ import { RadioMark } from "../../ui/option";
 import { CopyButton } from "../../ui/reference";
 import { ErrorLine } from "../../ui/states";
 
-const CHOSEN = "border-brass shadow-[inset_0_0_0_1px_var(--color-brass)]";
+const CHOSEN = "border-hand shadow-[inset_0_0_0_var(--line-w)_var(--color-hand)]";
 const LOCKED = { opacity: 0.6 };
 
 function Facts({ items }: { items: [string, ReactNode][] }) {
   return (
-    <dl className="m-0 mt-1.5 grid gap-1.5">
+    <dl className="m-0 mt-s1 grid gap-s1">
       {items.map(([term, text]) => (
-        <div key={term} className="grid grid-cols-[64px_minmax(0,1fr)] items-baseline gap-2.5">
+        <div key={term} className="grid grid-cols-[64px_minmax(0,1fr)] items-baseline gap-s2">
           <dt className="eyebrow">{term}</dt>
-          <dd className="m-0 text-note leading-[1.45] text-ink-2">{text}</dd>
+          <dd className="m-0 text-body leading-body text-ink-2">{text}</dd>
         </div>
       ))}
     </dl>
@@ -42,7 +42,7 @@ function details(option: CardOption, skip: Set<string>): [string, ReactNode][] {
   if (option.does && !skip.has("does")) items.push(["Does", option.does]);
   if (option.cost) items.push(["Cost", option.cost]);
   if (option.risk && !skip.has("risk")) items.push(["Risk", option.risk]);
-  if (option.door === "one-way" && !skip.has("door")) items.push(["Undo", <span className="font-semibold text-red">{option.undo ?? "Cannot be undone."}</span>]);
+  if (option.door === "one-way" && !skip.has("door")) items.push(["Undo", <span className="font-strong text-stop">{option.undo ?? "Cannot be undone."}</span>]);
   else if (option.undo && !skip.has("undo")) items.push(["Undo", option.undo]);
   if (option.pros.length) items.push(["Pros", option.pros.join(" · ")]);
   if (option.cons.length) items.push(["Cons", option.cons.join(" · ")]);
@@ -53,7 +53,7 @@ function details(option: CardOption, skip: Set<string>): [string, ReactNode][] {
 function RiskUndo({ option }: { option: CardOption }) {
   if (!option.risk && !option.undo) {
     return (
-      <p className="flex items-center gap-1.5 text-ink-2">
+      <p className="flex items-center gap-s1 text-ink-2">
         <Icon name="twoway" size="xs" />
         Two-way change (can be undone)
       </p>
@@ -63,14 +63,14 @@ function RiskUndo({ option }: { option: CardOption }) {
     <p>
       {option.risk && (
         <>
-          <span className="font-semibold">Risk: </span>
+          <span className="font-strong">Risk: </span>
           {option.risk}
         </>
       )}
       {option.risk && option.undo && <span className="text-ink-3"> · </span>}
       {option.undo && (
         <>
-          <span className="font-semibold">Undo: </span>
+          <span className="font-strong">Undo: </span>
           {option.undo}
         </>
       )}
@@ -100,7 +100,7 @@ function OptionRow({
   const shown = pick ? new Set(["risk", "undo", ...(blockAbove ? ["door"] : [])]) : new Set<string>();
   const more = details(option, shown);
   return (
-    <li className={cx("rounded-panel border bg-panel", on ? CHOSEN : pick ? "border-brass-edge" : "border-line-3")} data-testid="option" data-letter={option.letter}>
+    <li className={cx("rounded-panel border bg-panel", on ? CHOSEN : pick ? "border-hand-edge" : "border-line-3")} data-testid="option" data-letter={option.letter}>
       <div className="flex items-start">
         <button
           type="button"
@@ -109,13 +109,13 @@ function OptionRow({
           disabled={locked}
           onClick={onPick}
           data-choice=""
-          className="flex min-h-12 min-w-0 flex-1 cursor-pointer items-start gap-3 py-3 pl-3.5 text-left disabled:cursor-default"
+          className="flex min-h-s7 min-w-0 flex-1 cursor-pointer items-start gap-s3 py-s3 pl-s3 text-left disabled:cursor-default"
         >
           <RadioMark on={on} pick={pick}>
             {option.letter}
           </RadioMark>
-          <span className="min-w-0 flex-1 pt-1 text-row font-semibold [overflow-wrap:anywhere]">
-            {pick && <span className="text-brass">Our pick: </span>}
+          <span className="min-w-0 flex-1 pt-s1 text-body font-strong [overflow-wrap:anywhere]">
+            {pick && <span className="text-hand">Our pick: </span>}
             {option.letter}. {option.label}
           </span>
         </button>
@@ -125,32 +125,32 @@ function OptionRow({
             label={(open ? "Hide details for " : "Details for ") + option.letter}
             aria-expanded={open}
             onClick={() => setOpen(!open)}
-            className="m-0.5 mt-1.5"
+            className="m-hair mt-s1"
           />
         ) : (
-          <span className="w-3.5" />
+          <span className="w-[14px]" />
         )}
       </div>
       {(pick || open) && (
-        <div className="pr-3.5 pb-3.5 pl-[58px]">
+        <div className="pr-s3 pb-s3 pl-[58px]">
           {pick && (
-            <div className="grid gap-1.5 text-prose">
+            <div className="grid gap-s1 text-body">
               {card.pickWhy && (
                 <p>
-                  <span className="font-semibold">Why: </span>
+                  <span className="font-strong">Why: </span>
                   {card.pickWhy}
                 </p>
               )}
               {!blockAbove && <RiskUndo option={option} />}
               {card.commands.length > 0 && (
-                <div className="mt-1 grid gap-2">
+                <div className="mt-s1 grid gap-s2">
                   {card.commands.map((command) => (
-                    <div key={command.run} className="overflow-hidden rounded-small border border-line-2 bg-side">
-                      <div className="flex items-center justify-between gap-2 border-b border-line py-0.5 pr-1 pl-3 text-xs text-ink-3">
+                    <div key={command.run} className="overflow-hidden rounded-key border border-line bg-side">
+                      <div className="flex items-center justify-between gap-s2 border-b border-line py-hair pr-s1 pl-s3 text-label text-ink-3">
                         <span className="truncate">{command.where}</span>
                         <CopyButton value={command.run} label="Copy" done="Copied" className="border-transparent bg-transparent" />
                       </div>
-                      <pre className="m-0 px-3 py-2.5 font-mono text-code whitespace-pre-wrap [overflow-wrap:anywhere] text-code-ink">{command.run}</pre>
+                      <pre className="m-0 px-s3 py-s2 font-mono text-meta whitespace-pre-wrap [overflow-wrap:anywhere] text-ink">{command.run}</pre>
                     </div>
                   ))}
                 </div>
@@ -169,11 +169,11 @@ export function ReadOnlyOptions({ card, whole }: { card: Card; whole: boolean })
   const rest = card.options.filter((option) => option.letter !== chosen);
   if (!rest.length) return null;
   return (
-    <Fold label={"Options (" + rest.map((option) => option.letter).join(", ") + ")"} open={whole} className="mt-6" testId="answered-options">
-      <ul className="mt-1 grid gap-2">
+    <Fold label={"Options (" + rest.map((option) => option.letter).join(", ") + ")"} open={whole} className="mt-s5" testId="answered-options">
+      <ul className="mt-s1 grid gap-s2">
         {rest.map((option) => (
-          <li key={option.letter} className="rounded-panel border border-line bg-panel px-3.5 py-3" data-testid="read-only-option">
-            <p className="text-row font-semibold text-ink-2">
+          <li key={option.letter} className="rounded-panel border border-line bg-panel px-s3 py-s3" data-testid="read-only-option">
+            <p className="text-body font-strong text-ink-2">
               {option.letter}. {option.label}
             </p>
             {details(option, new Set()).length > 0 && <Facts items={details(option, new Set())} />}
@@ -190,25 +190,25 @@ function same(a: Choice | null, b: Choice): boolean {
 
 function Ask({ card }: { card: Card }) {
   return (
-    <section className="mt-6 rounded-panel border border-line-3 bg-panel px-4 py-3.5" aria-label="The ask" data-testid="ask">
-      <p className="text-row font-semibold">
+    <section className="mt-s5 rounded-panel border border-line-3 bg-panel px-s4 py-s3" aria-label="The ask" data-testid="ask">
+      <p className="text-body font-strong">
         {card.owner} asks you to approve: {card.about ?? card.title}
       </p>
-      <div className="mt-2 grid gap-1.5 text-prose">
+      <div className="mt-s2 grid gap-s1 text-body">
         {card.pickWhy && (
           <p>
-            <span className="font-semibold">Why: </span>
+            <span className="font-strong">Why: </span>
             {card.pickWhy}
           </p>
         )}
         {card.approvalUndo ? (
           <p>
-            <span className="font-semibold">Undo: </span>
+            <span className="font-strong">Undo: </span>
             {card.approvalUndo}
           </p>
         ) : (
           card.approvalDoor === "two-way" && (
-            <p className="flex items-center gap-1.5 text-ink-2">
+            <p className="flex items-center gap-s1 text-ink-2">
               <Icon name="twoway" size="xs" />
               Two-way change (can be undone)
             </p>
@@ -221,14 +221,14 @@ function Ask({ card }: { card: Card }) {
 
 function OneWayBlock({ risk }: { risk: string }) {
   return (
-    <div className="mb-2.5 rounded-panel border bg-red-soft px-3.5 py-3" style={{ borderColor: "color-mix(in oklab, var(--color-red) 50%, transparent)" }} data-testid="one-way-block">
-      <p className="flex items-center gap-2 font-semibold text-red">
+    <div className="mb-s2 rounded-panel border border-stop bg-panel px-s3 py-s3" data-testid="one-way-block">
+      <p className="flex items-center gap-s2 font-strong text-stop">
         <Icon name="alert" size="sm" />
         One-way change: cannot be undone
       </p>
       {risk && (
-        <p className="mt-1 pl-6 text-prose text-ink">
-          <span className="font-semibold">Risk: </span>
+        <p className="mt-s1 pl-s5 text-body text-ink">
+          <span className="font-strong">Risk: </span>
           {risk}
         </p>
       )}
@@ -334,16 +334,16 @@ export function AnswerFlow({ card, world, whole, keys }: { card: Card; world: Wo
       {approval ? (
         <>
           {block && (
-            <div className="mt-6">
+            <div className="mt-s5">
               <OneWayBlock risk={block.risk} />
             </div>
           )}
           <Ask card={card} />
         </>
       ) : (
-        <section className="mt-6" aria-label="Options" data-testid="options">
+        <section className="mt-s5" aria-label="Options" data-testid="options">
           {block && <OneWayBlock risk={block.risk} />}
-          <ul role="radiogroup" aria-label="Options" className="grid gap-2.5" style={locked ? LOCKED : undefined}>
+          <ul role="radiogroup" aria-label="Options" className="grid gap-s2" style={locked ? LOCKED : undefined}>
             {card.options.map((option) => (
               <OptionRow
                 key={option.letter}
@@ -363,7 +363,7 @@ export function AnswerFlow({ card, world, whole, keys }: { card: Card; world: Wo
                 disabled={locked}
                 onClick={() => pick({ kind: "none" })}
                 data-choice=""
-                className={cx("flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-panel border bg-panel px-3.5 py-2 text-left text-row font-semibold disabled:cursor-default", none ? CHOSEN : "border-line-3")}
+                className={cx("flex min-h-s7 w-full cursor-pointer items-center gap-s3 rounded-panel border bg-panel px-s3 py-s2 text-left text-body font-strong disabled:cursor-default", none ? CHOSEN : "border-line-3")}
                 data-testid="none-of-these"
               >
                 <RadioMark on={none} />
@@ -373,19 +373,19 @@ export function AnswerFlow({ card, world, whole, keys }: { card: Card; world: Wo
           </ul>
         </section>
       )}
-      <section className="mt-6 border-t border-line pt-5" aria-label="Your answer" data-testid="answer-area" aria-busy={locked}>
+      <section className="mt-s5 border-t border-line pt-s4" aria-label="Your answer" data-testid="answer-area" aria-busy={locked}>
         {pastDue ? (
-          <div className="mb-3 rounded-panel border border-brass-edge px-3.5 py-3 text-prose" style={{ backgroundColor: "var(--color-brass-soft)" }} data-testid="past-due">
-            <p className="flex items-start gap-2">
-              <Icon name="clock" size="sm" className="mt-[3px] flex-none text-brass" />
+          <div className="mb-s3 rounded-panel border border-wait bg-wait-tint px-s3 py-s3 text-body" data-testid="past-due">
+            <p className="flex items-start gap-s2">
+              <Icon name="clock" size="sm" className="mt-hair flex-none text-wait" />
               <span className="min-w-0 [overflow-wrap:anywhere]">{pastDue}</span>
             </p>
-            <p className="mt-1 pl-6 font-semibold">You can still answer now.</p>
+            <p className="mt-s1 pl-s5 font-strong">You can still answer now.</p>
           </div>
         ) : (
           noAnswer && (
-            <p className="mb-3 flex items-start gap-2 text-prose text-ink-2" data-testid="no-answer">
-              <Icon name="clock" size="sm" className="mt-[3px] flex-none" />
+            <p className="mb-s3 flex items-start gap-s2 text-body text-ink-2" data-testid="no-answer">
+              <Icon name="clock" size="sm" className="mt-hair flex-none" />
               <span className="min-w-0 [overflow-wrap:anywhere]">{noAnswer}</span>
             </p>
           )
@@ -407,21 +407,21 @@ export function AnswerFlow({ card, world, whole, keys }: { card: Card; world: Wo
           data-testid="note"
         />
         {state.phase === "failed" && (
-          <div className="mt-2.5" data-testid="send-failed">
+          <div className="mt-s2" data-testid="send-failed">
             <ErrorLine onRetry={canTryAgain(state) ? () => send() : undefined} retryLabel="Try again">
               {failedText(state)}
             </ErrorLine>
             {state.cause === "sign-in" && (
-              <a href={SIGN_IN_AGAIN_PATH} className="inline-flex min-h-11 items-center px-1 text-meta text-link hover:underline">
+              <a href={SIGN_IN_AGAIN_PATH} className="inline-flex min-h-hit items-center px-s1 text-meta text-inherit underline hover:text-hand">
                 Sign in again
               </a>
             )}
           </div>
         )}
         {confirming ? (
-          <div ref={confirmRef} className="mt-2.5 rounded-panel border border-line-3 bg-panel p-3" role="group" aria-label="Confirm" data-testid="confirm">
-            <p className="text-body font-semibold">{prompt.question}</p>
-            <div className="mt-2.5 grid grid-cols-2 gap-2">
+          <div ref={confirmRef} className="mt-s2 rounded-panel border border-line-3 bg-panel p-s3" role="group" aria-label="Confirm" data-testid="confirm">
+            <p className="text-body font-strong">{prompt.question}</p>
+            <div className="mt-s2 grid grid-cols-2 gap-s2">
               <Button kind="primary" onClick={confirm} data-testid="confirm-send">
                 {prompt.button}
               </Button>
@@ -431,7 +431,7 @@ export function AnswerFlow({ card, world, whole, keys }: { card: Card; world: Wo
             </div>
           </div>
         ) : approval ? (
-          <div className="mt-2.5 grid grid-cols-2 gap-2">
+          <div className="mt-s2 grid grid-cols-2 gap-s2">
             <Button kind="primary" disabled={locked} onClick={() => send({ kind: "approve" })} data-testid="approve">
               {locked && state.choice?.kind === "approve" ? sendingText(state) : "Approve"}
             </Button>
@@ -440,7 +440,7 @@ export function AnswerFlow({ card, world, whole, keys }: { card: Card; world: Wo
             </Button>
           </div>
         ) : (
-          <Button ref={sendRef} kind="primary" block className="mt-2.5" disabled={button.disabled || locked} onClick={() => send()} data-testid="send">
+          <Button ref={sendRef} kind="primary" block className="mt-s2" disabled={button.disabled || locked} onClick={() => send()} data-testid="send">
             {locked ? sendingText(state) : button.text}
           </Button>
         )}

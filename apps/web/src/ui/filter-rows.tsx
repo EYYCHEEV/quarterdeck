@@ -8,9 +8,9 @@ const HINTS: Record<string, string> = { label: "Your own types", due: "Overdue, 
 
 function ShowRow({ group, current, onPick }: { group: ChoiceGroup; current: string; onPick: (value: string) => void }) {
   return (
-    <div role="radiogroup" aria-label={group.title} className="flex min-h-12 items-center gap-3 px-3" data-testid="filter-show-row">
+    <div role="radiogroup" aria-label={group.title} className="flex min-h-s7 items-center gap-s3 px-s3" data-testid="filter-show-row">
       <span className="w-[76px] flex-none text-body text-ink-2">{group.title}</span>
-      <div className="flex min-w-0 flex-1 flex-wrap gap-x-1">
+      <div className="flex min-w-0 flex-1 flex-wrap gap-x-s1">
         {group.choices.map((choice) => {
           const on = current === choice.value;
           return (
@@ -20,7 +20,7 @@ function ShowRow({ group, current, onPick }: { group: ChoiceGroup; current: stri
               role="radio"
               aria-checked={on}
               onClick={() => onPick(choice.value)}
-              className={cx("flex min-h-11 cursor-pointer items-center gap-2 rounded-small px-2 text-body hover:bg-raised", on ? "text-ink" : "text-ink-2")}
+              className={cx("flex min-h-hit cursor-pointer items-center gap-s2 rounded-key px-s2 text-body hover:bg-raised", on ? "text-ink" : "text-ink-2")}
             >
               <RadioMark on={on} neutral small />
               {choice.label}
@@ -53,18 +53,18 @@ function PickRow({
         type="button"
         aria-expanded={open}
         onClick={onToggle}
-        className="flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-small px-3 py-1 text-left text-body hover:bg-raised"
+        className="flex min-h-s7 w-full cursor-pointer items-center gap-s3 rounded-key px-s3 py-s1 text-left text-body hover:bg-raised"
         data-testid={"filter-" + group.key}
       >
         <span className="w-[76px] flex-none text-ink-2">{group.title}</span>
         <span className="min-w-0 flex-1">
-          <span className={cx("block truncate", label && "font-semibold")}>{label ?? "All"}</span>
-          {hint && !label && <span className="block text-small text-ink-3">{hint}</span>}
+          <span className={cx("block truncate", label && "font-strong")}>{label ?? "All"}</span>
+          {hint && !label && <span className="block text-meta text-ink-2">{hint}</span>}
         </span>
         <Icon name={open ? "chevD" : "chevR"} size="sm" className="text-ink-3" />
       </button>
       {open && (
-        <div role="radiogroup" aria-label={group.title} className="grid pb-1 pl-[88px]">
+        <div role="radiogroup" aria-label={group.title} className="grid pb-s1 pl-[88px]">
           <ChoiceRow on={!current} label="All" onClick={() => onPick(undefined)} />
           {group.choices.map((choice) => (
             <ChoiceRow key={choice.value} on={current === choice.value} label={choice.label} onClick={() => onPick(choice.value)} />
@@ -79,7 +79,7 @@ export function Rows({ groups, value, onPick }: { groups: ChoiceGroup[]; value: 
   const [openKey, setOpenKey] = useState<string | null>(null);
   const show = groups.find((group) => group.key === "show");
   return (
-    <div className="grid gap-0.5 pb-1">
+    <div className="grid gap-hair pb-s1">
       {show && <ShowRow group={show} current={value("show") ?? "waiting"} onPick={(choice) => onPick("show", choice === "waiting" ? undefined : choice)} />}
       {groups
         .filter((group) => group.key !== "show")

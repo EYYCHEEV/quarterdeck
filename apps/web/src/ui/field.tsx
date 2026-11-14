@@ -22,7 +22,7 @@ export function SearchField({
   first?: boolean;
 }) {
   return (
-    <label className={cx("flex min-h-[46px] items-center gap-2.5 rounded-control border border-line-3 bg-panel pl-3.5 text-ink-3 focus-within:border-brass", value ? "pr-0.5" : "pr-3.5", className)}>
+    <label className={cx("flex min-h-hit items-center gap-s2 rounded-key border border-line-3 bg-panel pl-s3 text-ink-3 focus-within:border-hand", value ? "pr-hair" : "pr-s3", className)}>
       <Icon name="search" size="sm" />
       <input
         ref={inputRef}
@@ -36,14 +36,14 @@ export function SearchField({
         data-autofocus={first ? "" : undefined}
         onKeyDown={onKeyDown}
         onChange={(event) => onText(event.target.value)}
-        className="w-0 h-11 min-w-0 flex-1 border-0 bg-transparent text-base text-ink outline-none [&::-webkit-search-cancel-button]:hidden"
+        className="w-0 h-hit min-w-0 flex-1 border-0 bg-transparent text-body text-ink outline-none pointer-coarse:text-lead [&::-webkit-search-cancel-button]:hidden"
       />
       {value && (
         <button
           type="button"
           aria-label="Clear search"
           onClick={() => onText("")}
-          className="inline-grid size-11 flex-none cursor-pointer place-items-center rounded-small text-ink-2 hover:bg-control hover:text-ink"
+          className="inline-grid size-hit flex-none cursor-pointer place-items-center rounded-key text-ink-2 hover:bg-control hover:text-ink"
         >
           <Icon name="x" size="sm" />
         </button>
@@ -56,7 +56,7 @@ export function TextArea({ className, ...rest }: ComponentProps<"textarea">) {
   return (
     <textarea
       className={cx(
-        "block min-h-12 w-full resize-y rounded-control border border-line-3 bg-page px-3.5 py-3 text-base leading-[1.4] text-ink outline-none focus:border-brass",
+        "block min-h-s7 w-full resize-y rounded-key border border-line-3 bg-page px-s3 py-s3 text-body leading-snug text-ink outline-none focus:border-hand pointer-coarse:text-lead",
         className,
       )}
       {...rest}

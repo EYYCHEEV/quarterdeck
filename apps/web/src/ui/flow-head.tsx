@@ -16,17 +16,17 @@ export const HeadMenuProvider = HeadMenu.Provider;
 function Crumbs({ items }: { items: Crumb[] }) {
   return (
     <nav aria-label="Breadcrumb" className="min-w-0" data-testid="crumb">
-      <ol className="flex min-h-11 min-w-0 items-center gap-1 text-note font-semibold">
+      <ol className="flex min-h-hit min-w-0 items-center gap-s1 text-body font-strong">
         {items.map((item, index) => (
           <Fragment key={item.label + index}>
             {index > 0 && <li aria-hidden="true" className="flex-none text-ink-3"><Icon name="chevR" size="sm" /></li>}
             <li className="flex min-w-0">
               {item.to ? (
-                <Link to={item.to} className="flex min-h-11 min-w-0 items-center rounded-small px-1 text-ink-2 hover:bg-control hover:text-ink">
+                <Link to={item.to} className="flex min-h-hit min-w-0 items-center rounded-key px-s1 text-ink-2 hover:bg-control hover:text-ink">
                   <span className="truncate">{item.label}</span>
                 </Link>
               ) : (
-                <span aria-current="page" className="truncate px-1 text-ink">{item.label}</span>
+                <span aria-current="page" className="truncate px-s1 text-ink">{item.label}</span>
               )}
             </li>
           </Fragment>
@@ -74,7 +74,7 @@ export function FlowHead({ title, crumb, news = false }: { title: string; crumb?
       <link rel="stylesheet" href="/lanes.css" precedence="lanes" />
       {!phone && (
         <div className="flow-desktop-head">
-          <Head menu={menu} className="px-2 wide:px-8">
+          <Head menu={menu} className="px-s2 wide:px-s6">
             {crumb ? <Crumbs items={crumb} /> : <Title>{title}</Title>}
           </Head>
         </div>

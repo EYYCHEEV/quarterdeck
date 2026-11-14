@@ -16,11 +16,11 @@ function Video({ item }: { item: ViewerItem }) {
   const [failed, setFailed] = useState(() => !item.src || !playable(item));
   if (failed)
     return (
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-4" data-testid="viewer-no-play">
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-s3 p-s4" data-testid="viewer-no-play">
         {item.poster !== null && <img src={item.poster || undefined} alt={item.caption} className="min-h-0 max-w-full flex-1 object-contain" />}
         <p className="flex-none text-meta text-ink-2">This browser cannot play this video.</p>
         {item.src && (
-          <a href={item.src} download className="inline-flex min-h-11 flex-none items-center px-1.5 text-meta text-link hover:underline">
+          <a href={item.src} download className="inline-flex min-h-hit flex-none items-center px-s1 text-meta text-inherit underline hover:text-hand">
             Download the video
           </a>
         )}
@@ -34,7 +34,7 @@ function Picture({ item }: { item: ViewerItem }) {
   const [tries, setTries] = useState(0);
   if (failed)
     return (
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-4" data-testid="viewer-failed">
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-s3 p-s4" data-testid="viewer-failed">
         <p className="text-meta text-ink-2">This picture did not load.</p>
         <Button
           onClick={() => {
@@ -107,22 +107,22 @@ export function Viewer<T extends ViewerItem>({
       onKeyDown={onKey}
       className="fixed inset-0 z-50 flex flex-col bg-page outline-none"
     >
-      <div className="flex min-h-15 flex-none items-center gap-2 py-2 pr-2 pl-4 pt-[max(8px,env(safe-area-inset-top))]">
+      <div className="flex min-h-[60px] flex-none items-center gap-s2 py-s2 pr-s2 pl-s4 pt-[max(var(--spacing-s2),env(safe-area-inset-top))]">
         <span className="min-w-0 flex-1 text-meta text-ink-2" data-testid="viewer-count">
           {index + 1} of {items.length}
         </span>
-        <IconButton icon="x" label="Close" onClick={onClose} className="rounded-full" data-autofocus="" />
+        <IconButton icon="x" label="Close" onClick={onClose} className="rounded-round" data-autofocus="" />
       </div>
       <div className="relative min-h-0 flex-1 touch-pan-y select-none" onPointerDown={onDown} onPointerUp={onUp} data-testid="viewer-stage">
         {item.kind === "video" ? <Video key={item.id} item={item} /> : <Picture key={item.id} item={item} />}
-        <IconButton icon="back" label="Previous" onClick={() => step(-1)} aria-disabled={index === 0} className="absolute top-1/2 left-2 -translate-y-1/2 rounded-full bg-panel aria-disabled:cursor-default aria-disabled:opacity-40" />
-        <IconButton icon="chevR" label="Next" onClick={() => step(1)} aria-disabled={index === items.length - 1} className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full bg-panel aria-disabled:cursor-default aria-disabled:opacity-40" />
+        <IconButton icon="back" label="Previous" onClick={() => step(-1)} aria-disabled={index === 0} className="absolute top-1/2 left-s2 -translate-y-1/2 rounded-round bg-panel aria-disabled:cursor-default aria-disabled:opacity-40" />
+        <IconButton icon="chevR" label="Next" onClick={() => step(1)} aria-disabled={index === items.length - 1} className="absolute top-1/2 right-s2 -translate-y-1/2 rounded-round bg-panel aria-disabled:cursor-default aria-disabled:opacity-40" />
       </div>
-      <div className="flex-none border-t border-line px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))]">
-        <p className="text-small text-ink" data-testid="viewer-caption">
+      <div className="flex-none border-t border-line px-s4 pt-s3 pb-[max(var(--spacing-s3),env(safe-area-inset-bottom))]">
+        <p className="text-meta text-ink" data-testid="viewer-caption">
           {caption(item)}
         </p>
-        {actions && <div className="mt-1 flex flex-wrap gap-x-2">{actions(item, show)}</div>}
+        {actions && <div className="mt-s1 flex flex-wrap gap-x-s2">{actions(item, show)}</div>}
       </div>
     </div>
   );

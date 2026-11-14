@@ -24,7 +24,7 @@ export function QueueControls({
   const [sorting, setSorting] = useState(false);
   const shown = view?.rows.length ?? 0;
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-s2">
       <SearchField
         value={query.text}
         onText={(text) => {
@@ -39,7 +39,7 @@ export function QueueControls({
           if (event.key === "Escape" && !event.defaultPrevented) event.currentTarget.blur();
         }}
       />
-      <div className="relative flex items-center gap-2">
+      <div className="relative flex items-center gap-s2">
         <QueueFilter
           groups={view?.groups ?? []}
           count={view?.filterCount ?? 0}

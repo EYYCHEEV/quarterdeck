@@ -311,20 +311,22 @@ const theme = fs.readFileSync("src/ui/theme.css", "utf8");
 const late = fs.existsSync("src/ui/motion.css") ? fs.readFileSync("src/ui/motion.css", "utf8") : "";
 const staticBlocks = [...theme.matchAll(/@theme static \{([\s\S]*?)\n\}/g)].map((match) => match[1]).join("\n");
 
-test("D5: the three speeds and two easings are named theme values, with the brief's numbers", () => {
+test("D5: the three speeds and two easings are named theme values, with the design's numbers", () => {
   const value = (name) => theme.match(new RegExp("--" + name + ":\\s*([^;]+);"))?.[1].trim() ?? null;
   assert.deepEqual(
     [value("transition-duration-quick"), value("transition-duration-standard"), value("transition-duration-screen")],
-    ["100ms", "200ms", "240ms"],
+    ["80ms", "160ms", "240ms"],
   );
   assert.match(value("ease-arrive") ?? "", /^cubic-bezier\(/);
   assert.match(value("ease-leave") ?? "", /^cubic-bezier\(/);
 });
 
-test("D5: no time in the theme is over 300 ms", () => {
+test("D5: the only times in the theme over 300 ms are the cursor's blink and the working tick", () => {
+  const named = [...theme.matchAll(/--([a-z0-9-]+):\s*(\d+(?:\.\d+)?)(ms|s)\s*;/g)].map(([, name, amount, unit]) => [name, Number(amount) * (unit === "s" ? 1000 : 1)]);
+  const long = [...new Set(named.filter(([, ms]) => ms > 300).map(([name, ms]) => name + " " + ms))].sort();
+  assert.deepEqual(long, ["dur-blink 1060", "dur-tick 1200"]);
   const times = [...theme.matchAll(/(\d+(?:\.\d+)?)(ms|s)\b/g)].map(([, amount, unit]) => Number(amount) * (unit === "s" ? 1000 : 1));
-  assert.ok(times.length > 0);
-  assert.deepEqual(times.filter((ms) => ms > 300), []);
+  assert.deepEqual([...new Set(times.filter((ms) => ms > 300))].sort(), [1060, 1200]);
 });
 
 test("D5: the Reduce Motion rule also stops the view-transition layer", () => {

@@ -33,7 +33,13 @@ The notices for the packages that ship in the web app are generated from `apps/w
 
 - Project: Tailwind CSS 4.3.3, https://github.com/tailwindlabs/tailwindcss, used at build time (`tailwindcss`, `@tailwindcss/cli`).
 - License: MIT, Copyright (c) Tailwind Labs, Inc. Full text: [licenses/TAILWIND-CSS-MIT.txt](licenses/TAILWIND-CSS-MIT.txt).
-- Credit: the 4 px spacing grid and the utility classes come from Tailwind CSS. The colours, type sizes and radii in `apps/web/src/ui/theme.css` are Quarterdeck's own.
+- Credit: the utility classes come from Tailwind CSS. The colours, type sizes, spacing steps and radii in `apps/web/src/ui/theme.css` are Quarterdeck's own.
+
+## IBM Plex
+
+- Project: IBM Plex, https://github.com/IBM/plex, as packaged by Fontsource in `@fontsource/ibm-plex-sans` 5.3.0 and `@fontsource/ibm-plex-mono` 5.3.0.
+- License: OFL-1.1 (SIL Open Font License 1.1). IBM Plex Sans is Copyright 2019 IBM Corp., full text: [licenses/IBM-PLEX-SANS-OFL-1.1.txt](licenses/IBM-PLEX-SANS-OFL-1.1.txt). IBM Plex Mono is Copyright 2017 IBM Corp., full text: [licenses/IBM-PLEX-MONO-OFL-1.1.txt](licenses/IBM-PLEX-MONO-OFL-1.1.txt).
+- Use: four font files ship in `apps/web/public/fonts` as published, not modified: the Latin subsets of IBM Plex Sans and IBM Plex Mono at weights 400 and 600. Each licence text ships beside them.
 
 ## React
 

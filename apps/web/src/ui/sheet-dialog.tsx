@@ -23,7 +23,7 @@ export function SheetDialog({
   useOverlay(box, onClose, returnTo);
   useLeave(frame);
   return (
-    <div ref={frame} className="fixed inset-0 z-50 grid items-end upright:place-items-center upright:p-6">
+    <div ref={frame} className="fixed inset-0 z-50 grid items-end upright:place-items-center upright:p-s5">
       <link rel="stylesheet" href="/settings.css" precedence="settings" />
       <div className={cx("absolute inset-0 bg-scrim", ARRIVE)} aria-hidden="true" onClick={onClose} />
       <div
@@ -33,9 +33,9 @@ export function SheetDialog({
         aria-label={label}
         tabIndex={-1}
         data-pop={pop}
-        className={cx("sheet relative flex h-auto w-full flex-col overflow-hidden border-t border-line-3 bg-panel outline-none upright:border upright:border-line-2", RISE, wide ? "sheet-wide" : "sheet-narrow")}
+        className={cx("sheet relative flex h-auto w-full flex-col overflow-hidden border-t border-line-3 bg-panel outline-none upright:border upright:border-line", RISE, wide ? "sheet-wide" : "sheet-narrow")}
       >
-        <span aria-hidden="true" className="sheet-handle mx-auto mt-2.5 flex-none rounded-full" />
+        <span aria-hidden="true" className="sheet-handle mx-auto mt-s2 flex-none rounded-round" />
         {children}
       </div>
     </div>

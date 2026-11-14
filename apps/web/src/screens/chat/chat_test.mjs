@@ -176,7 +176,7 @@ await check("markdown: a table over 20 columns stays a paragraph, and past 200 r
   assert.equal(u.inlineText(blocks[1].v), row(2, "r200-"));
 });
 
-await check("markdown: a table renders inside a focusable, named region that scrolls sideways, at its natural width with each cell's words in a 15rem inline block that breaks long words, with header cells and each column's alignment", () => {
+await check("markdown: a table renders inside a focusable, named region that scrolls sideways, at its natural width with each cell's words in a 240 px inline block that breaks long words, with header cells and each column's alignment", () => {
   const out = html("| Name | Count |\n|:-:|--:|\n| a | 1 |");
   const region = out.match(/<div[^>]*role="region"[^>]*>/)?.[0] ?? "";
   assert.match(region, /aria-label="Table"/);
@@ -185,7 +185,7 @@ await check("markdown: a table renders inside a focusable, named region that scr
   assert.match(out, /<table class="[^"]*\bw-max\b/);
   assert.match(out, /<th[^>]*text-center[^>]*><span class="[^"]*">Name<\/span><\/th><th[^>]*text-right[^>]*><span class="[^"]*">Count<\/span><\/th>/);
   assert.match(out, /<td[^>]*text-center[^>]*><span class="[^"]*">a<\/span><\/td><td[^>]*text-right[^>]*><span class="[^"]*">1<\/span><\/td>/);
-  for (const [, classes] of out.matchAll(/<t[hd][^>]*><span class="([^"]*)">/g)) assert.deepEqual(["inline-block", "max-w-60", "wrap-anywhere"].filter((name) => !classes.split(" ").includes(name)), [], classes);
+  for (const [, classes] of out.matchAll(/<t[hd][^>]*><span class="([^"]*)">/g)) assert.deepEqual(["inline-block", "max-w-[240px]", "wrap-anywhere"].filter((name) => !classes.split(" ").includes(name)), [], classes);
 });
 
 await check("markdown: HTML and blocked links in table cells and block quotes stay inert text, and a safe link in a cell still asks first", () => {
@@ -854,6 +854,7 @@ const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile:
 const MAC = { viewport: { width: 1512, height: 982 } };
 const T = (p, id) => p.locator(`[data-testid="${id}"]`);
 const shown = (p, text) => p.getByText(text, { exact: true }).first().waitFor();
+const namesOf = (keys) => keys.evaluateAll((list) => list.map((el) => el.getAttribute("aria-label") ?? el.textContent.replace(/\s+/g, " ").trim()));
 const open = async (p, route) => {
   await p.goto(origin + route);
   await p.locator("#stage").waitFor();
@@ -1341,7 +1342,7 @@ it("Chat: pressing and holding a message on the phone opens Reply and Copy, and 
   await p.clock.runFor(600);
   const sheet = p.locator('[data-pop="message-actions"]');
   await sheet.waitFor();
-  assert.deepEqual(await sheet.getByRole("button").allInnerTexts(), ["Done", "Reply", "Copy"]);
+  assert.deepEqual(await namesOf(sheet.getByRole("button")), ["Done", "Reply", "Copy"]);
   await sheet.getByRole("button", { name: "Reply" }).tap();
   await sheet.waitFor({ state: "detached" });
   await draftQuote(p).getByText("Iris · 8:30 AM").waitFor();
@@ -1510,7 +1511,7 @@ it("Chat: a bot's secret request shows its name, the reason, a masked field, Sav
   assert.deepEqual(await card.getByTestId("secret-name").locator("figcaption, blockquote").allInnerTexts(), ["Suggested name from the bot:", "DEPLOY_KEY"]);
   assert.deepEqual(await card.getByTestId("secret-reason").locator("figcaption, blockquote").allInnerTexts(), ["Reason from Alba:", "push the Search branch to the staging host"]);
   assert.equal(await card.getByTestId("secret-value").getAttribute("type"), "password");
-  assert.deepEqual(await card.getByRole("button").allInnerTexts(), ["Save securely", "Decline"]);
+  assert.deepEqual(await namesOf(card.getByRole("button")), ["Save securely", "Decline"]);
   assert.equal(await card.getByTestId("secret-note").innerText(), "Saved outside chat. The named bot can use it through Quarterdeck, but cannot reveal the value. It stays until you replace or delete it.");
 });
 
@@ -2036,7 +2037,7 @@ it("Chat: a failed send says Not Delivered with Try Again and nothing more, keep
   await T(p, "chat-send").tap();
   const failed = mine(p, "Hello").getByRole("alert");
   await failed.getByText("Not Delivered", { exact: true }).waitFor();
-  assert.deepEqual([(await failed.innerText()).replace(/\s+/g, " ").trim(), await failed.getByRole("button", { name: "Try Again", exact: true }).count()], ["Not Delivered Try Again", 1]);
+  assert.deepEqual([(await failed.innerText()).replace(/\s+/g, " ").trim(), await failed.getByRole("button", { name: "Try Again", exact: true }).count()], ["Not Delivered TRY AGAIN", 1]);
   await T(p, "chat-retry").tap();
   await mine(p, "Hello").locator('[data-testid="chat-seen"]').waitFor();
   assert.equal(await mine(p, "Hello").count(), 1);

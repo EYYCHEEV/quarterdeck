@@ -17,3 +17,7 @@ d7bc651ec4ecea9f246e4fd73ef6acdab127b4fdea6b7c4095531f0d93787dbf  apps/web/publi
 87cc456800c632eebb6f98d24d6241a9d5c8918ff63525ef3bb4cbd9717d9a74  apps/web/public/evidence/media/alba-1-video-poster.png
 67ba97a35a292d8c738b75387744fc5051cdc7092603bf3f6c5f23a0f10b510f  apps/web/public/evidence/media/dale-1-help-phone.png
 90b4929c550ece32d1ca979d58e22f85a8998a2b2c761385a01a616b6495c025  apps/web/public/evidence/media/pg-2-v2-public-preview-phone.png
+08949f728dc52d528e69b1667d15c89a5686a4ee9a296ff90983985f99c380f7  apps/web/public/fonts/ibm-plex-mono-latin-400-normal.woff2
+0d1f0b8d0722224e32e9f28261bdc86c79115be73444ae5eceb73976a1bcdf83  apps/web/public/fonts/ibm-plex-mono-latin-600-normal.woff2
+3b646991d30055a93a4ecc499713d4347953a74a947ecab435ab72070cbdab0e  apps/web/public/fonts/ibm-plex-sans-latin-400-normal.woff2
+8960851d691c054ed38e259bdcf1a6190d157b4203ed5bb32c632a863fb8ec2f  apps/web/public/fonts/ibm-plex-sans-latin-600-normal.woff2

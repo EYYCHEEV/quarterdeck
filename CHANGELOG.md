@@ -3,6 +3,10 @@
 All notable changes to the bot tools are listed here, newest first. Each release uses one version number for the wheel and the wake extension. While the version starts with 0, a release can change interfaces; each entry says so when it does.
 From later releases this file also lists changes to the web app and the server. Each release has one heading of the exact form `## X.Y.Z`, with nothing else on the line, because the bot-tool release workflow finds its heading by exact match. An entry says which part it changes: bot tools, app, or server.
 
+## 0.2.0
+
+- App: a new look. The app is drawn in IBM Plex Sans and IBM Plex Mono, on solid surfaces, with one colour for what is yours and amber for what waits on you, in the dark and the light look. Every screen keeps its layout.
+
 ## 0.1.3
 
 - Bot tools: the wake extension for OMP can no longer end the agent it runs in. Mail it cannot read, or an error in its own work, now ends in one short notice instead of an error that stopped the session, and a lost bot lock stops the extension quietly. If waits keep failing for 30 minutes, the wake sends one short notice, then at most one an hour until a wait succeeds. (issue #19)

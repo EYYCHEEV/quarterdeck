@@ -51,11 +51,11 @@ The design check looks at four sizes: 390 (phone), 744x1133 (upright iPad), 1133
 | `src/screens/` | One folder per screen |
 | `src/shell/` | The frame, sidebar, drawer and Search, and `main.tsx`, which picks the data source |
 | `src/ui/` | The UI kit and the design tokens in `theme.css` |
-| `public/` | Static files the build copies as they are: screen stylesheets and sample media |
+| `public/` | Static files the build copies as they are: screen stylesheets, the IBM Plex font files with their licence texts, and sample media |
 | `fixtures/` | Test-only pictures. Only a `--fixtures` build copies them |
 | `design-check/known.json` | Layout and UX problems that were already on screen when a check arrived. A new problem fails the design check |
 | `tools/` | Build and serve scripts, the layer check, the colour check, and the design check with its measuring helpers |
-| `tools/lint/` | The comment, glass, theme variable and motion checks that `npm run lint` runs |
+| `tools/lint/` | The comment, glass, raw value, theme variable and motion checks that `npm run lint` runs |
 
 The folder also holds `index.html`, `tsconfig.json`, `package.json` and `package-lock.json`.
 
@@ -65,7 +65,7 @@ Run the checks for what you touched before a pull request. CI runs them all.
 
 | Command | What it proves |
 |---|---|
-| `npm run lint` | No code comments. The layer rule below. No colour value outside `src/ui/theme.css`. Glass styling only in the floating kit. Every theme variable the code reads is defined in the built stylesheet. Motion times and easings come only from the theme |
+| `npm run lint` | No code comments. The layer rule below. No colour value outside `src/ui/theme.css`. No glass styling anywhere. No raw length, time or colour outside the theme and no class from a switched-off scale; the old layout measures still in use are listed in `tools/lint/raw-values-known.json`. Every theme variable the code reads is defined in the built stylesheet. Motion times and easings come only from the theme |
 | `npm run typecheck` | The app type-checks |
 | `npm run test:data` | The Node test runner over the domain, data, platform, UI kit and Page screen tests, and the tests of the tools |
 | `npm run test:taskcard` | The Task Card and answer rules alone |

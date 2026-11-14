@@ -25,7 +25,7 @@ export function ChatHeader({ botId, bot, choices }: { botId: string; bot: Bot | 
       from={more}
       onClose={() => setOpen(false)}
     >
-      <div className="px-3 pb-2">{choices}</div>
+      <div className="px-s3 pb-s2">{choices}</div>
     </MoreSheet>
   );
 
@@ -37,9 +37,9 @@ export function ChatHeader({ botId, bot, choices }: { botId: string; bot: Bot | 
           {bot && (
             <FloatLabel>
               <Avatar name={bot.name} color={bot.color} size="lg" />
-              <span className="flex min-w-0 flex-col leading-[1.2]">
-                <h1 className="truncate text-prose font-semibold">{bot.name}</h1>
-                <small className="truncate text-tag text-ink-3">{bot.role}</small>
+              <span className="flex min-w-0 flex-col leading-tight">
+                <h1 className="truncate text-body font-strong">{bot.name}</h1>
+                <small className="truncate text-label text-ink-3">{bot.role}</small>
               </span>
             </FloatLabel>
           )}
@@ -53,13 +53,13 @@ export function ChatHeader({ botId, bot, choices }: { botId: string; bot: Bot | 
 
   return (
     <>
-      <Head className="sticky top-0 z-10 border-b border-line bg-page px-2 pb-2 wide:px-6">
+      <Head className="sticky top-0 z-10 border-b border-line bg-page px-s2 pb-s2 wide:px-s5">
         {bot && (
-          <span className="flex min-w-0 flex-1 items-center gap-2.5">
+          <span className="flex min-w-0 flex-1 items-center gap-s2">
             <Avatar name={bot.name} color={bot.color} size="lg" />
-            <span className="flex min-w-0 flex-col leading-[1.25]">
-              <h1 className="text-row font-semibold">{bot.name}</h1>
-              <small className="text-tag text-ink-3">{bot.role}</small>
+            <span className="flex min-w-0 flex-col leading-tight">
+              <h1 className="text-body font-strong">{bot.name}</h1>
+              <small className="text-label text-ink-3">{bot.role}</small>
             </span>
           </span>
         )}

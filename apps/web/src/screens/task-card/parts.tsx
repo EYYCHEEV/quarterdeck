@@ -15,14 +15,14 @@ export function TitleBlock({ card, world, now, main, tile }: { card: Card; world
   const project = world.projects.find((p) => p.id === card.projectId)?.name ?? card.projectId;
   const lane = world.lanes.find((l) => l.id === card.laneId)?.name ?? card.laneId;
   return (
-    <header className="pt-1">
-      <Heading id="card-title" className="text-card font-bold tracking-[-.015em] [overflow-wrap:anywhere]" data-testid="card-title">
+    <header className="pt-s1">
+      <Heading id="card-title" className="text-display font-strong [overflow-wrap:anywhere]" data-testid="card-title">
         {card.title}
       </Heading>
-      <div className="mt-2.5 flex items-start gap-2">
-        {tile && <PriorityTile priority={card.priority} className="mt-px flex-none" />}
-        <p className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1 text-note text-ink-2" data-testid="owner-line">
-          <span className="font-semibold text-ink">{card.owner}</span>
+      <div className="mt-s2 flex items-start gap-s2">
+        {tile && <PriorityTile priority={card.priority} className="mt-nudge flex-none" />}
+        <p className="flex min-w-0 flex-1 flex-wrap items-center gap-x-s1 gap-y-s1 text-body text-ink-2" data-testid="owner-line">
+          <span className="font-strong text-ink">{card.owner}</span>
           <Dot />
           {card.answer ? (
             <span>
@@ -38,7 +38,7 @@ export function TitleBlock({ card, world, now, main, tile }: { card: Card; world
                   </span>
                 </>
               )}
-              {card.due ? <span className={cx(main && "max-upright:basis-full", isDueSoon(card.due, now) && "font-semibold text-red")}>Due {dueLong(card.due, now)}</span> : <span>No due time</span>}
+              {card.due ? <span className={cx(main && "max-upright:basis-full", isDueSoon(card.due, now) && "font-strong text-stop")}>Due {dueLong(card.due, now)}</span> : <span>No due time</span>}
             </>
           )}
         </p>
@@ -55,17 +55,16 @@ export function VersionLine({ card, onEarlier }: { card: Card; onEarlier: () => 
     <button
       type="button"
       onClick={onEarlier}
-      className="mt-4 flex min-h-11 w-full cursor-pointer items-start gap-2.5 rounded-panel border bg-violet-soft px-3.5 py-2.5 text-left"
-      style={{ borderColor: "color-mix(in oklab, var(--color-violet) 35%, transparent)" }}
+      className="mt-s4 flex min-h-hit w-full cursor-pointer items-start gap-s2 rounded-panel border border-new bg-control px-s3 py-s2 text-left"
       aria-label={"Latest version. Open Earlier versions (" + count + ")"}
       data-testid="change-line"
     >
       <span className="min-w-0 flex-1" data-testid="version-line">
-        <span className="block text-note font-semibold">{line.head}</span>
-        {line.instruction && <span className="mt-0.5 block text-note [overflow-wrap:anywhere]">{line.instruction}</span>}
-        <span className="mt-0.5 block text-small font-medium text-violet">Earlier versions ({count})</span>
+        <span className="block text-body font-strong">{line.head}</span>
+        {line.instruction && <span className="mt-hair block text-body [overflow-wrap:anywhere]">{line.instruction}</span>}
+        <span className="mt-hair block text-meta font-strong text-new">Earlier versions ({count})</span>
       </span>
-      <Icon name="chevR" size="sm" className="mt-1 flex-none text-violet" />
+      <Icon name="chevR" size="sm" className="mt-s1 flex-none text-new" />
     </button>
   );
 }
@@ -76,8 +75,8 @@ export function Recap({ card, world }: { card: Card; world: World }) {
   const now = recap.now && !card.answer ? recap.now + "; " + stands : stands;
   const label = "text-ink-3";
   return (
-    <Section title="Recap" className="mt-6" data-testid="recap">
-      <dl className="m-0 grid gap-x-3 gap-y-1.5 text-body" style={{ gridTemplateColumns: "auto minmax(0, 1fr)" }}>
+    <Section title="Recap" className="mt-s5" data-testid="recap">
+      <dl className="m-0 grid gap-x-s3 gap-y-s1 text-body" style={{ gridTemplateColumns: "auto minmax(0, 1fr)" }}>
         {recap.about && (
           <>
             <dt className={label}>About:</dt>
@@ -86,11 +85,11 @@ export function Recap({ card, world }: { card: Card; world: World }) {
         )}
         <dt className={label}>Part of:</dt>
         <dd className="m-0">
-          <Link to={href.projects(card.projectId)} className="text-link hover:underline">
+          <Link to={href.projects(card.projectId)} className="text-inherit underline hover:text-hand">
             {recap.project}
           </Link>
           {" > "}
-          <Link to={href.lane(card.laneId)} className="text-link hover:underline">
+          <Link to={href.lane(card.laneId)} className="text-inherit underline hover:text-hand">
             {recap.lane}
           </Link>
           {recap.tasks.length > 0 && <span className="text-ink-2"> · {recap.unblocks}</span>}
@@ -98,14 +97,14 @@ export function Recap({ card, world }: { card: Card; world: World }) {
         <dt className={label}>Now:</dt>
         <dd className="m-0">{now}</dd>
       </dl>
-      <figure className="m-0 mt-4 rounded-panel border border-line-2 bg-well px-3 py-3" data-testid="picture">
+      <figure className="m-0 mt-s4 rounded-panel border border-line bg-well px-s3 py-s3" data-testid="picture">
         <figcaption className="eyebrow">Picture</figcaption>
         {card.ascii ? (
-          <pre className="m-0 mt-2 overflow-hidden font-mono text-picture whitespace-pre text-picture-ink" aria-label={"Picture: " + card.title}>
+          <pre className="m-0 mt-s2 overflow-hidden font-mono text-label whitespace-pre text-ink" aria-label={"Picture: " + card.title}>
             {card.ascii}
           </pre>
         ) : (
-          <p className="mt-2 text-meta text-ink-2">No picture yet</p>
+          <p className="mt-s2 text-meta text-ink-2">No picture yet</p>
         )}
       </figure>
     </Section>

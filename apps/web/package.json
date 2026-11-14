@@ -20,7 +20,7 @@
     "design:check": "node tools/design-check.mjs --sizes=phone-390,ipad-744x1133,ipad-1133x744,mac-1512",
     "design:check:all": "node tools/design-check.mjs",
     "lint:comments": "node tools/lint/no-comments.mjs",
-    "lint": "npm run lint:comments && node tools/arch-check.mjs && node tools/colour-check.mjs && node tools/lint/one-glass.mjs && node tools/lint/theme-vars.mjs && node tools/lint/motion.mjs",
+    "lint": "npm run lint:comments && node tools/arch-check.mjs && node tools/colour-check.mjs && node tools/lint/no-glass.mjs && node tools/lint/raw-values.mjs && node tools/lint/theme-vars.mjs && node tools/lint/motion.mjs",
     "test": "npm run lint && npm run typecheck && npm run test:data && npm run test:app && npm run test:chat && npm run test:taskcard"
   },
   "devDependencies": {

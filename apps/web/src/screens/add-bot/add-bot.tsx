@@ -14,7 +14,7 @@ import { ErrorLine } from "../../ui/states";
 
 function Step({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="grid gap-2">
+    <div className="grid gap-s2">
       <p className="eyebrow">{label}</p>
       {children}
     </div>
@@ -27,9 +27,9 @@ function NameStep({ name, onName, onCreate, busy, notice }: { name: string; onNa
     onCreate();
   };
   return (
-    <form onSubmit={submit} className="grid gap-3" data-testid="bot-name-step">
-      <label className="grid gap-1.5">
-        <span className="text-meta font-medium text-ink-2">Name (optional)</span>
+    <form onSubmit={submit} className="grid gap-s3" data-testid="bot-name-step">
+      <label className="grid gap-s1">
+        <span className="text-meta font-strong text-ink-2">Name (optional)</span>
         <input
           value={name}
           onChange={(event) => onName(event.target.value)}
@@ -39,10 +39,10 @@ function NameStep({ name, onName, onCreate, busy, notice }: { name: string; onNa
           placeholder="Any bot"
           data-autofocus=""
           data-testid="bot-name"
-          className="min-h-12 w-full rounded-control border border-line-3 bg-well px-3.5 text-base text-ink outline-none focus:border-brass"
+          className="min-h-s7 w-full rounded-key border border-line-3 bg-well px-s3 text-body text-ink outline-none focus:border-hand pointer-coarse:text-lead"
         />
       </label>
-      <p className="text-small text-ink-2">Only a bot with this name can use the invite.</p>
+      <p className="text-meta text-ink-2">Only a bot with this name can use the invite.</p>
       {notice && (
         <ErrorLine onRetry={notice.again ? onCreate : undefined} retryLabel="Try again">
           {notice.words}
@@ -61,18 +61,18 @@ function RequestStep({ request, needsPassword, onApprove, onRefuse }: { request:
   const [password, setPassword] = useState("");
   return (
     <>
-      <div className="grid gap-1 rounded-panel border border-line-3 bg-well px-4 py-4 text-center">
+      <div className="grid gap-s1 rounded-panel border border-line-3 bg-well px-s4 py-s4 text-center">
         <p className="text-meta text-ink-2">Code shown by the bot:</p>
-        <p className="join-code font-mono font-bold text-ink" data-testid="join-code">
+        <p className="join-code font-mono font-strong text-ink" data-testid="join-code">
           {request.code}
         </p>
         <p className="text-meta text-ink-2">Check your bot shows the same code.</p>
       </div>
       <p className="text-body text-ink">
-        <b className="font-semibold">Once in:</b> mail any bot, chat with you, use quarterdeck-mcp.
+        <b className="font-strong">Once in:</b> mail any bot, chat with you, use quarterdeck-mcp.
       </p>
       {needsPassword && <PasswordField value={password} onText={setPassword} />}
-      <div className="grid grid-cols-2 gap-3 pt-1">
+      <div className="grid grid-cols-2 gap-s3 pt-s1">
         <Button kind="plain" onClick={onRefuse} data-testid="join-refuse">
           Refuse
         </Button>
@@ -87,18 +87,18 @@ function RequestStep({ request, needsPassword, onApprove, onRefuse }: { request:
 function JoinedStep({ bot, onClose }: { bot: JoinedBot; onClose: () => void }) {
   return (
     <>
-      <div className="flex items-center gap-3 rounded-panel border border-line-3 bg-well px-4 py-3.5" data-testid="joined-row">
-        <Avatar name={bot.name} color="var(--color-avatar-1)" size="xl" />
+      <div className="flex items-center gap-s3 rounded-panel border border-line-3 bg-well px-s4 py-s3" data-testid="joined-row">
+        <Avatar name={bot.name} size="xl" />
         <span className="min-w-0 flex-1">
-          <b className="block text-row font-semibold">{bot.name}</b>
-          <span className="block text-small text-ink-2">In your sidebar now</span>
+          <b className="block text-body font-strong">{bot.name}</b>
+          <span className="block text-meta text-ink-2">In your sidebar now</span>
         </span>
-        <span className="size-[9px] flex-none rounded-full bg-brass" role="img" aria-label="New" />
+        <span className="size-mark-new flex-none bg-new" role="img" aria-label="New" />
       </div>
       <Link
         to={href.chat(bot.id)}
         onClick={onClose}
-        className="brass-fill inline-flex min-h-12 items-center justify-center gap-2 rounded-control px-[18px] text-body font-semibold"
+        className="key key-lit"
         data-testid="joined-chat"
       >
         Chat with {bot.name}
@@ -118,7 +118,7 @@ export function AddBotDialog({ onClose, returnTo }: { onClose: () => void; retur
       ) : (
         <>
           <Top title="Add bot" sub={null} waiting={false} onClose={onClose} />
-          <div className="sheet-body px-5 pt-3">
+          <div className="sheet-body px-s4 pt-s3">
             <ErrorLine>Could not load the bots.</ErrorLine>
           </div>
         </>
@@ -129,12 +129,12 @@ export function AddBotDialog({ onClose, returnTo }: { onClose: () => void; retur
 
 function Top({ title, sub, waiting, onClose }: { title: string; sub: string | null; waiting: boolean; onClose: () => void }) {
   return (
-    <div className="sheet-top flex flex-none items-start gap-3 px-5 pb-1">
+    <div className="sheet-top flex flex-none items-start gap-s3 px-s4 pb-s1">
       <div className="min-w-0 flex-1" role="status" data-testid={waiting ? "bot-waiting" : undefined}>
-        <h2 className="text-title leading-[1.25] font-bold tracking-[-.01em] [overflow-wrap:anywhere]">{title}</h2>
-        {sub && <p className="mt-1 text-meta text-ink-2">{sub}</p>}
+        <h2 className="text-title font-strong [overflow-wrap:anywhere]">{title}</h2>
+        {sub && <p className="mt-s1 text-meta text-ink-2">{sub}</p>}
       </div>
-      <IconButton icon="x" label="Close Add bot" onClick={onClose} className="rounded-full bg-control" data-testid="add-bot-close" />
+      <IconButton icon="x" label="Close Add bot" onClick={onClose} className="rounded-round bg-control" data-testid="add-bot-close" />
     </div>
   );
 }
@@ -190,11 +190,11 @@ function AddBot({ api, admin, onClose }: { api: BotsApi; admin: BotsAdmin; onClo
   return (
     <>
       <Top title={title} sub={sub} waiting={phase === "waiting"} onClose={onClose} />
-      <div className="sheet-body grid min-h-0 flex-1 content-start gap-4 overflow-y-auto px-5 pt-3">
+      <div className="sheet-body grid min-h-0 flex-1 content-start gap-s4 overflow-y-auto px-s4 pt-s3">
         {phase === "name" && <NameStep name={name} onName={setName} onCreate={() => void create()} busy={admin.busy} notice={admin.notice} />}
         {phase === "invite" && made && (
           <Step label="Invite">
-            <p className="rounded-control border border-line-3 bg-well px-3.5 py-3 font-mono text-code leading-[1.6] text-code-ink [overflow-wrap:anywhere] select-all" data-testid="bot-prompt">
+            <p className="rounded-key border border-line-3 bg-well px-s3 py-s3 font-mono text-meta leading-body text-ink [overflow-wrap:anywhere] select-all" data-testid="bot-prompt">
               {made.prompt}
             </p>
             {made.code !== null && (
@@ -206,7 +206,7 @@ function AddBot({ api, admin, onClose }: { api: BotsApi; admin: BotsAdmin; onClo
               <Icon name="copy" size="sm" />
               Copy
             </Button>
-            <p role="status" className="flex items-center gap-2 border-t border-line pt-3 text-meta text-ink-2" data-testid="bot-waiting-line">
+            <p role="status" className="flex items-center gap-s2 border-t border-line pt-s3 text-meta text-ink-2" data-testid="bot-waiting-line">
               <Icon name="clock" size="sm" className="text-ink-3" />
               Waiting for {bot} to ask to join...
             </p>
@@ -214,10 +214,10 @@ function AddBot({ api, admin, onClose }: { api: BotsApi; admin: BotsAdmin; onClo
         )}
         {phase === "waiting" && (
           <Step label="Invite">
-            <div className="flex items-center gap-3 rounded-control border border-line bg-control px-3.5 py-3">
-              <Icon name="check" size="sm" className="text-green" />
+            <div className="flex items-center gap-s3 rounded-key border border-line bg-control px-s3 py-s3">
+              <Icon name="check" size="sm" className="text-moving" />
               <span className="min-w-0 flex-1 text-meta text-ink-2">Copied. The text is not shown again.</span>
-              <Button kind="ghost" onClick={doCopy} className="min-h-11 px-3 py-0 text-meta">
+              <Button kind="ghost" onClick={doCopy} className="min-h-hit px-s3 py-0 text-meta">
                 Copy again
               </Button>
             </div>
@@ -245,7 +245,7 @@ function AddBot({ api, admin, onClose }: { api: BotsApi; admin: BotsAdmin; onClo
         )}
       </div>
       {state === "copied" && (
-        <p role="status" className="sheet-toast pointer-events-none fixed inset-x-0 mx-auto w-fit rounded-full border border-line-3 bg-raised px-4 py-2 text-meta text-ink" data-testid="toast">
+        <p role="status" className="sheet-toast pointer-events-none fixed inset-x-0 mx-auto w-fit rounded-round border border-line-3 bg-raised px-s4 py-s2 text-meta text-ink" data-testid="toast">
           Copied
         </p>
       )}

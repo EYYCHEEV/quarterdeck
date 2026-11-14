@@ -38,20 +38,20 @@ function ActivityProof({ cardId, pageRef, projectId }: { cardId: string; pageRef
 function ActivityLine({ item, world, now, cardId, projectId }: { item: Activity; world: World; now: number; cardId?: string; projectId: string }) {
   const bot = world.bots.find((b) => b.name === item.bot);
   return (
-    <li className="flex items-start gap-2.5" data-testid="activity">
-      <Avatar name={item.bot} color={bot?.color} size="sm" className="mt-0.5" />
-      <div className="min-w-0 flex-1 text-prose">
-        <p className="flex flex-wrap items-baseline gap-x-2 text-meta">
-          <b className="font-semibold">{item.bot}</b>
+    <li className="flex items-start gap-s2" data-testid="activity">
+      <Avatar name={item.bot} color={bot?.color} size="sm" className="mt-hair" />
+      <div className="min-w-0 flex-1 text-body">
+        <p className="flex flex-wrap items-baseline gap-x-s2 text-meta">
+          <b className="font-strong">{item.bot}</b>
           <time className="text-ink-3">{whenText(item.at, now)}</time>
         </p>
         <p className="text-ink-2">{item.text}</p>
         {cardId && item.refs.filter((ref) => world.pages.some((page) => page.ref === ref)).map((ref) => <ActivityProof key={ref} cardId={cardId} pageRef={ref} projectId={projectId} />)}
         {item.refs.length > 0 && (
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
+          <div className="mt-s1 flex flex-wrap gap-s1">
             {item.refs.flatMap((code) => {
               const info = referenceInfo(code, world);
-              return info ? [<RefChip key={code} to={referenceHref(info)} kind={info.kind} code={code} title={info.title} className="text-small" />] : [];
+              return info ? [<RefChip key={code} to={referenceHref(info)} kind={info.kind} code={code} title={info.title} className="text-meta" />] : [];
             })}
           </div>
         )}
@@ -133,10 +133,10 @@ export function LaneScreen({ laneId }: { laneId: string }) {
   const rest = items.slice(shown);
   const line = (item: Item) =>
     item.kind === "line" ? (
-      <li key="last-looked" className="flex items-center gap-2.5 text-small font-semibold text-violet" data-testid="last-looked">
-        <span aria-hidden="true" className="h-px flex-1 bg-violet" />
+      <li key="last-looked" className="flex items-center gap-s2 text-meta font-strong text-new" data-testid="last-looked">
+        <span aria-hidden="true" className="h-nudge flex-1 bg-new" />
         {item.text}
-        <span aria-hidden="true" className="h-px flex-1 bg-violet" />
+        <span aria-hidden="true" className="h-nudge flex-1 bg-new" />
       </li>
     ) : (
       <ActivityLine key={item.entry.at + item.entry.bot} item={item.entry} world={world} now={now} cardId={evidenceCard?.id} projectId={lane.projectId} />
@@ -147,13 +147,13 @@ export function LaneScreen({ laneId }: { laneId: string }) {
       {head}
       <div className="lane-body">
         <div className="lane-title"><p className="flow-kicker">{done ? "Lane · Read-only record" : "Lane"}</p><h1>{lane.name}</h1></div>
-        <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-note text-ink-2">
+        <p className="mt-s2 flex flex-wrap items-center gap-x-s3 gap-y-s1 text-body text-ink-2">
           <span>{project?.name}</span>
-          <span className={cx("inline-flex items-center gap-1.5 text-small font-semibold", done ? "text-green" : "text-blue")}>
-            <i className="size-2 rounded-full bg-current" />
+          <span className={cx("inline-flex items-center gap-s1 text-meta font-strong", done ? "text-moving" : "text-ink-2")}>
+            <i className="size-s2 rounded-round bg-current" />
             {status}
           </span>
-          <span className="inline-flex items-center gap-[7px]">
+          <span className="inline-flex items-center gap-s2">
             <Avatar name={lane.lead} color={lead?.color} size="xs" />
             {lane.lead}
           </span>
@@ -179,8 +179,8 @@ export function LaneScreen({ laneId }: { laneId: string }) {
             </span>
           }
         >
-          {waiting.length ? <ul className="grid gap-2" data-testid="lane-cards"><Rows items={waiting} world={world} /></ul> : <p className="lane-nothing-waiting">No Task Cards waiting.</p>}
-          {answered.length > 0 && <Fold label={"Answered (" + answered.length + ")"} className="answered-cards"><ul className="grid gap-2"><Rows items={answered.map((card) => ({ card, why: null }))} world={world} /></ul></Fold>}
+          {waiting.length ? <ul className="grid gap-s2" data-testid="lane-cards"><Rows items={waiting} world={world} /></ul> : <p className="lane-nothing-waiting">No Task Cards waiting.</p>}
+          {answered.length > 0 && <Fold label={"Answered (" + answered.length + ")"} className="answered-cards"><ul className="grid gap-s2"><Rows items={answered.map((card) => ({ card, why: null }))} world={world} /></ul></Fold>}
         </Section>
       </div>
     </div>

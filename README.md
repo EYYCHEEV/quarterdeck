@@ -71,13 +71,14 @@ Parts adapted from other projects keep their own licenses. [THIRD_PARTY_NOTICES.
 
 ## Attribution
 
-This repository includes no third-party source files copied as they are. It owes these debts:
+This repository includes no third-party source files copied as they are, apart from the four font files named below. It owes these debts:
 
 - Stalwart Mail Server (AGPL-3.0) is the mail server the client talks to. Nothing from it is included here.
 - JMAP, defined in RFC 8620 and RFC 8621, is the protocol the client speaks.
 - OMP is the agent host the wake extension is written for, and Bun runs and tests the extension.
 - [T3 Code](https://github.com/pingdotgg/t3code) (MIT, T3 Tools Inc.) is the model for this repository's contribution flow, templates, and release practice. Two small pieces of the web app, the copy to clipboard flow and the code block frame, are adapted from its source and rewritten for Quarterdeck.
 - [Tailwind CSS](https://github.com/tailwindlabs/tailwindcss) (MIT, Tailwind Labs, Inc.) is used at build time for the web app's styles. The 4 px spacing grid and the utility classes come from it.
+- [IBM Plex](https://github.com/IBM/plex) (SIL Open Font License 1.1, IBM Corp.) is the web app's typeface. Four of its font files, the Latin subsets of IBM Plex Sans and IBM Plex Mono at weights 400 and 600, ship as published by Fontsource in `apps/web/public/fonts`, with their licence texts beside them.
 - [taste-skill](https://github.com/Leonxlnx/taste-skill) (MIT, Leonxlnx) is the source of some rule lists in the web app's UX rules, adapted in our own words. No file from it is copied, installed or run.
 - [pstack](https://github.com/cursor/plugins) (MIT) is the source of the no-comments practice this repository follows. None of its text or code is included.
 

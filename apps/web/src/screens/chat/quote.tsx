@@ -6,7 +6,7 @@ import { cx } from "../../ui/cx";
 import { Link } from "../../ui/link";
 import { PriorityTile } from "../../ui/priority";
 
-const FRAME = "chat-quote-block relative flex items-start gap-2 rounded-small border border-line-3 border-l-[3px] border-l-brass bg-panel py-2 pr-1 pl-3 text-left";
+const FRAME = "chat-quote-block relative flex items-start gap-s2 rounded-key border border-line-3 border-l-[length:var(--line-w-key)] border-l-hand bg-panel py-s2 pr-s1 pl-s3 text-left";
 
 function showMessage(id: string) {
   const message = document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(id)}"]`);
@@ -33,14 +33,14 @@ export function QuoteBlock({ quote, onRemove }: { quote: Quote; onRemove?: () =>
   if (isCardQuote(quote))
     return (
       <div className={FRAME} data-testid={onRemove ? "chat-quote" : "chat-sent-quote"}>
-        <Link to={href.queue(quote.cardId)} className="min-w-0 flex-1 py-0.5">
-          <span className="eyebrow block text-brass">{quote.label}</span>
-          <span className="mt-1 flex items-start gap-2">
+        <Link to={href.queue(quote.cardId)} className="min-w-0 flex-1 py-hair">
+          <span className="eyebrow block text-ink-2">{quote.label}</span>
+          <span className="mt-s1 flex items-start gap-s2">
             <PriorityTile priority={quote.priority} />
-            <b className="min-w-0 text-prose font-semibold [overflow-wrap:anywhere]">{quote.title}</b>
+            <b className="min-w-0 text-body font-strong [overflow-wrap:anywhere]">{quote.title}</b>
           </span>
           {quote.recap.map((line) => (
-            <span key={line} className="mt-0.5 block text-small [overflow-wrap:anywhere] text-ink-2">
+            <span key={line} className="mt-hair block text-meta [overflow-wrap:anywhere] text-ink-2">
               {line}
             </span>
           ))}
@@ -51,9 +51,9 @@ export function QuoteBlock({ quote, onRemove }: { quote: Quote; onRemove?: () =>
   const source = onRemove ? undefined : quote.messageId;
   const body = (
     <>
-      <span className="eyebrow block text-brass">{quote.label}</span>
-      {quote.title && <b className="mt-1 block text-prose font-semibold [overflow-wrap:anywhere]">{quote.title}</b>}
-      <span id={textId} ref={clamped} className={cx("mt-1 text-small whitespace-pre-line [overflow-wrap:anywhere] text-ink-2", open ? "block" : "line-clamp-4")} data-testid="chat-quote-text">
+      <span className="eyebrow block text-ink-2">{quote.label}</span>
+      {quote.title && <b className="mt-s1 block text-body font-strong [overflow-wrap:anywhere]">{quote.title}</b>}
+      <span id={textId} ref={clamped} className={cx("mt-s1 text-meta whitespace-pre-line [overflow-wrap:anywhere] text-ink-2", open ? "block" : "line-clamp-4")} data-testid="chat-quote-text">
         {quote.text}
       </span>
     </>
@@ -62,15 +62,15 @@ export function QuoteBlock({ quote, onRemove }: { quote: Quote; onRemove?: () =>
     <div className={FRAME} data-testid={onRemove ? "chat-quote" : "chat-sent-quote"}>
       <div className="min-w-0 flex-1">
         {quote.to ? (
-          <Link to={quote.to} className="block py-0.5">
+          <Link to={quote.to} className="block py-hair">
             {body}
           </Link>
         ) : source ? (
-          <button type="button" onClick={() => showMessage(source)} className="block w-full cursor-pointer py-0.5 text-left pointer-coarse:min-h-11">
+          <button type="button" onClick={() => showMessage(source)} className="block w-full cursor-pointer py-hair text-left pointer-coarse:min-h-hit">
             {body}
           </button>
         ) : (
-          <div className="py-0.5">{body}</div>
+          <div className="py-hair">{body}</div>
         )}
         {folds && (
           <LinkButton aria-expanded={open} aria-controls={textId} onClick={() => setOpen(!open)} data-testid="chat-quote-fold">

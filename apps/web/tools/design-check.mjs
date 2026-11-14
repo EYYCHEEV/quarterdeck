@@ -625,12 +625,12 @@ function floatKit() {
   const parts = [...document.querySelectorAll("[data-float]")].filter((el) => el.getClientRects().length);
   if (!parts.length) return found;
   const probe = document.createElement("div");
-  probe.className = "frost";
+  probe.className = "bg-page shadow-[inset_0_0_0_var(--line-w)_var(--color-line)]";
   probe.style.cssText = "position:fixed;visibility:hidden;top:0;left:0;padding:max(8px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) 0 max(12px,env(safe-area-inset-left))";
   document.body.append(probe);
   const kit = getComputedStyle(probe);
-  const glass = (s) => [s.backgroundColor, s.backdropFilter, s.borderTopWidth, s.borderTopStyle, s.borderTopColor, s.boxShadow].join(" | ");
-  const want = { glass: glass(kit), top: parseFloat(kit.paddingTop), left: parseFloat(kit.paddingLeft), right: parseFloat(kit.paddingRight) };
+  const surface = (s) => [s.backgroundColor, s.backdropFilter, s.borderTopWidth, s.borderTopStyle, s.borderTopColor, s.boxShadow].join(" | ");
+  const want = { surface: surface(kit), top: parseFloat(kit.paddingTop), left: parseFloat(kit.paddingLeft), right: parseFloat(kit.paddingRight) };
   probe.remove();
   const SIZE = 44;
   const SIDE = { toggle: "left", back: "left", capsule: "right" };
@@ -650,7 +650,8 @@ function floatKit() {
     if (SIDE[part] === "left" && Math.abs(box.left - want.left) > 0.5) off.push(`${Math.round(box.left)} px from the left, kit ${want.left}`);
     if (SIDE[part] === "right" && Math.abs(innerWidth - box.right - want.right) > 0.5) off.push(`${Math.round(innerWidth - box.right)} px from the right, kit ${want.right}`);
     if (parseFloat(s.borderTopLeftRadius) + 0.5 < box.height / 2) off.push(`corner ${s.borderTopLeftRadius}, kit fully round`);
-    if (glass(s) !== want.glass) off.push(`glass ${glass(s)}, kit ${want.glass}`);
+    if (s.backdropFilter !== "none") off.push(`see-through blur ${s.backdropFilter}, kit solid`);
+    if (surface(s) !== want.surface) off.push(`surface ${surface(s)}, kit ${want.surface}`);
     if (off.length) found.push(`one floating kit: ${name} is off the kit: ${off.join("; ")}`);
   }
   return found;

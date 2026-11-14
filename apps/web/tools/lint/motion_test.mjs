@@ -10,11 +10,16 @@ const SCRIPT = fileURLToPath(new URL("./motion.mjs", import.meta.url));
 const THEME_FILE = "src/ui/theme.css";
 const THEME = [
   "@theme static {",
-  "  --transition-duration-quick: 100ms;",
-  "  --transition-duration-standard: 200ms;",
+  "  --transition-duration-quick: 80ms;",
+  "  --transition-duration-standard: 160ms;",
   "  --transition-duration-screen: 240ms;",
   "  --ease-arrive: cubic-bezier(0.2, 0, 0, 1);",
   "  --ease-leave: cubic-bezier(0.4, 0, 1, 1);",
+  "  --ease-sending: cubic-bezier(0.4, 0, 0.2, 1);",
+  "  --ease-blink: steps(1);",
+  "  --ease-tick: steps(2, jump-none);",
+  "  --dur-blink: 1060ms;",
+  "  --dur-tick: 1200ms;",
   "  --default-transition-duration: var(--transition-duration-standard);",
   "  --default-transition-timing-function: var(--ease-arrive);",
   "}",
@@ -129,19 +134,39 @@ test("an endless animation fails in CSS and in a class", async () => {
   }
 });
 
-const SENDING_RULE = ".sending-bar {\n  animation: sending 1200ms cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;\n}\n";
+const SENDING_RULE = ".sending-bar {\n  animation: sending --theme(--dur-tick inline) --theme(--ease-sending inline) infinite alternate;\n}\n";
+const BLINK_RULE = ".cursor-blink {\n  animation: blink --theme(--dur-blink inline) --theme(--ease-blink inline) infinite;\n}\n";
+const TICK_RULE = ".working-tick {\n  animation: tick --theme(--dur-tick inline) --theme(--ease-tick inline) infinite;\n}\n";
+const OLD_SENDING_RULE = ".sending-bar {\n  animation: sending 1200ms cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;\n}\n";
 
-test("the sending bar is the one exception: its approved rule in motion.css passes with its own time, easing and endless run", async () => {
-  assert.deepEqual(await problemsOf("src/ui/motion.css", ".leave { animation: leave var(--transition-duration-quick) var(--ease-leave) both; }\n" + SENDING_RULE), []);
+test("three endless rules are the exceptions: each exact rule in motion.css passes, reading its time and easing from the theme", async () => {
+  const leave = ".leave { animation: leave var(--transition-duration-quick) var(--ease-leave) both; }\n";
+  for (const rule of [SENDING_RULE, BLINK_RULE, TICK_RULE]) assert.deepEqual(await problemsOf("src/ui/motion.css", leave + rule), [], rule);
+  assert.deepEqual(await problemsOf("src/ui/motion.css", leave + SENDING_RULE + BLINK_RULE + TICK_RULE), []);
 });
 
-test("past the sending bar's exact rule, every endless animation, literal time and written-in easing still fails", async () => {
-  assert.equal((await problemsOf("src/ui/probe.css", SENDING_RULE)).length, 3, "the rule outside motion.css");
-  assert.equal((await problemsOf("src/ui/motion.css", SENDING_RULE.replace(".sending-bar", ".other-bar"))).length, 3, "another class with the same rule");
-  assert.equal((await problemsOf("src/ui/motion.css", SENDING_RULE.replace("1200ms", "2400ms"))).length, 3, "the sending bar at another speed");
-  assert.equal((await problemsOf("src/ui/motion.css", SENDING_RULE.replace("alternate;", "alternate;\n  transition: opacity 400ms;"))).length, 4, "the sending bar with one more line");
+test("past the three exact rules, every endless animation, literal time and written-in easing still fails", async () => {
+  for (const rule of [SENDING_RULE, BLINK_RULE, TICK_RULE]) {
+    assert.equal((await problemsOf("src/ui/probe.css", rule)).length, 1, "outside motion.css: " + rule);
+    assert.equal((await problemsOf("src/ui/motion.css", rule.replace(/^\.[a-z-]+/, ".other"))).length, 1, "another class: " + rule);
+  }
+  assert.equal((await problemsOf("src/ui/motion.css", SENDING_RULE.replace("--dur-tick", "--dur-blink"))).length, 1, "the sending bar at another speed");
+  assert.equal((await problemsOf("src/ui/motion.css", TICK_RULE.replace("infinite;", "infinite alternate;"))).length, 1, "the tick with one more word");
+  assert.equal((await problemsOf("src/ui/motion.css", OLD_SENDING_RULE)).length, 3, "the sending bar with its time and easing written in");
+  assert.equal((await problemsOf("src/ui/motion.css", SENDING_RULE.replace("alternate;", "alternate;\n  transition: opacity 400ms;"))).length, 2, "the sending bar with one more line");
   const second = await problemsOf("src/ui/motion.css", SENDING_RULE + ".a { animation-iteration-count: infinite; }\n");
-  assert.deepEqual(second, ["src/ui/motion.css:4: infinite is an endless animation; none is allowed"], "a second endless rule beside it, on its own line");
+  assert.deepEqual(second, ["src/ui/motion.css:4: infinite is an endless animation; none is allowed"], "a fourth endless rule beside them, on its own line");
+});
+
+test("the blink and the tick are the only theme times over 300 ms, at their exact values and only in the theme", async () => {
+  const { motionProblems } = await import("./motion.mjs");
+  const themeProblems = (text) => motionProblems([{ name: THEME_FILE, text }], text);
+  assert.deepEqual(themeProblems(THEME), []);
+  assert.equal(themeProblems(THEME.replace("--dur-tick: 1200ms", "--dur-tick: 1300ms")).length, 1, "the tick at another time");
+  assert.equal(themeProblems(THEME.replace("--dur-blink: 1060ms", "--dur-blink: 1061ms")).length, 1, "the blink at another time");
+  assert.equal(themeProblems(THEME.replace("  --dur-tick: 1200ms;", "  --dur-tick: 1200ms;\n  --dur-slow: 900ms;")).length, 1, "a third long time");
+  assert.equal((await problemsOf("src/ui/probe.css", ":root { --dur-tick: 1200ms; }\n")).length, 1, "the tick's time outside the theme");
+  assert.deepEqual(themeProblems(THEME + ":root { --dur-blink: 0ms; --dur-tick: 0ms; }\n"), [], "both stopped for Reduce Motion");
 });
 
 test("a millisecond number for motion in a screen part fails", async () => {

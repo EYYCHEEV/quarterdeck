@@ -36,7 +36,7 @@ function withMine(shown: World, latest: World): World {
 }
 
 function Kbd({ children }: { children: ReactNode }) {
-  return <kbd className="rounded-tile border border-line-3 bg-control px-1.5 font-mono text-tag text-ink-2">{children}</kbd>;
+  return <kbd className="rounded-tag border border-line-3 bg-control px-s1 font-mono text-label text-ink-2">{children}</kbd>;
 }
 
 function useShownWorld(latest: World | null) {
@@ -89,15 +89,15 @@ function StatusLine({ view, query, setQuery, changed, apply }: { view: QueueView
     <>
       {chips.length > 0 && <FilterLine chips={chips} onRemove={remove} onClear={() => setQuery(EMPTY_QUERY)} testId="queue-filters-on" />}
       {changed > 0 ? (
-        <p className="mx-0.5 mt-2 mb-1.5 flex min-h-11 items-center gap-2 rounded-control bg-violet-soft px-3 text-meta text-ink" role="status" data-testid="queue-changed">
-          <span aria-hidden="true" className="size-2 flex-none rounded-full bg-violet" />
+        <p className="mx-hair mt-s2 mb-s1 flex min-h-hit items-center gap-s2 rounded-key bg-control px-s3 text-meta text-ink" role="status" data-testid="queue-changed">
+          <span aria-hidden="true" className="size-s2 flex-none rounded-round bg-new" />
           <span className="min-w-0 flex-1">{changed === 1 ? "1 card changed." : changed + " cards changed."}</span>
           <LinkButton onClick={apply}>Show</LinkButton>
         </p>
       ) : (
         chips.length === 0 &&
         (!view || view.rows.length > 0) && (
-          <p className="mx-0.5 mt-2 mb-1.5 flex min-h-11 items-center text-meta text-ink-2" data-testid="queue-rule">
+          <p className="mx-hair mt-s2 mb-s1 flex min-h-hit items-center text-meta text-ink-2" data-testid="queue-rule">
             {view && view.sorts[0].value !== "ranked" ? "Ranked by due, then newest change" : "Ranked by priority, then unblocked, then due"}
           </p>
         )
@@ -177,10 +177,10 @@ export function QueueScreen({ cardId, wide, pane }: { cardId: string | null; wid
 
   const top = (
     <>
-      {showReceipt && <DoneLine className="mb-3">{receipt.text}</DoneLine>}
+      {showReceipt && <DoneLine className="mb-s3">{receipt.text}</DoneLine>}
       <QueueControls view={view} query={query} setQuery={setQuery} wide={wide} search={search} onField={() => showReceipt && setReceipt(null)} />
       {latest.failed && world ? (
-        <ErrorLine className="mt-2 mb-2" onRetry={latest.retry}>
+        <ErrorLine className="mt-s2 mb-s2" onRetry={latest.retry}>
           Could not refresh the Queue. Showing the list from {latest.at ? clockTime(new Date(latest.at).toISOString()) : "earlier"}.
         </ErrorLine>
       ) : (
@@ -202,7 +202,7 @@ export function QueueScreen({ cardId, wide, pane }: { cardId: string | null; wid
       ) : rows.length === 0 ? (
         <Empty
           icon="search"
-          className="mt-2"
+          className="mt-s2"
           testId="queue-no-match"
           action={
             query.text ? (
@@ -215,7 +215,7 @@ export function QueueScreen({ cardId, wide, pane }: { cardId: string | null; wid
           {view.answered ? "Nothing answered yet." : "Nothing in the Queue matches."}
         </Empty>
       ) : (
-        <ul ref={list} className={cx("flex flex-col gap-2", fromBars && ARRIVE)} aria-label="Task Cards" data-testid="queue-list">
+        <ul ref={list} className={cx("flex flex-col gap-s2", fromBars && ARRIVE)} aria-label="Task Cards" data-testid="queue-list">
           {listed.shown.map((entry) => (
             <Row key={entry.id} row={entry.item} view={view} world={world as World} selected={!entry.leaving && open === entry.id} wide={wide} motion={rowMotion(entry, listed.drop)} />
           ))}
@@ -229,17 +229,17 @@ export function QueueScreen({ cardId, wide, pane }: { cardId: string | null; wid
   const title = (
     <Title>
       Queue
-      {view && <span className="text-row font-semibold text-ink-2"> · {view.count}</span>}
+      {view && <span className="text-body leading-none font-strong text-ink-2"> · {view.count}</span>}
     </Title>
   );
-  const head = <Head className={cx(!wide && "px-2")}>{title}</Head>;
+  const head = <Head className={cx(!wide && "px-s2")}>{title}</Head>;
 
   if (!wide)
     return (
       <div className="mx-auto w-full max-w-[720px]">
         {phone ? <FloatListTop label="Queue actions" dot={dot} /> : head}
-        <div className={cx("px-4 pt-2 pb-12", phone && FLOAT_TOP_PAD)}>
-          {phone && <div className="pb-2">{title}</div>}
+        <div className={cx("px-s4 pb-s7", phone ? FLOAT_TOP_PAD : "pt-s2")}>
+          {phone && <div className="pb-s2">{title}</div>}
           {top}
           {body}
         </div>
@@ -248,40 +248,40 @@ export function QueueScreen({ cardId, wide, pane }: { cardId: string | null; wid
 
   if (empty)
     return (
-      <div className="flex h-dvh min-h-0 flex-col px-4 mac:px-8">
+      <div className="flex h-dvh min-h-0 flex-col px-s4 mac:px-s6">
         {head}
-        <div className="w-[400px] flex-none pt-2">{top}</div>
-        <div className="grid min-h-0 flex-1 place-items-center pb-24">
+        <div className="w-[400px] flex-none pt-s2">{top}</div>
+        <div className="grid min-h-0 flex-1 place-items-center pb-[96px]">
           <div className="w-full max-w-[420px]">{emptyBlock}</div>
         </div>
       </div>
     );
 
   return (
-    <div className="flex h-dvh min-h-0 gap-6 px-4 mac:px-8">
+    <div className="flex h-dvh min-h-0 gap-s5 px-s4 mac:px-s6">
       <section className="flex w-[400px] flex-none flex-col" aria-label="Queue">
         {head}
-        <div className="flex-none pt-2">{top}</div>
-        <div className="-mx-1 -mt-1 min-h-0 flex-1 overflow-y-auto px-1 pt-1 pb-6" data-testid="queue-scroll">
+        <div className="flex-none pt-s2">{top}</div>
+        <div className="-mx-s1 -mt-s1 min-h-0 flex-1 overflow-y-auto px-s1 pt-s1 pb-s5" data-testid="queue-scroll">
           {body}
         </div>
-        <p className="hidden flex-none items-center gap-4 border-t border-line py-2.5 text-small text-ink-3 mac:flex" data-testid="key-hints">
-          <span className="inline-flex items-center gap-1.5">
+        <p className="hidden flex-none items-center gap-s4 border-t border-line py-s2 text-meta text-ink-3 mac:flex" data-testid="key-hints">
+          <span className="inline-flex items-center gap-s1">
             <Kbd>j</Kbd>
             <Kbd>k</Kbd>
             next, previous
           </span>
-          <span className="inline-flex items-center gap-1.5">
+          <span className="inline-flex items-center gap-s1">
             <Kbd>/</Kbd>
             search
           </span>
-          <span className="inline-flex items-center gap-1.5">
+          <span className="inline-flex items-center gap-s1">
             <Kbd>Esc</Kbd>
             out
           </span>
         </p>
       </section>
-      <div ref={paneBox} tabIndex={-1} className="-mx-1 min-w-0 flex-1 overflow-y-auto px-1 outline-none" data-pane="" data-testid="card-pane">
+      <div ref={paneBox} tabIndex={-1} className="-mx-s1 min-w-0 flex-1 overflow-y-auto px-s1 outline-none" data-pane="" data-testid="card-pane">
         {open ? (
           pane(open, cardId === null, () => list.current?.querySelector<HTMLElement>('[aria-current="true"]')?.focus())
         ) : loading ? (

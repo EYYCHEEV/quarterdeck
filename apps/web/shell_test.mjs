@@ -41,6 +41,8 @@ const equal = (got, want, what) => {
   if (JSON.stringify(got) !== JSON.stringify(want)) throw new Error(what + ": got " + JSON.stringify(got) + ", want " + JSON.stringify(want));
 };
 const titles = (p) => T(p, "card-row").locator("a").allInnerTexts();
+const nameOf = (key) => key.evaluate((el) => el.getAttribute("aria-label") ?? el.textContent.replace(/\s+/g, " ").trim());
+const namesOf = (keys) => keys.evaluateAll((list) => list.map((el) => el.getAttribute("aria-label") ?? el.textContent.replace(/\s+/g, " ").trim()));
 const open = async (p, route) => {
   await p.goto(origin + route);
   await p.locator("#stage").waitFor();
@@ -156,7 +158,7 @@ it("Queue: the Filter sheet has Show, six filters and a button that counts the c
   await T(p, "filter-btn").tap();
   await T(p, "filter-show-row").waitFor();
   for (const key of ["project", "lane", "bot", "priority", "label", "due"]) await T(p, "filter-" + key).waitFor();
-  equal(await T(p, "filter-result").innerText(), "Show 10 Task Cards", "footer button");
+  equal(await nameOf(T(p, "filter-result")), "Show 10 Task Cards", "footer button");
 });
 
 const recordHeights = (p, pop) =>
@@ -1201,8 +1203,8 @@ it("Task Card: saved versions show with his answer to the first one", PHONE, asy
   await T(p, "version").first().waitFor();
   await T(p, "earlier-versions").getByText(/^You answered: B\. Friday 5 PM/).waitFor();
   await T(p, "version").last().getByText(/^Risk: /).waitFor();
-  const picture = await T(p, "version-picture").first().evaluate((el) => [getComputedStyle(el).fontSize, el.scrollWidth <= el.clientWidth]);
-  equal(picture.join(" "), "12.5px true", "picture at the picture size, not cut");
+  const picture = await T(p, "version-picture").first().evaluate((el) => [getComputedStyle(el).fontSize === getComputedStyle(document.documentElement).getPropertyValue("--text-label").trim(), el.scrollWidth <= el.clientWidth]);
+  equal(picture, [true, true], "picture at the theme's label size, not cut");
 });
 
 it("Lane: the tracker comes first, then the activity, then waiting and answered rows", PHONE, async (p) => {
@@ -1447,7 +1449,7 @@ it("Lane: a Done Lane is a read-only record with its done line, all its activity
   equal(await T(p, "lane").getAttribute("data-status"), "Done", "status");
   equal(await T(p, "done-line").innerText(), "Done Sun 8:41 PM. Checked by Dr. Kivo. Signed off by you.", "done line");
   equal([await T(p, "tracker-blockers").count(), await p.getByText(/^Earlier activity/).count()], [0, 0], "no blockers, nothing folded");
-  equal(await T(p, "talk-to").innerText(), "Talk to Dale", "button");
+  equal(await nameOf(T(p, "talk-to")), "Talk to Dale", "button");
   await T(p, "talk-to").tap();
   await p.waitForURL((url) => url.pathname.startsWith("/chat/"));
 });
@@ -1994,7 +1996,7 @@ it("Mail on the Mac and sideways: a opens Ask for the open thread", MAC, async (
 
 it("Mail in a short Mac window and sideways: after scrolling to the end of the page the reference row stays at the top, and a opens Ask in view", MAC, async (p) => {
   const inView = (locator) => locator.evaluate((el) => el.getBoundingClientRect().top >= 0 && el.getBoundingClientRect().bottom <= window.innerHeight);
-  for (const [width, height] of [[1512, 640], [1133, 744]]) {
+  for (const [width, height] of [[1512, 640], [1133, 640]]) {
     await p.setViewportSize({ width, height });
     await open(p, "/mail/MT-101");
     await T(p, "mail-item").first().waitFor();
@@ -2892,7 +2894,7 @@ it("Frame: the phone menu opens the drawer, Esc closes it and focus returns to M
 });
 
 for (const [where, size, menu] of [
-  ["the Mac", MAC, false],
+  ["the Mac", { viewport: { width: 1512, height: 900 } }, false],
   ["a phone", PHONE, true],
   ["an iPad 1024 wide", { viewport: { width: 1024, height: 768 }, hasTouch: true, isMobile: true }, true],
 ])
@@ -2960,8 +2962,17 @@ it("Search: an Artifact comes up under Artifacts and opens in its project", MAC,
   equal(new URL(p.url()).pathname, "/projects/quarterdeck/artifacts/AR-1", "route");
 });
 
-const BRASS = "rgb(232, 179, 93)";
-const BRASS_INK = "rgb(28, 20, 8)";
+const tonesOf = (p, names) =>
+  p.evaluate((list) => {
+    const probe = document.createElement("i");
+    document.body.append(probe);
+    const found = list.map((name) => {
+      probe.style.color = "var(--color-" + name + ")";
+      return getComputedStyle(probe).color;
+    });
+    probe.remove();
+    return found;
+  }, names);
 const radios = (p) => T(p, "settings-appearance").getByRole("radio").evaluateAll((items) => items.map((item) => [item.textContent, item.getAttribute("aria-checked"), item.disabled]));
 
 it("Settings on the Mac: the gear opens the Settings screen with its five sections, and Appearance offers System, Light and Dark", MAC, async (p) => {
@@ -2991,7 +3002,7 @@ it("Settings: Light applies at once with a toast and turns the screen light", MA
 });
 
 const ACCOUNT = "Account: Captain";
-const SIGNED_OUT = ["Signed out", "This device only.", "Sign in with Google"];
+const SIGNED_OUT = ["Signed out", "This device only.", "SIGN IN WITH GOOGLE"];
 const accountMenu = (p) => p.locator('[data-pop="account-menu"]');
 const signOutBox = (p) => p.locator('[data-pop="sign-out-confirm"]');
 const focusedId = (p) => p.evaluate(() => document.activeElement?.getAttribute("data-testid"));
@@ -3140,27 +3151,30 @@ it("Sign out: when Sign out fails the confirm stays open with its line, and Sign
 });
 
 for (const [name, size, phone] of SIGN_OUT_SIZES)
-  it("Sign out on " + name + ": every new target is at least 44 by 44 px", size, async (p) => {
-    const small = async (locator) =>
-      locator.evaluateAll((items) => items.filter((item) => item.getBoundingClientRect().width < 44 || item.getBoundingClientRect().height < 44).map((item) => item.textContent));
+  it("Sign out on " + name + ": every new target is at least 44 by 44 px, and a key is as tall as the theme's key height", size, async (p) => {
+    const small = async (locator, tall = 44) =>
+      locator.evaluateAll((items, least) => items.filter((item) => item.getBoundingClientRect().width < 44 || item.getBoundingClientRect().height < least).map((item) => item.textContent), tall);
     await open(p, "/queue");
+    const keyHeight = await p.evaluate(() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--spacing-key-h")));
+    equal(keyHeight, phone ? 44 : 34, "the theme's key height: 34 px with a mouse from 1400 px wide, 44 px elsewhere");
     await openAccountMenu(p, phone);
     const found = [...(await small(p.getByRole("button", { name: ACCOUNT }))), ...(await small(accountMenu(p).getByRole("button")))];
     await accountMenu(p).getByRole("button", { name: "Sign out" }).click();
-    found.push(...(await small(signOutBox(p).getByRole("button"))));
+    found.push(...(await small(signOutBox(p).getByRole("button"), keyHeight)));
     await signOutBox(p).getByRole("button", { name: "Sign out" }).click();
     await T(p, "signed-out").waitFor();
-    found.push(...(await small(T(p, "signed-out").getByRole("button"))));
-    equal(found, [], "targets under 44 px");
+    found.push(...(await small(T(p, "signed-out").getByRole("button"), keyHeight)));
+    equal(found, [], "targets under their least size");
   });
 
-it("Brass: the answer path is solid brass, and its ink reads at least 4.5 to 1", PHONE, async (p) => {
+it("Hand: the answer path is the lit key, solid in the hand colour, and its ink reads at least 4.5 to 1", PHONE, async (p) => {
   await open(p, "/queue/alba-1");
+  const [hand, onHand] = await tonesOf(p, ["hand", "on-hand"]);
   const send = await T(p, "send").evaluate((el) => {
     const style = getComputedStyle(el);
     return { fill: style.backgroundColor, image: style.backgroundImage, ink: style.color };
   });
-  equal(send, { fill: BRASS, image: "none", ink: BRASS_INK }, "Send");
+  equal(send, { fill: hand, image: "none", ink: onHand }, "Send");
   const ratio = await p.evaluate(([a, b]) => {
     const lum = (rgb) => {
       const [r, g, bl] = rgb.match(/\d+/g).map((v) => {
@@ -3171,19 +3185,82 @@ it("Brass: the answer path is solid brass, and its ink reads at least 4.5 to 1",
     };
     const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
     return (hi + 0.05) / (lo + 0.05);
-  }, [BRASS, BRASS_INK]);
+  }, [hand, onHand]);
   equal(ratio >= 4.5, true, "contrast " + ratio.toFixed(2) + " to 1");
 });
 
-it("Brass: the focus ring and the chat unread dot are the same solid brass", MAC, async (p) => {
+it("Signals: the focus ring is the hand colour and the unread mark is the new colour, both solid", MAC, async (p) => {
   await open(p, "/queue");
-  const dot = p.getByRole("img", { name: "Unread" }).first();
-  equal(await dot.evaluate((el) => [getComputedStyle(el).backgroundColor, getComputedStyle(el).backgroundImage]), [BRASS, "none"], "unread dot");
+  const [hand, fresh] = await tonesOf(p, ["hand", "new"]);
+  equal(hand === fresh, false, "the two signals are different colours");
+  const mark = p.getByRole("img", { name: "Unread" }).first();
+  equal(await mark.evaluate((el) => [getComputedStyle(el).backgroundColor, getComputedStyle(el).backgroundImage]), [fresh, "none"], "unread mark");
   await T(p, "settings-btn").focus();
   await p.keyboard.press("Shift+Tab");
   await p.keyboard.press("Tab");
-  equal(await p.evaluate(() => getComputedStyle(document.activeElement).outlineColor), BRASS, "focus ring");
+  equal(await p.evaluate(() => getComputedStyle(document.activeElement).outlineColor), hand, "focus ring");
 });
+
+const FONT_FILES = ["ibm-plex-mono-latin-400-normal.woff2", "ibm-plex-mono-latin-600-normal.woff2", "ibm-plex-sans-latin-400-normal.woff2", "ibm-plex-sans-latin-600-normal.woff2"];
+const FONT_FACES = [
+  ["Plex Mono", "400", "normal", "swap"],
+  ["Plex Mono", "600", "normal", "swap"],
+  ["Plex Sans", "400", "normal", "swap"],
+  ["Plex Sans", "600", "normal", "swap"],
+];
+const fontFaces = (p) =>
+  p.evaluate(async () => {
+    await Promise.allSettled([...document.fonts].map((face) => face.load()));
+    return [...document.fonts].map((face) => [face.family.replace(/["']/g, ""), face.weight, face.style, face.display, face.status]).sort();
+  });
+const drawnFace = async (p, part) => {
+  const named = await part.evaluate((el) => {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, { acceptNode: (node) => (node.data.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP) });
+    const holder = walker.nextNode().parentElement;
+    holder.setAttribute("data-face-probe", "");
+    return getComputedStyle(holder).fontFamily.split(",")[0].replace(/["']/g, "").trim();
+  });
+  const cdp = await p.context().newCDPSession(p);
+  try {
+    await cdp.send("DOM.enable");
+    await cdp.send("CSS.enable");
+    const { root } = await cdp.send("DOM.getDocument", { depth: 0 });
+    const { nodeId } = await cdp.send("DOM.querySelector", { nodeId: root.nodeId, selector: "[data-face-probe]" });
+    const { fonts } = await cdp.send("CSS.getPlatformFontsForNode", { nodeId });
+    return [named, fonts.map((font) => font.isCustomFont)];
+  } finally {
+    await cdp.detach();
+    await p.locator("[data-face-probe]").evaluate((el) => el.removeAttribute("data-face-probe"));
+  }
+};
+
+for (const [name, size] of [["a phone", PHONE], ["the Mac", MAC]])
+  it("Fonts drawn on " + name + ": the Task Card's title is drawn in Plex Sans and its Send key in Plex Mono, from the four font files the app ships", size, async (p) => {
+    const fetched = [];
+    p.on("response", (response) => {
+      const [folder, file] = new URL(response.url()).pathname.split("/").slice(-2);
+      if (file.endsWith(".woff2")) fetched.push([folder, file, response.status()]);
+    });
+    await open(p, "/queue/alba-1");
+    await T(p, "send").waitFor();
+    equal(await fontFaces(p), FONT_FACES.map((face) => [...face, "loaded"]), "the four faces, each loaded");
+    equal(fetched.sort(), FONT_FILES.map((file) => ["fonts", file, 200]), "font files fetched");
+    equal([await drawnFace(p, T(p, "card-title").first()), await drawnFace(p, T(p, "send"))], [["Plex Sans", [true]], ["Plex Mono", [true]]], "the first face named and a shipped font drawn, for the title and for Send");
+  });
+
+it("Fonts blocked: with the four font files refused the Task Card keeps its words in a device face, with no sideways scroll and Send's words not cut", PHONE, async (p) => {
+  await p.route("**/*.woff2", (route) => route.abort("blockedbyclient"));
+  await open(p, "/queue/alba-1");
+  await T(p, "send").waitFor();
+  equal(await fontFaces(p), FONT_FACES.map((face) => [...face, "error"]), "the four faces, none loaded");
+  await shown(p, "How many results should each Search group show?");
+  equal([await drawnFace(p, T(p, "card-title").first()), await drawnFace(p, T(p, "send"))], [["Plex Sans", [false]], ["Plex Mono", [false]]], "a device face drawn, for the title and for Send");
+  const fit = await p.evaluate(() => {
+    const send = document.querySelector('[data-testid="send"]');
+    return [document.documentElement.scrollWidth <= document.documentElement.clientWidth, send.scrollWidth <= send.clientWidth];
+  });
+  equal(fit, [true, true], "no sideways scroll, Send's words not cut");
+}, /^Failed to load resource: net::ERR_/);
 
 const look = (p) => p.evaluate(() => document.documentElement.getAttribute("data-appearance"));
 
@@ -3255,33 +3332,34 @@ const bubbleTones = (p) =>
       return value;
     };
     const style = getComputedStyle(document.querySelector(".chat-bot-bubble"));
-    const [back, ink, muted, inset, link] = [style.backgroundColor, style.color, tone("color-chat-bot-muted"), tone("color-chat-bot-inset"), tone("color-chat-bot-link")];
+    const [back, ink, panel, themeInk, muted, inset] = [style.backgroundColor, style.color, tone("color-panel"), tone("color-ink"), tone("color-ink-2"), tone("color-well")];
     return {
-      colours: [back, ink, link],
-      ratios: { ink: ratio(read(ink), read(back)), muted: ratio(read(muted), read(back)), link: ratio(read(link), read(back)), inkOnInset: ratio(read(ink), read(inset)), mutedOnInset: ratio(read(muted), read(inset)) },
+      colours: [back, ink],
+      theme: [panel, themeInk],
+      ratios: { ink: ratio(read(ink), read(back)), muted: ratio(read(muted), read(back)), inkOnInset: ratio(read(ink), read(inset)), mutedOnInset: ratio(read(muted), read(inset)) },
     };
   });
 
-it("Chat in the dark look: the bot bubble is dark with white text, brass links and muted words that stay readable", { ...MAC, colorScheme: "dark" }, async (p) => {
+it("Chat in the dark look: the bot bubble is a panel in the theme's ink, and its quiet words stay readable", { ...MAC, colorScheme: "dark" }, async (p) => {
   await open(p, "/chat/iris");
   await T(p, "chat-bot-message").first().waitFor();
   const tones = await bubbleTones(p);
-  equal(tones.colours, ["rgb(38, 38, 43)", "rgb(236, 236, 239)", "rgb(232, 179, 93)"], "bubble, text and link");
-  const { ink, muted, link, inkOnInset, mutedOnInset } = tones.ratios;
-  equal([ink >= 12, muted >= 6, link >= 7, inkOnInset >= 14, mutedOnInset >= 7], [true, true, true, true, true], JSON.stringify(tones.ratios));
+  equal(tones.colours, tones.theme, "bubble and text are the theme's panel and ink");
+  const { ink, muted, inkOnInset, mutedOnInset } = tones.ratios;
+  equal([ink >= 12, muted >= 6, inkOnInset >= 14, mutedOnInset >= 7], [true, true, true, true], JSON.stringify(tones.ratios));
 });
 
-it("Chat in the light look: the bot bubble keeps its pale colours and contrast", { ...MAC, colorScheme: "light" }, async (p) => {
+it("Chat in the light look: the bot bubble is a panel in the theme's ink and keeps its contrast", { ...MAC, colorScheme: "light" }, async (p) => {
   await open(p, "/chat/iris");
   await T(p, "chat-bot-message").first().waitFor();
   const tones = await bubbleTones(p);
-  equal(tones.colours, ["rgb(232, 232, 227)", "rgb(37, 38, 42)", "rgb(101, 70, 0)"], "bubble, text and link");
-  const { ink, muted, link } = tones.ratios;
-  equal([ink >= 10, muted >= 5, link >= 5], [true, true, true], JSON.stringify(tones.ratios));
+  equal(tones.colours, tones.theme, "bubble and text are the theme's panel and ink");
+  const { ink, muted } = tones.ratios;
+  equal([ink >= 10, muted >= 5], [true, true], JSON.stringify(tones.ratios));
 });
 
 for (const look of ["dark", "light"])
-  it("Chat in the " + look + " look: a keyboard focus ring inside a bot bubble is the bubble's link colour", { ...MAC, colorScheme: look }, async (p) => {
+  it("Chat in the " + look + " look: a keyboard focus ring inside a bot bubble is the hand colour, as everywhere", { ...MAC, colorScheme: look }, async (p) => {
     await open(p, "/chat/iris");
     await T(p, "chat-bot-message").first().waitFor();
     let inside = false;
@@ -3290,15 +3368,8 @@ for (const look of ["dark", "light"])
       inside = await p.evaluate(() => Boolean(document.activeElement?.closest(".chat-bot-bubble")));
     }
     equal(inside, true, "a Tab stop inside the bubble");
-    const [ring, link] = await p.evaluate(() => {
-      const probe = document.createElement("i");
-      probe.style.color = "var(--color-chat-bot-link)";
-      document.body.append(probe);
-      const colour = getComputedStyle(probe).color;
-      probe.remove();
-      return [getComputedStyle(document.activeElement).outlineColor, colour];
-    });
-    equal(ring, link, "the ring colour and the bubble's link colour");
+    const [hand] = await tonesOf(p, ["hand"]);
+    equal(await p.evaluate(() => getComputedStyle(document.activeElement).outlineColor), hand, "the ring colour and the hand colour");
   });
 
 for (const look of ["dark", "light"])
@@ -3325,17 +3396,15 @@ it("Home screen: in a browser tab there is no home-screen flag and no strip", PH
   equal([await p.evaluate(() => document.documentElement.hasAttribute("data-standalone")), (await stripOf(p))?.display ?? "none"], [false, "none"], "flag and strip");
 });
 
-for (const [look, iris, alba] of [
-  ["dark", "rgb(95, 207, 196)", "rgb(183, 156, 255)"],
-  ["light", "rgb(13, 107, 99)", "rgb(106, 63, 192)"],
-])
-  it("Sidebar in the " + look + " look: each pinned bot's avatar shows its palette colour", { ...MAC, colorScheme: look }, async (p) => {
+for (const look of ["dark", "light"])
+  it("Sidebar in the " + look + " look: no bot has a colour of its own; every pinned bot's tile is the same quiet ink", { ...MAC, colorScheme: look }, async (p) => {
     await open(p, "/queue");
-    const colour = (id) => T(p, "pinned-bot").and(p.locator(`[data-id="${id}"]`)).locator('span[aria-hidden="true"]').first().evaluate((el) => getComputedStyle(el).color);
-    equal([await colour("iris"), await colour("alba")], [iris, alba], "avatar colours");
+    const [quiet] = await tonesOf(p, ["ink-2"]);
+    const colour = (id) => T(p, "pinned-bot").and(p.locator(`[data-id="${id}"]`)).locator("span[data-avatar]").first().evaluate((el) => getComputedStyle(el).color);
+    equal([await colour("iris"), await colour("alba")], [quiet, quiet], "tile colours");
   });
 
-const AVATAR = 'span[aria-hidden="true"].rounded-full';
+const AVATAR = "span[data-avatar]";
 const AVATAR_SIZES = { 18: "xs", 22: "sm", 28: "md", 36: "lg", 46: "xl" };
 const AVATAR_ROUTES = ["/chat/dr-kivo", "/lanes/l-sea", "/lanes/l-set", "/chat/iris"];
 
@@ -3495,7 +3564,7 @@ it("Add bot: Approve says the bot joined and offers Chat with it", MAC, async (p
   await joinAsked(p, "Finch");
   await T(p, "join-approve").click();
   equal(await addBot(p).getByRole("heading").innerText(), "Finch joined.", "title");
-  equal(await T(p, "joined-chat").innerText(), "Chat with Finch", "chat link");
+  equal(await nameOf(T(p, "joined-chat")), "Chat with Finch", "chat link");
   await T(p, "chat-row").and(p.locator('[data-id="finch"]')).waitFor();
 });
 
@@ -3537,6 +3606,16 @@ it("Floating top: the phone Queue shows the menu toggle at the left, and Search 
   const [left, right] = [await toggle.boundingBox(), await queueActions(p).boundingBox()];
   equal([left.x + left.width < 195, right.x > 195], [true, true], "toggle left, capsule right");
   equal(await p.locator("header").count(), 0, "no solid header");
+});
+
+it("Floating top: on a phone the Queue's title and the Task Card's title start below the capsule", PHONE, async (p) => {
+  await queueShown(p);
+  const [actions, title] = [await queueActions(p).boundingBox(), await p.getByRole("heading", { level: 1, name: /^Queue/ }).boundingBox()];
+  equal(title.y >= actions.y + actions.height, true, "the Queue's title starts at " + title.y + ", the capsule ends at " + (actions.y + actions.height));
+  await open(p, "/queue/alba-1");
+  await T(p, "card-title").waitFor();
+  const [capsule, card] = [await p.locator('[data-float="capsule"]').boundingBox(), await T(p, "card-title").boundingBox()];
+  equal(card.y >= capsule.y + capsule.height, true, "the card's title starts at " + card.y + ", the capsule ends at " + (capsule.y + capsule.height));
 });
 
 it("Floating top: the toggle opens the menu, and Esc returns focus to the toggle", PHONE, async (p) => {
@@ -3940,7 +4019,7 @@ const motionPage = () => ({
   ignore: mailRefusal,
 });
 const motionCase = (name, size, steps) => it("Motion: " + name, size, (p) => motionPair(p, size, steps, motionPage()));
-const shapesOf = (list) => [...new Set(list.map((one) => one.duration + " " + one.properties.join("+")))].sort();
+const shapesOf = (list) => [...new Set(list.map((one) => one.duration + " " + one.properties.join("+")))].sort((a, b) => parseFloat(a) - parseFloat(b) || a.localeCompare(b));
 
 motionCase("on a phone the leaving screen slides forward and back while the arriving screen fades in where it lands, a first visit never slides a blank, a tap during it lands as it would with Reduce Motion, and a system back does not move", PHONE, async (p, m) => {
   const places = () => Promise.all([T(p, "menu-btn").boundingBox(), T(p, "card-row").first().boundingBox()]);
@@ -4032,6 +4111,19 @@ for (const [where, size] of [["the Mac", MAC], ["an iPad sideways", TOUCH_SIDEWA
     await settle(p);
     equal(await blankSeen(p), false, "the first visit to Mail never slid in the code-loading fallback");
   });
+
+it("Motion: on an iPad sideways, where each scrolling pane is drawn in a layer of its own, a style left on the card pane after the change still fails the end picture compare", TOUCH_SIDEWAYS, async (p) => {
+  const steps = async (page) => {
+    await open(page, "/queue");
+    await T(page, "card-pane").getByTestId("card-title").waitFor();
+    await settle(page);
+    await T(page, "card-row").nth(1).locator("a").tap();
+    await T(page, "card-title").getByText(QUEUE_ORDER[1], { exact: true }).waitFor();
+    await page.waitForFunction(() => document.documentElement.dataset.move === undefined, null, { polling: "raf" });
+  };
+  const thrown = await motionPair(p, TOUCH_SIDEWAYS, steps, { ...motionPage(), leftover: '[data-testid="card-pane"]' }).then(() => "nothing was thrown", (error) => String(error?.message ?? error));
+  equal(thrown.startsWith("the end picture with motion differs from the Reduce Motion picture: "), true, "a style left on the card pane fails the compare; thrown: " + thrown.split("\n")[0].slice(0, 160));
+});
 
 for (const [where, size, leave, focus] of [
   ["the Mac", MAC, async (p) => {
@@ -4939,13 +5031,13 @@ const sendPick = async (p, door) => {
 };
 const keptOnCard = async (p) => {
   const pick = p.locator('[data-testid="option"][data-letter="B"] [role="radio"]');
-  return [await T(p, "note").inputValue(), await pick.getAttribute("aria-checked"), await pick.isDisabled(), await T(p, "send").isDisabled(), await T(p, "send").innerText()];
+  return [await T(p, "note").inputValue(), await pick.getAttribute("aria-checked"), await pick.isDisabled(), await T(p, "send").isDisabled(), await nameOf(T(p, "send"))];
 };
 const failedLine = async (p, words, tryAgain) => {
   const line = T(p, "send-failed");
   await line.waitFor().catch(() => undefined);
   const said = (await line.count()) ? await line.innerText() : null;
-  equal([await line.getByText(words, { exact: true }).count(), await line.getByRole("button", { name: "Try again", exact: true }).count()], [1, tryAgain ? 1 : 0], "the words " + JSON.stringify(words) + " and Try again on the failed line, which says " + JSON.stringify(said) + " beside Send " + JSON.stringify(await T(p, "send").innerText()));
+  equal([await line.getByText(words, { exact: true }).count(), await line.getByRole("button", { name: "Try again", exact: true }).count()], [1, tryAgain ? 1 : 0], "the words " + JSON.stringify(words) + " and Try again on the failed line, which says " + JSON.stringify(said) + " beside Send " + JSON.stringify(await nameOf(T(p, "send"))));
 };
 const pickNearBottom = async (p, letter) => {
   const row = p.locator('[data-testid="option"][data-letter="' + letter + '"]');
@@ -5028,7 +5120,7 @@ for (const [door, what] of SEND_DOORS) {
     server.lists = "hold";
     await sendPick(p, door);
     await p.clock.runFor(44_000);
-    equal(await T(p, "send").innerText(), "Sending B ...", "Send before 45 seconds");
+    equal(await nameOf(T(p, "send")), "Sending B ...", "Send before 45 seconds");
     await p.clock.runFor(1_000);
     await failedLine(p, NOT_SURE, false);
     equal([await keptOnCard(p), server.posts.length], [SEND_KEPT, 0], "his pick and note on the card, and posts");
@@ -5288,7 +5380,7 @@ it("Server Chat on a phone: no + button, a held message offers Copy and no Quote
   });
   const sheet = p.locator('[data-pop="message-actions"]');
   await sheet.waitFor();
-  equal(await sheet.getByRole("button").allInnerTexts(), ["Done", "Copy"], "held message actions");
+  equal(await namesOf(sheet.getByRole("button")), ["Done", "Copy"], "held message actions");
   await sheet.getByRole("button", { name: "Done" }).tap();
   await sheet.waitFor({ state: "detached" });
   const before = p.url();
@@ -5327,7 +5419,7 @@ for (const [name, features, rows] of [["lists quote", ["quote"], ["Reply", "Copy
     await holdBubble(p, "iris-m30");
     const sheet = p.locator('[data-pop="message-actions"]');
     await sheet.waitFor();
-    equal(await sheet.getByRole("button").allInnerTexts(), ["Done", ...rows], "the menu's buttons in order");
+    equal(await namesOf(sheet.getByRole("button")), ["Done", ...rows], "the menu's buttons in order");
     const shown = await sheet.getByRole("button").evaluateAll((list) => list.filter((el) => el.textContent !== "Done").map((el) => [el.textContent, el.querySelector("svg") !== null, el.getBoundingClientRect().height >= 48]));
     equal(shown, rows.map((row) => [row, true, true]), "each row: its words, an icon, at least 48 px tall");
   });

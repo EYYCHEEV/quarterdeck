@@ -34,11 +34,11 @@ export function BotLinkConfirmation({ botName, children }: { botName: string; ch
       {request && (
         <Dialog label={title} pop="bot-link-confirm" onClose={close} returnTo={opener} compact>
           <DialogHead title={title} onClose={close} />
-          <div className="grid min-h-0 gap-3 overflow-y-auto px-4 py-4">
+          <div className="grid min-h-0 gap-s3 overflow-y-auto px-s4 py-s4">
             <p className="font-mono text-body break-all" data-testid="bot-link-origin">{request.origin}</p>
             <p className="text-body text-ink-2">{request.botName} supplied this address. Quarterdeck has not checked where it leads.</p>
           </div>
-          <div className="grid flex-none grid-cols-2 gap-2 border-t border-line p-3">
+          <div className="grid flex-none grid-cols-2 gap-s2 border-t border-line p-s3">
             <Button kind="primary" onClick={() => {
               openOutside(request.url);
               close();

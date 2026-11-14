@@ -40,9 +40,9 @@ function useCopyAction(text: string) {
 
 function ActionBar({ text, onQuote, className }: { text: string; onQuote?: () => void; className: string }) {
   const { run, label } = useCopyAction(text);
-  const part = "min-h-9 cursor-pointer px-3 text-small font-medium text-ink-2 hover:bg-raised hover:text-ink pointer-coarse:min-h-11";
+  const part = "min-h-[36px] cursor-pointer px-s3 text-meta font-strong text-ink-2 hover:bg-raised hover:text-ink pointer-coarse:min-h-hit";
   return (
-    <div role="toolbar" aria-label="Message actions" className={cx("absolute z-10 flex overflow-hidden rounded-small border border-line-2 bg-control shadow-pop", className)} data-testid="message-actions">
+    <div role="toolbar" aria-label="Message actions" className={cx("absolute z-10 flex overflow-hidden rounded-key border border-line bg-control shadow-lift", className)} data-testid="message-actions">
       {onQuote && (
         <button type="button" onClick={onQuote} className={part}>
           Reply
@@ -68,7 +68,7 @@ function ActionSheet({ title, selected, text, onQuote, onClose }: { title: strin
   }, [copied]);
   return (
     <Sheet title={title} wide={false} onClose={onClose} pop="message-actions">
-      <ul className="grid gap-0.5 pb-1">
+      <ul className="grid gap-hair pb-s1">
         {onQuote && (
           <li>
             <button
@@ -175,7 +175,7 @@ export function Actionable({
       onFocus={(event) => setFocus(live && event.target.matches(":focus-visible"))}
       onBlur={leaveFocus}
     >
-      {copy !== undefined && (hover || focus) && !sheet && <ActionBar text={copy} onQuote={onQuote && (() => onQuote(selection()))} className={align === "end" ? "-top-4 left-0" : "-top-4 right-0"} />}
+      {copy !== undefined && (hover || focus) && !sheet && <ActionBar text={copy} onQuote={onQuote && (() => onQuote(selection()))} className={align === "end" ? "-top-s4 left-0" : "-top-s4 right-0"} />}
       {children}
       {copy !== undefined && sheet && <ActionSheet title={title} selected={sheet.selected !== null} text={copy} onQuote={onQuote && (() => onQuote(sheet.selected))} onClose={() => setSheet(null)} />}
     </li>
@@ -225,7 +225,7 @@ export function SelectionQuote({ onQuote }: { onQuote: (id: string, text: string
           onQuote(spot.id, spot.text);
           window.getSelection()?.removeAllRanges();
         }}
-        className="min-h-9 cursor-pointer rounded-small border border-line-3 bg-control px-3 text-small font-medium text-ink shadow-pop hover:bg-raised"
+        className="min-h-[36px] cursor-pointer rounded-key border border-line-3 bg-control px-s3 text-meta font-strong text-ink shadow-lift hover:bg-raised"
       >
         Reply
       </button>

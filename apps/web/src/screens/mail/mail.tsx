@@ -36,12 +36,11 @@ const threadOf = (ref: string) => ref.replace(/\.\d+$/, "");
 
 const MoreSheet = lazy(() => import("../../ui/more-sheet").then((m) => ({ default: m.MoreSheet })));
 
-const PILL = "pointer-events-none fixed inset-x-4 z-20 mx-auto w-fit max-w-[calc(100%-32px)] rounded-control border border-line-2 bg-raised px-4 py-2.5 text-meta";
+const PILL = "pointer-events-none fixed inset-x-s4 z-20 mx-auto w-fit max-w-[calc(100%_-_var(--spacing-s6))] rounded-key border border-line bg-raised px-s4 py-s2 text-meta";
 const PILL_AT = { bottom: "max(16px, env(safe-area-inset-bottom))" };
 const ROW = { gridTemplateColumns: "auto minmax(0,1fr)", outlineOffset: -2 };
 const BAR = { top: 10, bottom: 10, width: 3, borderRadius: "0 9999px 9999px 0" };
 const SUBJECT = { lineHeight: 1.35 };
-const BRASS = { color: "var(--color-brass)" };
 const COLUMNS = { gridTemplateColumns: "372px minmax(0,1fr)" };
 const MARK_SCROLL = { scrollMarginTop: 96 };
 const FADED = { opacity: 0.6 };
@@ -53,15 +52,15 @@ const EMPTY = { paddingTop: 32 };
 const RULED = { background: "var(--color-line)" };
 
 const ACTION =
-  "inline-flex min-h-11 flex-none cursor-pointer items-center gap-1.5 rounded-[10px] border border-line-3 bg-panel px-2.5 text-tag font-medium text-ink-2 hover:text-ink";
-const PICK = "flex min-h-11 w-full cursor-pointer items-center gap-2.5 rounded-[10px] px-2.5 py-1.5 text-left text-body hover:bg-raised";
+  "inline-flex min-h-hit flex-none cursor-pointer items-center justify-center gap-s1 rounded-key border border-line-3 bg-panel px-s2 text-label font-strong text-ink-2 hover:text-ink pointer-coarse:min-w-hit";
+const PICK = "flex min-h-hit w-full cursor-pointer items-center gap-s2 rounded-key px-s2 py-s1 text-left text-body hover:bg-raised";
 
 function RefChips({ codes, world }: { codes: string[]; world: World }) {
   const chips = codes.flatMap((code) => {
     const info = referenceInfo(code, world);
     return info ? [<RefChip key={code} to={referenceHref(info)} kind={info.kind} code={code} title={info.title} />] : [];
   });
-  return chips.length ? <div className="mt-2.5 flex flex-wrap gap-2">{chips}</div> : null;
+  return chips.length ? <div className="mt-s2 flex flex-wrap gap-s2">{chips}</div> : null;
 }
 
 function BotStack({ names, world, ring }: { names: string[]; world: World; ring: string }) {
@@ -69,7 +68,7 @@ function BotStack({ names, world, ring }: { names: string[]; world: World; ring:
   return (
     <span className="flex flex-none items-center" aria-hidden="true">
       {names.slice(0, 4).map((name, at) => (
-        <span key={name} className="flex rounded-full" style={{ outline: "2px solid " + ring, marginLeft: at > 0 ? -4 : undefined, opacity: removed.has(name) ? 0.6 : undefined }}>
+        <span key={name} className={cx("flex rounded-round", at > 0 && "-ml-s1")} style={{ outline: "var(--line-w-rail) solid " + ring, opacity: removed.has(name) ? 0.6 : undefined }}>
           <Avatar name={name} color={botCalled(world.bots, name)?.color} />
         </span>
       ))}
@@ -92,14 +91,14 @@ function AskMenu({ thread, mail, world, wide, onClose }: { thread: MailThread; m
         <Avatar name={bot.name} color={bot.color} size="sm" />
         <span className="min-w-0 [overflow-wrap:anywhere]" data-testid="ask-name">
           {bot.name}
-          {wrote && <span className="text-ink-3"> (wrote it)</span>}
+          {wrote && <span className="text-ink-2"> (wrote it)</span>}
         </span>
       </button>
     </li>
   );
   return (
     <Sheet title={more ? "Ask another bot about " + code : "Ask about " + code} wide={wide} onClose={onClose} pop="ask">
-      <ul className="grid gap-0.5 px-1 pb-1" data-testid="ask-list">
+      <ul className="grid gap-hair px-s1 pb-s1" data-testid="ask-list">
         {more ? (
           <>
             <li>
@@ -108,7 +107,7 @@ function AskMenu({ thread, mail, world, wide, onClose }: { thread: MailThread; m
               </LinkButton>
             </li>
             {others.map((bot) => row(bot, false))}
-            {others.length === 0 && <li className="px-2.5 py-2 text-small text-ink-2">No other bots.</li>}
+            {others.length === 0 && <li className="px-s2 py-s2 text-meta text-ink-2">No other bots.</li>}
           </>
         ) : (
           <>
@@ -135,8 +134,8 @@ function Actions({ thread, mail, world, wide, className, style }: { thread: Mail
   const [open, setOpen] = useState(false);
   const code = mail ? mail.ref : thread.ref;
   return (
-    <div className={cx("flex flex-wrap items-center gap-x-2 gap-y-1", className)} style={style}>
-      <code className="rounded-md bg-raised px-1.5 py-px font-mono text-xs whitespace-nowrap text-ink-2 select-all">{code}</code>
+    <div className={cx("flex flex-wrap items-center gap-x-s2 gap-y-s1", className)} style={style}>
+      <code className="rounded-key bg-raised px-s1 py-nudge font-mono text-label whitespace-nowrap text-ink-2 select-all">{code}</code>
       <CopyButton value={code} label="Copy reference" done={"Copied " + code} testId={"copy-" + code} />
       <div className="relative">
         <button type="button" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-expanded={open} aria-label={"Ask a bot about " + code} className={ACTION} data-testid={"ask-" + code}>
@@ -179,7 +178,7 @@ function ThreadTop({ thread, world }: { thread: MailThread; world: World }) {
         </Suspense>
       )}
       {state !== "idle" && (
-        <p role={state === "copied" ? "status" : "alert"} className={cx(PILL, state === "copied" ? "text-ink" : "text-red")} style={PILL_AT}>
+        <p role={state === "copied" ? "status" : "alert"} className={cx(PILL, state === "copied" ? "text-ink" : "text-stop")} style={PILL_AT}>
           {state === "copied" ? "Copied " + thread.ref : "Could not copy. Select the reference."}
         </p>
       )}
@@ -192,14 +191,15 @@ function ThreadRow({ thread, world, on, wide, motion }: { thread: MailThread; wo
   const lane = world.lanes.find((l) => l.id === thread.laneId)?.name;
   const bots = listBots(thread);
   const subject = (
-    <b className="min-w-0 flex-1 text-prose font-medium [overflow-wrap:anywhere]" style={SUBJECT}>
+    <b className="min-w-0 flex-1 text-body font-strong [overflow-wrap:anywhere]" style={SUBJECT}>
       {thread.subject}
     </b>
   );
-  const time = <time className="flex-none text-xs text-ink-3">{clockTime(new Date(lastMailAt(thread)).toISOString())}</time>;
-  const code = <code className={cx("rounded-md bg-raised px-1.5 py-px font-mono text-xs text-ink-2", wide ? "flex-none" : "ml-auto")}>{thread.ref}</code>;
+  const quiet = on ? "text-ink-2" : "text-ink-3";
+  const time = <time className={cx("flex-none text-label", quiet)}>{clockTime(new Date(lastMailAt(thread)).toISOString())}</time>;
+  const code = <code className={cx("rounded-key bg-raised px-s1 py-nudge font-mono text-label text-ink-2", wide ? "flex-none" : "ml-auto")}>{thread.ref}</code>;
   const who = (
-    <span className="min-w-0 flex-1 text-small text-ink-2 [overflow-wrap:anywhere]" data-testid="mail-row-bots">
+    <span className="min-w-0 flex-1 text-meta text-ink-2 [overflow-wrap:anywhere]" data-testid="mail-row-bots">
       {bots.text}
     </span>
   );
@@ -222,36 +222,36 @@ function ThreadRow({ thread, world, on, wide, motion }: { thread: MailThread; wo
           go(href.mail(thread.ref), { replace: true });
         }}
         aria-current={on ? "true" : undefined}
-        className={cx("relative grid items-start gap-3 py-3 pr-3.5 pl-4", on ? "bg-control" : "hover:bg-hover")}
+        className={cx("relative grid items-start gap-s3 py-s3 pr-s3 pl-s4", on ? "bg-control" : "hover:bg-panel")}
         style={ROW}
         data-testid="mail-row"
         data-id={thread.ref}
       >
-        {on && <span aria-hidden="true" className="absolute left-0 bg-brass" style={BAR} />}
-        <span className="mt-0.5">
+        {on && <span aria-hidden="true" className="absolute left-0 bg-hand" style={BAR} />}
+        <span className="mt-hair">
           <BotStack names={bots.shown} world={world} ring={on ? "var(--color-control)" : "var(--color-panel)"} />
         </span>
-        <span className="grid min-w-0 gap-0.5">
+        <span className="grid min-w-0 gap-hair">
           {wide ? (
             <>
-              <span className="flex items-baseline gap-2.5">
+              <span className="flex items-baseline gap-s2">
                 {code}
                 {subject}
               </span>
-              <span className="flex items-baseline gap-2.5">
+              <span className="flex items-baseline gap-s2">
                 {who}
                 {time}
               </span>
-              {place && <span className="text-small text-ink-3">{place}</span>}
+              {place && <span className={cx("text-meta", quiet)}>{place}</span>}
             </>
           ) : (
             <>
-              <span className="flex items-baseline gap-2.5">
+              <span className="flex items-baseline gap-s2">
                 {subject}
                 {time}
               </span>
               {who}
-              <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-small text-ink-3">
+              <span className={cx("flex flex-wrap items-center gap-x-s2 gap-y-s1 text-meta", quiet)}>
                 {place}
                 {code}
               </span>
@@ -270,54 +270,54 @@ function MailCard({ mail, thread, world, removed, now, mark, wide, note }: { mai
   return (
     <li
       id={"mail-" + mail.ref}
-      className={cx("rounded-panel border px-3.5 pt-3 pb-1.5", marked ? "border-brass-edge bg-control" : "border-line bg-panel")}
+      className={cx("rounded-panel border px-s3 pt-s3 pb-s1", marked ? "border-hand-edge bg-control" : "border-line bg-panel")}
       style={MARK_SCROLL}
       data-testid="mail-item"
       data-ref={mail.ref}
     >
       {marked && (
-        <p className="eyebrow mb-2 inline-flex items-center gap-1.5" style={BRASS} data-testid="mail-marked">
+        <p className="eyebrow mb-s2 inline-flex items-center gap-s1 text-hand" data-testid="mail-marked">
           <Icon name="link" size="xs" />
           Linked mail
         </p>
       )}
-      <div className="flex items-start gap-2.5">
+      <div className="flex items-start gap-s2">
         <span className="flex" style={removed.has(mail.from) ? FADED : undefined}>
           <Avatar name={mail.from} color={botCalled(world.bots, mail.from)?.color} />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-x-2 text-meta text-ink-2" style={ROW_GAP}>
+          <div className="flex flex-wrap items-baseline gap-x-s2 text-meta text-ink-2" style={ROW_GAP}>
             <span className="min-w-0 flex-1 [overflow-wrap:anywhere]" data-testid="mail-to">
-              <b className="font-semibold text-ink">{nameOf(mail.from, removed)}</b> to {toNames(mail, removed)}
+              <b className="font-strong text-ink">{nameOf(mail.from, removed)}</b> to {toNames(mail, removed)}
             </span>
-            <time className="flex-none text-small text-ink-2">{whenText(mail.at, now)}</time>
+            <time className="flex-none text-meta text-ink-2">{whenText(mail.at, now)}</time>
           </div>
           {cc && (
-            <p className="mt-0.5 text-small text-ink-2 [overflow-wrap:anywhere]" data-testid="mail-cc">
+            <p className="mt-hair text-meta text-ink-2 [overflow-wrap:anywhere]" data-testid="mail-cc">
               {cc}
             </p>
           )}
         </div>
       </div>
       {note && (
-        <p className="mt-2.5 flex gap-2 rounded-small bg-well px-3 py-2 text-small text-ink-2" data-testid="mail-removed-note">
-          <Icon name="lock" size="xs" className="mt-[3px]" />
+        <p className="mt-s2 flex gap-s2 rounded-key bg-well px-s3 py-s2 text-meta text-ink-2" data-testid="mail-removed-note">
+          <Icon name="lock" size="xs" className="mt-hair" />
           <span className="min-w-0 [overflow-wrap:anywhere]">{note}</span>
         </p>
       )}
       {forward && (
-        <div className="mt-2.5 rounded-small border border-line bg-well px-3" style={QUOTE_END} data-testid="mail-forward">
-          <Link to={href.mail(forward.ref)} className="inline-flex min-h-11 items-center gap-1.5 text-meta font-medium text-link" data-testid="forwarded-from">
+        <div className="mt-s2 rounded-key border border-line bg-well px-s3" style={QUOTE_END} data-testid="mail-forward">
+          <Link to={href.mail(forward.ref)} className="inline-flex min-h-hit items-center gap-s1 text-meta font-strong text-inherit underline hover:text-hand" data-testid="forwarded-from">
             <Icon name="oneway" size="xs" />
             {forward.line}
             <Icon name="chevR" size="xs" />
           </Link>
           {forward.quote && (
-            <blockquote className="border-l-2 border-line-3 pl-3" data-testid="forward-quote">
+            <blockquote className="border-l-2 border-line-3 pl-s3" data-testid="forward-quote">
               <p className="text-meta text-ink-2 [overflow-wrap:anywhere]">
                 {forward.quote.writerToRecipient}, {forward.quote.time}
               </p>
-              <p className="mt-1 text-body leading-[1.55] whitespace-pre-line [overflow-wrap:anywhere]">
+              <p className="mt-s1 text-body leading-body whitespace-pre-line [overflow-wrap:anywhere]">
                 <LinkedText parts={linkedParts(forward.quote.text, world)} />
               </p>
               <RefChips codes={forward.quote.refs} world={world} />
@@ -325,18 +325,18 @@ function MailCard({ mail, thread, world, removed, now, mark, wide, note }: { mai
           )}
         </div>
       )}
-      <p className="mt-2.5 text-body leading-[1.55] whitespace-pre-line [overflow-wrap:anywhere]">
+      <p className="mt-s2 text-body leading-body whitespace-pre-line [overflow-wrap:anywhere]">
         <LinkedText parts={linkedParts(mail.text, world)} />
       </p>
       <RefChips codes={mail.refs} world={world} />
       {(mail.forwardedBy ?? []).map((item) => (
-        <Link key={item.mail} to={href.mail(item.mail)} className="mt-1.5 flex min-h-11 items-center gap-1.5 text-meta font-medium text-link [overflow-wrap:anywhere]" data-testid="forwarded-by">
+        <Link key={item.mail} to={href.mail(item.mail)} className="mt-s1 flex min-h-hit items-center gap-s1 text-meta font-strong text-inherit underline [overflow-wrap:anywhere] hover:text-hand" data-testid="forwarded-by">
           <Icon name="twoway" size="xs" className="flex-none" />
           <span className="min-w-0">{forwardedByLine(item, removed)}</span>
           <Icon name="chevR" size="xs" className="flex-none" />
         </Link>
       ))}
-      <Actions thread={thread} mail={mail} world={world} wide={wide} className="mt-2.5 border-t border-line" style={ACTIONS_TOP} />
+      <Actions thread={thread} mail={mail} world={world} wide={wide} className="mt-s2 border-t border-line" style={ACTIONS_TOP} />
     </li>
   );
 }
@@ -377,56 +377,56 @@ function ThreadView({ thread, world, now, mark, wide, phone }: { thread: MailThr
   return (
     <article aria-labelledby="mail-subject" data-testid="mail-thread">
       {!wide && !phone && (
-        <BackLink to={href.mail()} className="-ml-1">
+        <BackLink to={href.mail()} className="-ml-s1">
           Mail
         </BackLink>
       )}
-      <div className={wide ? "sticky top-0 z-10 -mx-1 border-b border-line bg-page px-1 py-2" : undefined}>
-        <Actions thread={thread} mail={null} world={world} wide={wide} className={wide ? undefined : "mt-1"} />
+      <div className={wide ? "sticky top-0 z-10 -mx-s1 border-b border-line bg-page px-s1 py-s2" : undefined}>
+        <Actions thread={thread} mail={null} world={world} wide={wide} className={wide ? undefined : "mt-s1"} />
       </div>
-      <h2 id="mail-subject" className="mt-3 text-title leading-[1.3] font-bold tracking-[-.01em] [overflow-wrap:anywhere]">
+      <h2 id="mail-subject" className="mt-s3 text-title leading-snug font-strong [overflow-wrap:anywhere]">
         {thread.subject}
       </h2>
       {thread.projectId ? (
-        <p className="eyebrow mt-1.5 flex items-center gap-1.5">
+        <p className="eyebrow mt-s1 flex items-center gap-s1">
           <Icon name="mail" size="xs" />
           {project}
           {lane ? " > " + lane : ""}
         </p>
       ) : null}
-      <div className="mt-2.5 flex items-center gap-2.5">
+      <div className="mt-s2 flex items-center gap-s2">
         <BotStack names={botsOrdered(thread)} world={world} ring="var(--color-page)" />
         <p className="min-w-0 text-meta text-ink-2 [overflow-wrap:anywhere]" data-testid="mail-bots">
           {botsLine(thread, removed)}
         </p>
       </div>
       {card && (
-        <Link to={href.queue(card.id)} className="mt-2.5 inline-flex min-h-11 max-w-full items-center gap-2 rounded-small border border-line-3 bg-panel px-2.5 py-1.5 text-meta" data-testid="behind-card">
+        <Link to={href.queue(card.id)} className="mt-s2 inline-flex min-h-hit max-w-full items-center gap-s2 rounded-key border border-line-3 bg-panel px-s2 py-s1 text-meta" data-testid="behind-card">
           <PriorityTile priority={card.priority} />
           <span className="min-w-0 [overflow-wrap:anywhere]">Behind the Task Card: {card.title}</span>
           <Icon name="chevR" size="xs" className="flex-none text-ink-3" />
         </Link>
       )}
-      <p className="mt-3 flex items-start gap-1.5 text-small text-ink-2" data-testid="mail-read-only">
-        <Icon name="lock" size="xs" className="mt-[3px]" />
+      <p className="mt-s3 flex items-start gap-s1 text-meta text-ink-2" data-testid="mail-read-only">
+        <Icon name="lock" size="xs" className="mt-hair" />
         Read only. Your inbox and sent mail.
       </p>
       {unread ? (
         readFailed ? (
-          <ErrorLine className="mt-3.5" onRetry={() => setTries((n) => n + 1)}>
+          <ErrorLine className="mt-s3" onRetry={() => setTries((n) => n + 1)}>
             Could not load this thread.
           </ErrorLine>
         ) : (
-          <LoadingBars className="mt-3.5" rows={3} height={96} />
+          <LoadingBars className="mt-s3" rows={3} height={96} />
         )
       ) : (
         <>
           {thread.omitted ? (
-            <p ref={leftOut} className="mt-3.5 text-small text-ink-2" data-testid="mail-omitted">
+            <p ref={leftOut} className="mt-s3 text-meta text-ink-2" data-testid="mail-omitted">
               {thread.omitted === 1 ? "1 earlier mail not shown." : thread.omitted + " earlier mails not shown."}
             </p>
           ) : null}
-          <ol className="mt-3.5 grid gap-2.5">
+          <ol className="mt-s3 grid gap-s2">
             {thread.mails.map((mail) => (
               <MailCard key={mail.ref} mail={mail} thread={thread} world={world} removed={removed} now={now} mark={mark} wide={wide} note={noteOf(mail)} />
             ))}
@@ -504,8 +504,8 @@ export function MailScreen({ mailRef, wide }: { mailRef: string | null; wide: bo
   });
 
   const title = <Title>Mail</Title>;
-  const head = phone ? null : <Head className="px-2 wide:px-8">{title}</Head>;
-  const named = phone && (mailRef ? <h1 className="sr-only">Mail</h1> : <div className="pb-2">{title}</div>);
+  const head = phone ? null : <Head className="px-s2 wide:px-s6">{title}</Head>;
+  const named = phone && (mailRef ? <h1 className="sr-only">Mail</h1> : <div className="pb-s2">{title}</div>);
   const top = !phone ? null : !mailRef ? (
     <FloatListTop label="Mail actions" dot={dot} />
   ) : thread && world ? (
@@ -521,7 +521,7 @@ export function MailScreen({ mailRef, wide }: { mailRef: string | null; wide: bo
       <div className="mx-auto w-full max-w-[1240px]">
         {top}
         {head}
-        <div className={cx("px-4 wide:px-8", phone ? FLOAT_TOP_PAD : "pt-2")}>
+        <div className={cx("px-s4 wide:px-s6", phone ? FLOAT_TOP_PAD : "pt-s2")}>
           {named}
           {(world ? listFailed : failed) ? (
             <ErrorLine onRetry={world ? () => setListTries((n) => n + 1) : retry}>Could not load the Mail.</ErrorLine>
@@ -546,8 +546,8 @@ export function MailScreen({ mailRef, wide }: { mailRef: string | null; wide: bo
   );
 
   const list = (
-    <section aria-label="Mail threads" className="grid grid-cols-1 content-start gap-2">
-      <div className="flex items-center gap-2">
+    <section aria-label="Mail threads" className="grid grid-cols-1 content-start gap-s2">
+      <div className="flex items-center gap-s2">
         <SearchField value={query.text} onText={(text) => setQuery({ ...query, text })} label="Search mail" className="min-w-0 flex-1" testId="mail-search" />
         <div className="relative">
           <FilterPick groups={view.groups} count={view.filterCount} value={(key) => query.filters[key as MailFilterKey]} onPick={pickFilter} onClear={clear} wide={wide} />
@@ -559,11 +559,11 @@ export function MailScreen({ mailRef, wide }: { mailRef: string | null; wide: bo
       {nothing ? (
         !(wide && none) && emptyNode
       ) : (
-        <div className="grid gap-1" data-testid="mail-list">
+        <div className="grid gap-s1" data-testid="mail-list">
           {dayGroups(rows.shown, now, (row) => row.item).map((day) => (
-            <section key={day.key} aria-label={day.heading} className="grid gap-1.5" data-testid="mail-day">
-              <h3 className="eyebrow mt-3 px-1">{day.heading}</h3>
-              <ul className="grid gap-px overflow-hidden rounded-panel border border-line" style={RULED}>
+            <section key={day.key} aria-label={day.heading} className="grid gap-s1" data-testid="mail-day">
+              <h3 className="eyebrow mt-s3 px-s1">{day.heading}</h3>
+              <ul className="grid gap-nudge overflow-hidden rounded-panel border border-line" style={RULED}>
                 {day.threads.map((row) => (
                   <ThreadRow key={row.id} thread={row.item} world={world} on={wide && !row.leaving && row.id === shownRef} wide={wide} motion={rowMotion(row, rows.drop)} />
                 ))}
@@ -587,10 +587,10 @@ export function MailScreen({ mailRef, wide }: { mailRef: string | null; wide: bo
     <div className="mx-auto w-full max-w-[1240px]" data-testid="mail">
       {top}
       {head}
-      <div className={cx("px-4 pb-12 wide:grid wide:items-start wide:gap-7 wide:px-8", phone ? FLOAT_TOP_PAD : "pt-1")} style={wide ? COLUMNS : undefined}>
+      <div className={cx("px-s4 pb-s7 wide:grid wide:items-start wide:gap-s5 wide:px-s6", phone ? FLOAT_TOP_PAD : "pt-s1")} style={wide ? COLUMNS : undefined}>
         {named}
         {showList && (
-          <div ref={listBox} className="wide:sticky wide:top-3">
+          <div ref={listBox} className="wide:sticky wide:top-s3">
             {list}
           </div>
         )}

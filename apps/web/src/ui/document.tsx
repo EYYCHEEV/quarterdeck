@@ -6,12 +6,11 @@ import { Icon } from "./icon";
 import { Link } from "./link";
 import { MoreSheet } from "./more-sheet";
 import { usePhone } from "./phone";
-import { DOCUMENT_STYLE } from "./document-style";
 
 type Top = { to: string; label: string; screen: string; tools?: ReactNode; menu?: ReactNode };
 
 export function DocumentStyle() {
-  return <style>{DOCUMENT_STYLE}</style>;
+  return <link rel="stylesheet" href="/document.css" precedence="document" />;
 }
 
 function PhoneTop({ to, label, screen, tools, menu }: Top) {

@@ -30,14 +30,14 @@ function Confirm({
 }) {
   return (
     <SheetDialog label={label} pop={pop} onClose={onCancel} returnTo={returnTo}>
-      <div className="sheet-body grid min-h-0 flex-1 content-start gap-3 overflow-y-auto px-5 pt-5">
-        <h2 className="text-title leading-[1.25] font-bold tracking-[-.01em]">{title}</h2>
+      <div className="sheet-body grid min-h-0 flex-1 content-start gap-s3 overflow-y-auto px-s4 pt-s4">
+        <h2 className="text-title font-strong">{title}</h2>
         {children}
-        <div className="mt-2 grid grid-cols-2 gap-3">
+        <div className="mt-s2 grid grid-cols-2 gap-s3">
           <Button kind="plain" onClick={onCancel} data-autofocus="" data-testid="confirm-cancel">
             {cancel}
           </Button>
-          <Button kind={danger ? "outline" : "primary"} disabled={busy} onClick={onConfirm} className={danger ? "sheet-danger text-red" : undefined} data-testid="confirm-yes">
+          <Button kind={danger ? "outline" : "primary"} disabled={busy} onClick={onConfirm} className={danger ? "sheet-danger text-stop" : undefined} data-testid="confirm-yes">
             {confirm}
           </Button>
         </div>
@@ -75,22 +75,22 @@ export function CleanupDialog({ days, onCancel, onConfirm }: { days: CleanupDays
       <p className="text-body text-ink" data-testid="cleanup-count">
         Today this would remove {today.files} files, {today.size}, none opened since {today.since}.
       </p>
-      <p className="text-body font-semibold text-red">Removed files cannot be brought back.</p>
+      <p className="text-body font-strong text-stop">Removed files cannot be brought back.</p>
       <Button kind="ghost" onClick={() => setListed((on) => !on)} aria-expanded={listed} className="sheet-act-start" data-testid="cleanup-list">
         See the list
       </Button>
       {listed && (
-        <ul className="settings-rows grid rounded-control border border-line bg-well" data-testid="cleanup-files">
+        <ul className="settings-rows grid rounded-key border border-line bg-well" data-testid="cleanup-files">
           {SAMPLE.map(([file, between, when]) => (
-            <li key={file} className="grid gap-0.5 px-3.5 py-2.5">
-              <span className="flex items-baseline justify-between gap-3 text-meta">
-                <b className="min-w-0 truncate font-semibold">{file}</b>
-                <time className="flex-none text-small text-ink-3">{when}</time>
+            <li key={file} className="grid gap-hair px-s3 py-s2">
+              <span className="flex items-baseline justify-between gap-s3 text-meta">
+                <b className="min-w-0 truncate font-strong">{file}</b>
+                <time className="flex-none text-meta text-ink-3">{when}</time>
               </span>
-              <span className="text-small text-ink-2">{between}</span>
+              <span className="text-meta text-ink-2">{between}</span>
             </li>
           ))}
-          <li className="px-3.5 py-2.5 text-small text-ink-2">and {today.files - SAMPLE.length} more</li>
+          <li className="px-s3 py-s2 text-meta text-ink-2">and {today.files - SAMPLE.length} more</li>
         </ul>
       )}
     </Confirm>

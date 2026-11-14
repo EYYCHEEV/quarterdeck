@@ -47,14 +47,14 @@ function PathLine({ card, world }: { card: Card; world: World }) {
   const project = world.projects.find((p) => p.id === card.projectId);
   const lane = world.lanes.find((l) => l.id === card.laneId);
   return (
-    <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1 text-note">
-      <Link to={href.projects(card.projectId)} className="inline-flex min-h-11 items-center rounded-small px-1 font-semibold text-ink hover:bg-control">
+    <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-s1 text-body">
+      <Link to={href.projects(card.projectId)} className="inline-flex min-h-hit items-center rounded-key px-s1 font-strong text-ink hover:bg-control">
         {project?.name ?? card.projectId}
       </Link>
       <span aria-hidden="true" className="text-ink-3">
         &gt;
       </span>
-      <Link to={href.lane(card.laneId)} className="inline-flex min-h-11 items-center rounded-small px-1 font-medium text-ink-2 hover:bg-control hover:text-ink">
+      <Link to={href.lane(card.laneId)} className="inline-flex min-h-hit items-center rounded-key px-s1 font-strong text-ink-2 hover:bg-control hover:text-ink">
         {lane?.name ?? card.laneId}
       </Link>
     </span>
@@ -169,20 +169,20 @@ export function TaskCardScreen({ cardId, pane, auto = false, toList }: { cardId:
     head = (
       <>
         {(showReceipt || afterSend) && toList && (
-          <div className="flex items-center pt-1">
+          <div className="flex items-center pt-s1">
             <BackLink to={href.queue(cardId)} onClick={toList}>
               Queue{waitingText}
             </BackLink>
           </div>
         )}
         {answered && !showReceipt && !afterSend && (
-          <div className="flex items-center pt-1">
+          <div className="flex items-center pt-s1">
             <BackLink to={href.queue(cardId)} onClick={toAnswered}>
               Answered
             </BackLink>
           </div>
         )}
-        <div className="flex items-center gap-2 pt-[max(8px,env(safe-area-inset-top))]">
+        <div className="flex items-center gap-s2 pt-[max(var(--spacing-s2),env(safe-area-inset-top))]">
           {card && world ? <PathLine card={card} world={world} /> : <span className="flex-1" />}
           {card && <PriorityTile priority={card.priority} />}
           {card && toggle}
@@ -191,7 +191,7 @@ export function TaskCardScreen({ cardId, pane, auto = false, toList }: { cardId:
     );
   } else {
     head = (
-      <Head menu={false} className="pr-2.5 pl-2">
+      <Head menu={false} className="pr-s2 pl-s2">
         {answered ? (
           <BackLink to={href.queue()} onClick={toAnswered}>
             Answered
@@ -217,13 +217,13 @@ export function TaskCardScreen({ cardId, pane, auto = false, toList }: { cardId:
   } else if (!world || readFailed) {
     const limited = qd.limited?.() ?? false;
     body = (
-      <ErrorLine className="mt-4" onRetry={world && done?.failed ? () => setReads((n) => n + 1) : retry} retryLabel={limited ? "Try again" : undefined}>
+      <ErrorLine className="mt-s4" onRetry={world && done?.failed ? () => setReads((n) => n + 1) : retry} retryLabel={limited ? "Try again" : undefined}>
         {openFailedText(limited)}
       </ErrorLine>
     );
   } else if (!card) {
     body = (
-      <Empty className="mt-4" action={<Link to={href.queue()} className="inline-flex min-h-11 items-center px-1.5 text-meta text-link">Back to the Queue</Link>}>
+      <Empty className="mt-s4" action={<Link to={href.queue()} className="inline-flex min-h-hit items-center px-s1 text-meta text-inherit underline hover:text-hand">Back to the Queue</Link>}>
         This Task Card is not in the example data.
       </Empty>
     );
@@ -238,7 +238,7 @@ export function TaskCardScreen({ cardId, pane, auto = false, toList }: { cardId:
     body = (
       <article aria-labelledby="card-title" data-card={card.id} className={qd.openCard ? ARRIVE : undefined}>
         {failed && (
-          <ErrorLine className="mt-2" onRetry={retry}>
+          <ErrorLine className="mt-s2" onRetry={retry}>
             Could not refresh. This is the card as last loaded.
           </ErrorLine>
         )}
@@ -247,16 +247,16 @@ export function TaskCardScreen({ cardId, pane, auto = false, toList }: { cardId:
         <Recap card={card} world={world} />
         <Evidence key={"evidence " + card.id} card={card} world={world} now={now} wide={pane} />
         {answered ? <ReadOnlyOptions card={card} whole={whole} /> : <AnswerFlow key={card.id} card={card} world={world} whole={whole} keys={pane} />}
-        <div className="mt-6 border-t border-line pt-5">
-          <Button kind="outline" block className="min-h-12" onClick={() => talkTo(card, world)} data-testid="talk-to">
+        <div className="mt-s5 border-t border-line pt-s4">
+          <Button kind="outline" block className="min-h-s7" onClick={() => talkTo(card, world)} data-testid="talk-to">
             <ChatGlyph size={16} />
             Talk to {card.owner}
           </Button>
         </div>
         <Folds card={card} unblocks={recapOf(card, world).tasks} whole={whole} versionsAsked={versionsAsked} moreAsked={moreAsked} now={now} />
-        {phone && <div className="mt-4 flex justify-end">{toggle}</div>}
+        {phone && <div className="mt-s4 flex justify-end">{toggle}</div>}
         {pane && (
-          <div className="mt-4 hidden justify-end any-pointer-fine:flex">
+          <div className="mt-s4 hidden justify-end any-pointer-fine:flex">
             <PillButton onClick={() => setKeyList(true)} data-testid="keys-btn">
               ? Keys
             </PillButton>
@@ -269,15 +269,15 @@ export function TaskCardScreen({ cardId, pane, auto = false, toList }: { cardId:
   }
 
   return (
-    <div className={cx("relative mx-auto w-full max-w-[720px]", pane ? "pb-16" : "px-0 pb-16")} data-testid="task-card">
+    <div className={cx("relative mx-auto w-full max-w-[720px]", pane ? "pb-[64px]" : "px-0 pb-[64px]")} data-testid="task-card">
       {showReceipt && !phone && (
-        <div className={cx(pane ? "pt-[max(8px,env(safe-area-inset-top))]" : "px-4 pt-[max(12px,env(safe-area-inset-top))]")}>
+        <div className={cx(pane ? "pt-[max(var(--spacing-s2),env(safe-area-inset-top))]" : "px-s4 pt-[max(var(--spacing-s3),env(safe-area-inset-top))]")}>
           <DoneLine>{receipt.text}</DoneLine>
         </div>
       )}
       {head}
-      <div className={cx(pane ? "pt-1" : "px-4 pt-1", phone && FLOAT_TOP_PAD)}>
-        {showReceipt && phone && <DoneLine className="mb-3">{receipt.text}</DoneLine>}
+      <div className={cx(!pane && "px-s4", phone ? FLOAT_TOP_PAD : "pt-s1")}>
+        {showReceipt && phone && <DoneLine className="mb-s3">{receipt.text}</DoneLine>}
         {body}
       </div>
     </div>

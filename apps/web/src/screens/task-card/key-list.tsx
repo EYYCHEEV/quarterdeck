@@ -15,18 +15,18 @@ export function KeyList({ owner, approval, onClose }: { owner: string; approval:
   return (
     <Dialog label="Keys (Mac, or iPad with a keyboard)" pop="keys" onClose={onClose}>
       <DialogHead title="Keys (Mac, or iPad with a keyboard)" onClose={onClose} />
-      <div className="overflow-y-auto px-4 py-3">
-        <dl className="m-0 grid grid-cols-[96px_minmax(0,1fr)] gap-x-3 gap-y-2 text-body">
+      <div className="overflow-y-auto px-s4 py-s3">
+        <dl className="m-0 grid grid-cols-[96px_minmax(0,1fr)] gap-x-s3 gap-y-s2 text-body">
           {rows(owner, approval).map(([keys, what]) => (
             <div key={keys} className="contents">
               <dt>
-                <kbd className="rounded-md border border-line-2 bg-control px-1.5 py-px font-mono text-meta whitespace-pre text-ink">{keys}</kbd>
+                <kbd className="rounded-key border border-line bg-control px-s1 py-nudge font-mono text-meta whitespace-pre text-ink">{keys}</kbd>
               </dt>
               <dd className="m-0 text-ink-2">{what}</dd>
             </div>
           ))}
         </dl>
-        <p className="mt-3 text-meta text-ink-2">Letter keys pause while you type a note.</p>
+        <p className="mt-s3 text-meta text-ink-2">Letter keys pause while you type a note.</p>
       </div>
     </Dialog>
   );
