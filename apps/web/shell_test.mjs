@@ -6103,6 +6103,46 @@ it("Server Chat on a phone: Talk to on a fresh load needs no chat list read, put
 
 const quoting = (extra = {}) => ({ shape: (body) => ({ ...body, features: ["quote"] }), ...extra });
 
+const serverMail = async (p) => {
+  const payload = (name) => JSON.parse(readFileSync(new URL("./src/data/server-payloads/mail/" + name, import.meta.url), "utf8").replaceAll("bot-b", "iris"));
+  const list = payload("list-5-threads.json");
+  const thread = payload("thread-sent-and-received.json");
+  await p.route("**/captain/mail", (route) => route.fulfill({ status: 200, headers: { "Content-Type": list.headers["Content-Type"], ETag: list.headers.ETag }, body: JSON.stringify(list.body) }));
+  await p.route("**/captain/mail/MT-3", (route) => route.fulfill({ status: 200, headers: { "Content-Type": thread.headers["Content-Type"] }, body: JSON.stringify(thread.body) }));
+};
+
+it("Server Mail on a phone: with Mail as the first screen he opens, the chat list is read without the menu, and Ask offers the bots", PHONE, async (p) => {
+  await serverBuildChat(p);
+  await serverMail(p);
+  const listed = p.waitForResponse((response) => new URL(response.url()).pathname === "/captain/api/chats", { timeout: 10_000 }).then(() => true, () => false);
+  await open(p, "/mail/MT-3");
+  await T(p, "ask-MT-3.1").waitFor();
+  equal(await listed, true, "the chat list was read with only Mail open");
+  await T(p, "ask-MT-3.1").tap();
+  await T(p, "ask-another").tap();
+  equal((await T(p, "ask-bot").count()) > 0, true, "Another bot offers the bots");
+});
+
+it("Server Mail on the Mac: with quote listed, Ask then Send posts one line about the mail and his words as plain text with no quote", MAC, async (p) => {
+  const asked = await serverBuildChat(p, quoting());
+  await serverMail(p);
+  await open(p, "/mail/MT-3");
+  await T(p, "chat-row").first().waitFor();
+  await T(p, "ask-MT-3.1").click();
+  await T(p, "ask-another").click();
+  await T(p, "ask-bot").first().click();
+  const box = T(p, "chat-input");
+  await box.waitFor();
+  const line = await box.inputValue();
+  equal([/^About Mail MT-3\.1: ".+"\n$/.test(line), await T(p, "chat-quote").count()], [true, 0], "the box holds one line about the mail and there is no quote box: " + JSON.stringify(line));
+  await box.focus();
+  await box.evaluate((el) => el.setSelectionRange(el.value.length, el.value.length));
+  await p.keyboard.type("Is this still right?");
+  await T(p, "chat-send").click();
+  await sendSettles(p.locator('[data-message-id="iris-m31"]'));
+  equal(asked.posts.map((body) => [Object.keys(body).sort(), body.text]), [[["bot", "clientId", "csrf", "text"], line + "Is this still right?"]], "POSTs");
+});
+
 it("Server Chat on a phone: with quote listed, Reply in the held menu puts the message above the box, Send posts its id and words with his text, and the sent row shows the quote", PHONE, async (p) => {
   const asked = await serverBuildChat(p, quoting());
   await chatOpened(p);
