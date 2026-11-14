@@ -715,6 +715,133 @@ test("a third 502 after the two retries refuses with Not Delivered, with three P
   assert.deepEqual(POSTS(h, from), ["client-13", "client-13", "client-13"]);
 });
 
+const busy = (seconds, headers = {}) => json(seconds === undefined ? { error: "mail" } : { error: "mail", retryAfter: seconds }, 502, headers);
+
+const busyOnce = (reply) => {
+  let first = true;
+  return (body, init, server) => {
+    if (!first) return store(body, server);
+    first = false;
+    return reply();
+  };
+};
+
+test("a 502 that names a retry time makes the send wait that long, then post once more with the same clientId and the first text, with no thread read between, and the send resolves with one row", async () => {
+  const h = serve(lib, { post: busyOnce(() => busy(12)) });
+  await h.boot();
+  await h.source.chat.openThread("steward");
+  const phases = [];
+  const from = h.calls.length;
+  const state = watchSend(h, h.source.chat.send("steward", { text: "hello", clientId: "client-b1" }, (phase, seconds) => phases.push(seconds === undefined ? phase : phase + " " + seconds)));
+  await pass(h, 11_800);
+  assert.equal(state.done, false);
+  assert.deepEqual(h.requests(from), [TOKEN, POST]);
+  assert.deepEqual(phases, ["busy 12"]);
+  await pass(h, 500);
+  assert.equal(state.value?.clientId, "client-b1");
+  assert.deepEqual(h.requests(from), [TOKEN, POST, TOKEN, POST]);
+  assert.deepEqual(h.calls.slice(from).filter((call) => call.method === "POST").map((call) => [call.body.clientId, call.body.text]), [["client-b1", "hello"], ["client-b1", "hello"]]);
+  assert.deepEqual(phases, ["busy 12", "sending"]);
+  assert.equal(h.threads.get("steward").filter((one) => one.clientId === "client-b1").length, 1);
+});
+
+test("a second busy answer on that one resend refuses with Not Delivered, with two POSTs in all and no further try", async () => {
+  const h = serve(lib, { post: () => busy(3) });
+  await h.boot();
+  await h.source.chat.openThread("steward");
+  const from = h.calls.length;
+  const state = watchSend(h, h.source.chat.send("steward", { text: "hello", clientId: "client-b2" }));
+  await pass(h, 4_000);
+  assert.ok(refusedWith("Not Delivered")(state.error), String(state.error));
+  assert.deepEqual(h.requests(from), [TOKEN, POST, TOKEN, POST]);
+  await pass(h, 30_000);
+  assert.deepEqual(POSTS(h, from), ["client-b2", "client-b2"]);
+});
+
+test("a resend after a busy answer that is not confirmed is looked for once in the thread and then fails, with no further try", async () => {
+  let tries = 0;
+  const post = () => {
+    tries += 1;
+    return tries === 1 ? busy(3) : new Response("", { status: 503 });
+  };
+  const h = serve(lib, { post });
+  await h.boot();
+  await h.source.chat.openThread("steward");
+  const from = h.calls.length;
+  const state = watchSend(h, h.source.chat.send("steward", { text: "hello", clientId: "client-b3" }));
+  await pass(h, 4_000);
+  assert.equal(state.error?.name, "NotConfirmed");
+  assert.deepEqual(h.requests(from), [TOKEN, POST, TOKEN, POST, THREAD("steward")]);
+  await pass(h, 30_000);
+  assert.deepEqual(POSTS(h, from), ["client-b3", "client-b3"]);
+});
+
+test("a busy wait that ends while the tab is hidden posts nothing until the tab returns, then posts once", async () => {
+  const h = serve(lib, { post: busyOnce(() => busy(5)) });
+  await h.boot();
+  await h.source.chat.openThread("steward");
+  const from = h.calls.length;
+  const state = watchSend(h, h.source.chat.send("steward", { text: "hello", clientId: "client-b4" }));
+  await pass(h, 1_000);
+  h.hide();
+  await pass(h, 10_000);
+  assert.equal(state.done, false);
+  assert.deepEqual(POSTS(h, from), ["client-b4"]);
+  h.show();
+  await pass(h, 500);
+  assert.equal(state.value?.clientId, "client-b4");
+  assert.deepEqual(POSTS(h, from), ["client-b4", "client-b4"]);
+});
+
+test("when the session ends during a busy wait, nothing more is posted and the send says sign in again", async () => {
+  let end = false;
+  const h = serve(lib, { post: () => busy(20), read: (path) => (end && path.startsWith("/captain/api/chat?") ? json({ error: "session" }, 401) : null) });
+  await h.boot();
+  await h.source.chat.openThread("steward");
+  const from = h.calls.length;
+  const state = watchSend(h, h.source.chat.send("steward", { text: "hello", clientId: "client-b6" }));
+  await pass(h, 6_000);
+  assert.equal(state.done, false);
+  end = true;
+  await assert.rejects(h.source.chat.openThread("iris"), named("SignInRequired"));
+  await pass(h, 20_000);
+  assert.equal(state.error?.name, "SignInRequired");
+  assert.deepEqual(POSTS(h, from), ["client-b6"]);
+});
+
+const RETRY_TIMES = [
+  ["1 in the JSON", () => busy(1), 1],
+  ["60 in the JSON", () => busy(60), 60],
+  ["7 in the header and none in the JSON", () => busy(undefined, { "Retry-After": "7" }), 7],
+  ["9 in the JSON and 30 in the header", () => busy(9, { "Retry-After": "30" }), 9],
+  ["0 in the JSON", () => busy(0), null],
+  ["61 in the JSON", () => busy(61), null],
+  ["2.5 in the JSON", () => busy(2.5), null],
+  ["a string in the JSON", () => busy("5"), null],
+  ["0 in the JSON and 7 in the header", () => busy(0, { "Retry-After": "7" }), null],
+  ["0 in the header", () => busy(undefined, { "Retry-After": "0" }), null],
+  ["61 in the header", () => busy(undefined, { "Retry-After": "61" }), null],
+  ["a word in the header", () => busy(undefined, { "Retry-After": "soon" }), null],
+  ["no retry time at all", () => busy(undefined), null],
+];
+
+for (const [label, reply, seconds] of RETRY_TIMES) {
+  test("a 502 with " + label + (seconds === null ? " is today's failure: five seconds, a thread read, and one more POST" : " waits " + seconds + " seconds"), async () => {
+    const h = serve(lib, { post: busyOnce(reply) });
+    await h.boot();
+    await h.source.chat.openThread("steward");
+    const phases = [];
+    const from = h.calls.length;
+    const state = watchSend(h, h.source.chat.send("steward", { text: "hello", clientId: "client-b5" }, (phase, wait) => phases.push([phase, wait])));
+    await pass(h, 500);
+    assert.deepEqual(phases, seconds === null ? [] : [["busy", seconds]]);
+    await pass(h, 61_000);
+    assert.equal(state.value?.clientId, "client-b5");
+    assert.deepEqual(h.requests(from), seconds === null ? [TOKEN, POST, THREAD("steward"), TOKEN, POST] : [TOKEN, POST, TOKEN, POST]);
+    if (seconds !== null) settledNear(state, seconds * 1_000);
+  });
+}
+
 test("a POST aborted at twenty seconds and answered on the retry resolves as sent", async () => {
   let tries = 0;
   const post = (body, init, server) => {

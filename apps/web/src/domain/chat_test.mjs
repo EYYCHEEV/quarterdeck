@@ -26,6 +26,11 @@ test("a failed chat send says Not Delivered and offers Try Again, as iMessage do
   assert.equal(SEND_RATE_TEXT, failedText({ limited: true }));
 });
 
+test("the busy line counts whole seconds down in plain words, and says second for one", async () => {
+  const { busyText } = await loadTs("src/domain/chat.ts");
+  assert.deepEqual([busyText(12), busyText(2), busyText(1)], ["Mail is busy. Sending again in 12 seconds", "Mail is busy. Sending again in 2 seconds", "Mail is busy. Sending again in 1 second"]);
+});
+
 test("his latest message says Delivered, then Read with the time on the same day, Read Yesterday the day before, and the day heading further back, as iMessage words it", () => {
   const now = Date.parse("2026-11-07T02:30:00-05:00");
   assert.equal(DELIVERED_TEXT, "Delivered");
