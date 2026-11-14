@@ -475,7 +475,7 @@ await check("chat admission: concurrent batches count against one ten-file limit
   const [, refused] = await Promise.all([u.attachChatFiles("admission-limit", first, u.admit), u.attachChatFiles("admission-limit", second, u.admit)]);
   const draft = u.readSession(key, null);
   assert.equal(draft.files.length, 10);
-  assert.deepEqual(refused, ["A message can carry up to 10 files."]);
+  assert.deepEqual(refused, [{ name: null, why: "A message can carry up to 10 files." }]);
   for (const item of draft.files) URL.revokeObjectURL(item.url);
 });
 
@@ -1671,18 +1671,20 @@ it("Chat: a value typed in a bot's secret request never reaches the message box 
   assert.equal(await p.evaluate((value) => JSON.stringify({ ...sessionStorage, ...localStorage }).includes(value), SECRET_VALUE), false);
 });
 
-it("Chat: picked files show in a preview strip with an x each, and the x takes one away", PHONE, async (p) => {
+it("Chat: picked files show as chips with an x each under a line that counts them, and the x takes one away", PHONE, async (p) => {
   await open(p, "/chat/iris");
   await T(p, "pick-photos").setInputFiles(PICTURE);
   await T(p, "pick-files").setInputFiles(LOG);
   const tiles = T(p, "draft-file");
   await tiles.nth(1).waitFor();
   assert.match(await tiles.first().locator("img").getAttribute("src"), /^blob:/);
-  assert.equal(await tiles.nth(1).innerText().then((text) => text.replace(/\s+/g, " ")), "build.log 14 KB");
+  assert.equal(await tiles.nth(1).innerText().then((text) => text.replace(/\s+/g, " ")), "LOG build.log 14 KB, ready");
+  assert.match(await T(p, "draft-total").innerText(), /^2 files, [0-9.]+ [KM]B$/);
   assert.equal(await T(p, "chat-send").isEnabled(), true);
   await p.getByRole("button", { name: "Remove screenshot.png" }).tap();
   await tiles.nth(1).waitFor({ state: "detached" });
-  assert.equal(await tiles.first().innerText().then((text) => text.replace(/\s+/g, " ")), "build.log 14 KB");
+  assert.equal(await tiles.first().innerText().then((text) => text.replace(/\s+/g, " ")), "LOG build.log 14 KB, ready");
+  assert.equal(await T(p, "draft-total").innerText(), "1 file, 14 KB");
 });
 
 it("Chat: on the Mac a pasted screenshot joins the preview strip", MAC, async (p) => {
@@ -1695,18 +1697,19 @@ it("Chat: on the Mac a pasted screenshot joins the preview strip", MAC, async (p
   await T(p, "draft-file").getByRole("button", { name: "Remove image.png" }).waitFor();
 });
 
-it("Chat: on the Mac a dragged file shows a hint and joins the preview strip when dropped", MAC, async (p) => {
+it("Chat: on the Mac a dragged file turns the composer's edge to a dashed line with a note in it, and joins the chips when dropped", MAC, async (p) => {
   await open(p, "/chat/iris");
   await T(p, "chat-thread").waitFor();
   const dataTransfer = await filesDragged(p, { name: "trace.log", type: "text/plain", text: "trace" });
   await T(p, "chat").dispatchEvent("dragenter", { dataTransfer });
-  await T(p, "drop-hint").getByText("Drop to attach to Iris").waitFor();
+  await T(p, "drop-hint").getByText("Drop to attach. Up to 10 files in one message.", { exact: true }).waitFor();
+  assert.deepEqual(await T(p, "drop-hint").evaluate((hint) => [hint.closest(".chat-composer-form") !== null, getComputedStyle(hint.closest(".chat-composer-form") ?? hint).borderTopStyle]), [true, "dashed"]);
   await T(p, "chat").dispatchEvent("drop", { dataTransfer });
   await T(p, "drop-hint").waitFor({ state: "detached" });
   await T(p, "draft-file").getByRole("button", { name: "Remove trace.log" }).waitFor();
 });
 
-it("Chat: a picture over 10 MB and a file over 50 MB are refused by name before sending, and the log beside them stays", MAC, async (p) => {
+it("Chat: a picture over 10 MB and a file over 50 MB are refused by name before sending, each in its own note with its own Dismiss, and the log beside them stays", MAC, async (p) => {
   await open(p, "/chat/alba");
   await T(p, "chat-thread").waitFor();
   const strip = fixture("CF-2").composerStrip;
@@ -1714,13 +1717,19 @@ it("Chat: a picture over 10 MB and a file over 50 MB are refused by name before 
   const dataTransfer = await sizedFilesDragged(p, ...strip.map((item) => ({ name: item.name, type: typeOf(item), bytes: item.bytes })));
   await T(p, "chat").dispatchEvent("dragenter", { dataTransfer });
   await T(p, "chat").dispatchEvent("drop", { dataTransfer });
-  const notice = p.getByRole("alert");
-  await notice.getByText("big-screenshot.png is too large (11 MB). Pictures can be up to 10 MB. phone-recording.mov is too large (60 MB). Files can be up to 50 MB.", { exact: true }).waitFor();
+  const notes = p.getByRole("alert").locator('[data-testid="draft-note"]');
+  await notes.nth(1).waitFor();
+  const lines = ["big-screenshot.png is too large (11 MB). Pictures can be up to 10 MB.", "phone-recording.mov is too large (60 MB). Files can be up to 50 MB."];
+  assert.deepEqual(await notes.locator("p").allInnerTexts(), lines);
   assert.equal(await T(p, "draft-file").count(), 1);
   await T(p, "draft-file").getByRole("button", { name: "Remove search-run.log" }).waitFor();
   assert.equal(await T(p, "chat-send").isEnabled(), true);
-  await notice.getByRole("button", { name: "Dismiss" }).click();
-  await notice.waitFor({ state: "detached" });
+  await notes.first().getByRole("button", { name: "Dismiss this note" }).click();
+  await notes.nth(1).waitFor({ state: "detached" });
+  assert.deepEqual(await notes.locator("p").allInnerTexts(), [lines[1]]);
+  await notes.getByRole("button", { name: "Dismiss this note" }).click();
+  await p.getByRole("alert").waitFor({ state: "detached" });
+  assert.equal(await T(p, "draft-file").count(), 1);
 });
 
 it("Chat: a program is refused by its kind with a plain line, and the PDF picked with it stays", PHONE, async (p) => {
