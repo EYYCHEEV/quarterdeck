@@ -2535,6 +2535,91 @@ it("Chat on a phone: Search from More opens, and closing it puts focus back on M
   assert.equal(await focusedTestId(p), "float-more");
 });
 
+const IPAD_UPRIGHT = { viewport: { width: 744, height: 1133 }, hasTouch: true, isMobile: true };
+const moreList = (p) => p.locator('[data-pop="more"]');
+
+it("Chat on the Mac: the three dots open a small menu under them, not a sheet", MAC, async (p) => {
+  await open(p, "/chat/iris");
+  await T(p, "chat-more").click();
+  const menu = moreList(p);
+  await menu.waitFor();
+  const dots = await T(p, "chat-more").boundingBox();
+  const box = await menu.boundingBox();
+  assert.equal(box.width <= 340, true, "a small box, not " + box.width + " wide");
+  assert.equal(box.y >= dots.y + dots.height && box.y <= dots.y + dots.height + 16, true, "the box hangs under the three dots");
+  assert.equal(Math.abs(box.x + box.width - (dots.x + dots.width)) <= 1, true, "the right edges line up");
+  assert.equal(await menu.getAttribute("aria-modal"), null, "not a modal sheet");
+  assert.equal(await menu.getByRole("heading").count(), 0, "no title");
+  assert.deepEqual(await menu.getByTestId("more-item").allInnerTexts(), ["Search", "Settings", "Add bot"]);
+  assert.equal(await menu.getByTestId("chat-alerts").count(), 1, "the Alerts row");
+});
+
+for (const shut of ["outside", "Escape"]) {
+  it("Chat on the Mac: " + shut + " closes the three dots menu with focus back on the three dots", MAC, async (p) => {
+    await open(p, "/chat/iris");
+    await T(p, "chat-more").click();
+    const menu = moreList(p);
+    await menu.waitFor();
+    if (shut === "outside") await p.mouse.click(400, 600);
+    else await p.keyboard.press("Escape");
+    await menu.waitFor({ state: "detached" });
+    assert.equal(await focusedTestId(p), "chat-more");
+  });
+}
+
+it("Chat on the Mac: Search from the three dots menu opens, and closing it puts focus back on the three dots", MAC, async (p) => {
+  await open(p, "/chat/iris");
+  await T(p, "chat-more").click();
+  await moreList(p).getByRole("button", { name: "Search", exact: true }).click();
+  await moreList(p).waitFor({ state: "detached" });
+  await p.locator('[data-pop="search"]').waitFor();
+  await p.keyboard.press("Escape");
+  await p.locator('[data-pop="search"]').waitFor({ state: "detached" });
+  assert.equal(await focusedTestId(p), "chat-more");
+});
+
+for (const [name, size] of [["a phone", PHONE], ["an iPad upright", IPAD_UPRIGHT]]) {
+  it("Chat on " + name + ": the three dots open the More sheet with a handle, its title and a Close key", size, async (p) => {
+    await open(p, "/chat/iris");
+    await T(p, "float-more").tap();
+    const sheet = moreList(p);
+    await sheet.waitFor();
+    assert.equal(await sheet.getAttribute("aria-modal"), "true");
+    assert.equal(await sheet.getByRole("heading").innerText(), "More");
+    assert.equal(await sheet.getByTestId("sheet-handle").count(), 1, "the handle");
+    assert.deepEqual([await sheet.getByRole("button", { name: "Close", exact: true }).count(), await sheet.getByRole("button", { name: "Done", exact: true }).count()], [1, 0], "a Close key, no Done key");
+    assert.deepEqual(await sheet.getByTestId("more-item").allInnerTexts(), ["Search", "Settings", "Add bot"]);
+    assert.equal(await sheet.getByTestId("chat-alerts").count(), 1, "the Alerts row");
+    const box = await sheet.boundingBox();
+    assert.equal(Math.round(box.y + box.height), p.viewportSize().height, "the sheet sits on the foot");
+    assert.equal(box.width <= 720, true, "held to a readable width");
+  });
+
+  for (const shut of ["Close", "outside", "Escape"]) {
+    it("Chat on " + name + ": " + shut + " closes the More sheet with focus back on the three dots", size, async (p) => {
+      await open(p, "/chat/iris");
+      await T(p, "float-more").tap();
+      const sheet = moreList(p);
+      await sheet.waitFor();
+      if (shut === "Close") await sheet.getByRole("button", { name: "Close", exact: true }).tap();
+      else if (shut === "outside") await p.touchscreen.tap(8, 8);
+      else await p.keyboard.press("Escape");
+      await sheet.waitFor({ state: "detached" });
+      assert.equal(await focusedTestId(p), "float-more");
+    });
+  }
+}
+
+it("Chat on an iPad upright: Search from More opens, and closing it puts focus back on More", IPAD_UPRIGHT, async (p) => {
+  await open(p, "/chat/iris");
+  await T(p, "float-more").tap();
+  await moreList(p).getByRole("button", { name: "Search", exact: true }).tap();
+  await p.locator('[data-pop="search"]').waitFor();
+  await p.keyboard.press("Escape");
+  await p.locator('[data-pop="search"]').waitFor({ state: "detached" });
+  assert.equal(await focusedTestId(p), "float-more");
+});
+
 it("Chat: the message box is solid in both looks, so nothing shows through it", PHONE, async (p) => {
   const solid = async () => {
     const form = T(p, "chat-input").locator("xpath=ancestor::form[1]");
@@ -2607,17 +2692,22 @@ it("Chat: a bot with an unread message shows New above its first unread message,
   assert.equal(await T(p, "chat-new").count(), 0, "New lines on a second visit");
 });
 
-it("Chat: the Sound choice is kept after the page loads again", MAC, async (p) => {
+it("Chat: Alerts for this chat says On or Off, and each chat keeps its own choice after the page loads again", MAC, async (p) => {
   await open(p, "/chat/iris");
   await T(p, "chat-more").click();
-  const sound = T(p, "chat-sound");
-  const before = await sound.getAttribute("aria-checked");
-  await sound.click();
-  const after = before === "true" ? "false" : "true";
-  assert.equal(await sound.getAttribute("aria-checked"), after);
+  const alerts = T(p, "chat-alerts");
+  assert.deepEqual([await alerts.getAttribute("role"), await alerts.getAttribute("aria-checked")], ["switch", "true"]);
+  assert.deepEqual((await alerts.innerText()).split("\n").map((line) => line.trim()).filter(Boolean), ["Alerts for this chat", "On"]);
+  await alerts.click();
+  assert.equal(await alerts.getAttribute("aria-checked"), "false");
+  assert.deepEqual((await alerts.innerText()).split("\n").map((line) => line.trim()).filter(Boolean), ["Alerts for this chat", "Off"]);
+  assert.equal(await moreList(p).count(), 1, "the switch leaves the menu open");
   await p.reload();
   await T(p, "chat-more").click();
-  assert.equal(await T(p, "chat-sound").getAttribute("aria-checked"), after);
+  assert.equal(await T(p, "chat-alerts").getAttribute("aria-checked"), "false");
+  await open(p, "/chat/alba");
+  await T(p, "chat-more").click();
+  assert.equal(await T(p, "chat-alerts").getAttribute("aria-checked"), "true", "another chat keeps its own choice");
 });
 
 it("Chat: Turn on notifications says they come with the connection and asks the browser for nothing", MAC, async (p) => {
