@@ -6,7 +6,7 @@ function rows(owner: string, approval: boolean): [string, string][] {
     : [
         ["a  b  ...", "pick that option"],
         ["n", "None of these"],
-        ["Enter", "send your pick"],
+        ["Enter", "answer"],
       ];
   return [["j / k", "next / previous card"], ...answer, ["t", "Talk to " + owner], ["\u2318K", "Search"]];
 }

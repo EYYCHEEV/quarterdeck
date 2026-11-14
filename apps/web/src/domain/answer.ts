@@ -82,8 +82,8 @@ export function answerStep(card: Card, state: AnswerState, event: AnswerEvent): 
 }
 
 export function sendButton(card: Card, state: AnswerState): { text: string; disabled: boolean } {
-  if (!state.choice || state.choice.kind === "approve" || state.choice.kind === "reject") return { text: "Send", disabled: card.options.length > 0 };
-  return { text: state.choice.kind === "none" ? "Send: None of these" : "Send " + choiceText(state.choice), disabled: false };
+  if (!state.choice || state.choice.kind === "approve" || state.choice.kind === "reject") return { text: "Answer", disabled: card.options.length > 0 };
+  return { text: state.choice.kind === "none" ? "Answer: None of these" : "Answer " + choiceText(state.choice), disabled: false };
 }
 
 export function notePlaceholder(state: AnswerState): string {

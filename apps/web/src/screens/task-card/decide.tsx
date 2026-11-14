@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useQd } from "../../data/hooks";
-import { readSession, sessionGeneration, useReceipt, useSession, writeSession } from "../../data/session";
+import { readSession, sessionGeneration, takeHand, useReceipt, useSession, writeSession } from "../../data/session";
 import { TimedOut } from "../../data/source";
 import { answerStep, cardKey, carryAnswer, confirmPrompt, notePlaceholder, receiptText, SEND_LIMIT_MS, sendButton, startAnswer, type AnswerEvent, type AnswerState } from "../../domain/answer";
 import { noAnswerLine, oneWayBlock } from "../../domain/card";
@@ -273,6 +273,10 @@ export function AnswerFlow({ card, world, whole, keys }: { card: Card; world: Wo
     if (confirming) back.current?.focus({ preventScroll: true });
   }, [confirming]);
 
+  useEffect(() => {
+    if (takeHand(card.id)) sendRef.current?.focus();
+  }, [card.id]);
+
   const deliver = async (after: AnswerState) => {
     if (after.phase !== "sending" || !after.choice) return;
     const from = currentPath();
@@ -442,6 +446,7 @@ export function AnswerFlow({ card, world, whole, keys }: { card: Card; world: Wo
         ) : (
           <Button ref={sendRef} kind="primary" block className="mt-s2" disabled={button.disabled || locked} onClick={() => send()} data-testid="send">
             {locked ? sendingText(state) : button.text}
+            {keys && !locked && !button.disabled && <kbd aria-hidden="true" data-cap="Enter" className="key-cap" />}
           </Button>
         )}
       </section>

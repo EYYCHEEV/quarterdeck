@@ -90,6 +90,16 @@ export function quoteInChat(botId: string, quote: Quote) {
   writeSession<ChatDraft>(key, { ...readSession(key, EMPTY_DRAFT), quote });
 }
 
+export function handToAnswer(cardId: string) {
+  writeSession("card.hand", cardId);
+}
+
+export function takeHand(cardId: string): boolean {
+  if (readSession<string | null>("card.hand", null) !== cardId) return false;
+  writeSession("card.hand", null);
+  return true;
+}
+
 export const useMailQuery = () => useSession<MailQuery>("mail.query", EMPTY_MAIL_QUERY);
 
 export function clearSession(): Map<string, unknown> {

@@ -291,6 +291,23 @@
     box-shadow: none;
     cursor: default;
   }
+  .key-cap {
+    display: inline-block;
+    padding: 0 var(--spacing-s1);
+    border: var(--line-w) solid currentColor;
+    border-bottom-width: var(--line-w-rail);
+    border-radius: var(--radius-tag);
+    font: inherit;
+    white-space: nowrap;
+  }
+  .key-cap::after {
+    content: attr(data-cap);
+  }
+  @media (pointer: coarse) {
+    .key-cap {
+      display: none;
+    }
+  }
   @media (hover: hover) and (pointer: fine) {
     .key:hover:not(:disabled, [aria-disabled="true"]) {
       border-color: var(--color-ink-2);
