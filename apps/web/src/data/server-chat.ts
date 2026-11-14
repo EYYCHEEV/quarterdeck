@@ -39,7 +39,7 @@ const OPEN_SPACING = 5_000;
 const SEND_CAP = 55_000;
 const ATTEMPT_CAP = 25_000;
 const REREAD_CAP = 5_000;
-const RETRY_AFTER = 5_000;
+const RETRY_PAUSES: readonly number[] = [5_000, 15_000];
 const KEEP_UPLOAD = 55 * 60_000;
 
 const passing = (error: unknown): boolean => error instanceof NotConfirmed || error instanceof Unavailable || (error instanceof Refused && error.message === CHAT_WORDS.mail);
@@ -366,8 +366,9 @@ export function createServerChat(host: ChatHost): ChatPart {
         const found = error instanceof NotConfirmed && left() > 0 ? await foundSent(bot, outgoing.clientId, left()) : null;
         current();
         if (found) return sentOf(found);
-        if (tries === 2 || left() <= RETRY_AFTER) throw error;
-        await pause(RETRY_AFTER);
+        const wait: number | undefined = RETRY_PAUSES[tries - 1];
+        if (wait === undefined || left() <= wait) throw error;
+        await pause(wait);
         current();
         const later = await foundSent(bot, outgoing.clientId, left());
         current();
