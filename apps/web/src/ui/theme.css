@@ -130,6 +130,8 @@
   --spacing-s7: 48px;
   --spacing-hit: 44px;
   --spacing-key-h: 34px;
+  --spacing-file-h: 40px;
+  --spacing-thumb: 28px;
   --spacing-row: 36px;
   --spacing-float-pad: 76px;
   --spacing-col-glyph: 14px;
@@ -196,6 +198,7 @@
 @media (max-width: 1399px), (pointer: coarse) {
   :root {
     --spacing-key-h: 44px;
+    --spacing-file-h: 46px;
     --spacing-row: 44px;
   }
 }

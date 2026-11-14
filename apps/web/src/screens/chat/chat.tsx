@@ -6,7 +6,7 @@ import { useSecrets } from "../../data/secret-hooks";
 import { attachChatFiles, updatePendingSends, useChatDraft, usePendingSends, type PendingSend } from "../../data/session";
 import { RateLimited, Refused } from "../../data/source";
 import { fitsSend, messageQuote, quoteAsText, SEND_FAILED_TEXT, SEND_LONG_TEXT, SEND_RATE_TEXT } from "../../domain/chat";
-import { admit, pictureCaption } from "../../domain/chat-files";
+import { admit, pictureCaption, type Refusal } from "../../domain/chat-files";
 import { EXPIRED_TEXT, FILES_OFF_TEXT, serverAdmit } from "../../domain/files-r1";
 import { dayKey, dayLabel } from "../../domain/time";
 import { Button } from "../../ui/button";
@@ -87,7 +87,7 @@ export function ChatScreen({ botId, wide }: { botId: string; wide: boolean }) {
   const [gallery, setGallery] = useState<number | null>(null);
   const opener = useRef<HTMLElement | null>(null);
   const [focusNext, setFocusNext] = useState<{ target: () => HTMLElement | null } | null>(null);
-  const [refused, setRefused] = useState<string[]>([]);
+  const [refused, setRefused] = useState<Refusal[]>([]);
   const [dragging, setDragging] = useState(false);
   const secrets = useSecrets(botId);
   const secretsReady = !secrets.loading && !secrets.failed;
@@ -218,7 +218,7 @@ export function ChatScreen({ botId, wide }: { botId: string; wide: boolean }) {
     if (__QD_SOURCE__ === "server" && __QD_CHAT__ === "on") {
       if (!thread.value) return false;
       if (!fitsSend(text)) {
-        setRefused([SEND_LONG_TEXT]);
+        setRefused([{ name: null, why: SEND_LONG_TEXT }]);
         return false;
       }
     }
@@ -243,11 +243,11 @@ export function ChatScreen({ botId, wide }: { botId: string; wide: boolean }) {
   };
 
   const attach = (list: File[]) => {
-    if (__QD_SOURCE__ === "server" && __QD_CHAT__ === "on" && !limits) return setRefused([FILES_OFF_TEXT]);
+    if (__QD_SOURCE__ === "server" && __QD_CHAT__ === "on" && !limits) return setRefused([{ name: null, why: FILES_OFF_TEXT }]);
     const owner = botId;
     void attachChatFiles(owner, list, limits ? serverAdmit(limits) : admit).then(
       (reasons) => { if (activeBot.current === owner) setRefused(reasons); },
-      () => { if (activeBot.current === owner) setRefused(["Could not read these files."]); },
+      () => { if (activeBot.current === owner) setRefused([{ name: null, why: "Could not read these files." }]); },
     );
   };
 
@@ -447,9 +447,10 @@ export function ChatScreen({ botId, wide }: { botId: string; wide: boolean }) {
         inputRef={input}
         onAttach={attach}
         onUnattach={unattach}
-        notice={refused.length ? refused.join("\n") : null}
-        filesOn={limits !== null}
-        onDismissNotice={() => setRefused([])}
+        notes={refused}
+        limits={limits}
+        dropping={dragging}
+        onDismissNote={(at) => setRefused((list) => list.filter((_, n) => n !== at))}
         onSecret={() => setBoxOpen(true)}
         onUseSecretBox={() => setBoxOpen(true)}
         cards={
@@ -481,13 +482,6 @@ export function ChatScreen({ botId, wide }: { botId: string; wide: boolean }) {
       )}
       {viewing && <FileViewer file={viewing} returnTo={opener} onClose={() => setViewing(null)} />}
       {gallery !== null && <Viewer items={pictures} start={gallery} label="Pictures in this chat" returnTo={opener} onClose={() => setGallery(null)} caption={(item) => item.caption} />}
-      {dragging && (
-        <div className="pointer-events-none fixed inset-0 z-30 grid place-items-center bg-scrim" data-testid="drop-hint">
-          <p role="status" className="rounded-panel border border-line-3 bg-panel px-s4 py-s3 text-body">
-            Drop to attach to {bot.name}
-          </p>
-        </div>
-      )}
     </div>
   );
 }

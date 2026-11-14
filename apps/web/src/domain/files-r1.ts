@@ -1,5 +1,5 @@
-import { sizeText } from "./chat-files";
-import type { FileAdmission, InspectedFile, PrepareFiles } from "./file-inspection";
+import { sizeToTenth } from "./chat-files";
+import { MAX_FILES, type FileAdmission, type InspectedFile, type PrepareFiles, type Refusal } from "./file-inspection";
 
 export type FileLimits = { fileBytes: number; messageBytes: number; count: number };
 
@@ -10,8 +10,11 @@ export const FILES_OFF_TEXT = "Not sent: files are not built on the server yet."
 export const typeText = (name: string): string => "This file's type is not allowed: " + name;
 export const bigText = (name: string): string => "This file is too big: " + name;
 export const blockedText = (name: string): string => "This file was blocked: " + name;
-export const countText = (count: number): string => "A message can carry up to " + count + " files.";
-export const togetherText = (bytes: number): string => "These files are too big together. A message can carry up to " + sizeText(bytes) + ".";
+export const KIND_WHY = "Quarterdeck cannot send this kind of file.";
+export const countWhy = (count: number): string => "A message holds " + count + (count === 1 ? " file" : " files") + " at most. Send these, then attach the rest.";
+export const bigWhy = (bytes: number, limit: number): string => "It is " + sizeToTenth(bytes, Math.ceil) + ", and one file can be " + sizeToTenth(limit) + " at most.";
+export const togetherWhy = (bytes: number, limit: number): string => "With it this message would be " + sizeToTenth(bytes, Math.ceil) + ", and a message can be " + sizeToTenth(limit) + " at most.";
+export const dropText = (limits: FileLimits | null): string => "Drop to attach. Up to " + (limits ? limits.count + " files, " + sizeToTenth(limits.fileBytes) + " each, " + sizeToTenth(limits.messageBytes) + " in one message." : MAX_FILES + " files in one message.");
 
 const TYPES: Record<string, string> = {
   png: "image/png",
@@ -98,42 +101,42 @@ export function headMatches(claim: string, head: Uint8Array): boolean {
 export function serverAdmit(limits: FileLimits): PrepareFiles {
   return async (files, alreadyAttached, attachedBytes = 0): Promise<FileAdmission> => {
     const accepted: InspectedFile[] = [];
-    const refused: string[] = [];
-    const refuse = (reason: string): void => {
-      if (!refused.includes(reason)) refused.push(reason);
+    const refused: Refusal[] = [];
+    const refuse = (name: string | null, why: string): void => {
+      if (!refused.some((one) => one.name === name && one.why === why)) refused.push({ name, why });
     };
     let bytes = attachedBytes;
     for (const file of files) {
       if (alreadyAttached + accepted.length >= limits.count) {
-        refuse(countText(limits.count));
+        refuse(file.name, countWhy(limits.count));
         continue;
       }
       if (isHeic(file)) {
-        refuse(HEIC_TEXT);
+        refuse(null, HEIC_TEXT);
         continue;
       }
       const claim = claimedType(file.name, file.type);
       if (claim === null || file.size === 0) {
-        refuse(typeText(file.name));
+        refuse(file.name, KIND_WHY);
         continue;
       }
       if (file.size > limits.fileBytes) {
-        refuse(bigText(file.name));
+        refuse(file.name, bigWhy(file.size, limits.fileBytes));
         continue;
       }
       if (bytes + file.size > limits.messageBytes) {
-        refuse(togetherText(limits.messageBytes));
+        refuse(file.name, togetherWhy(bytes + file.size, limits.messageBytes));
         continue;
       }
       let head: Uint8Array;
       try {
         head = new Uint8Array(await file.slice(0, HEAD_BYTES).arrayBuffer());
       } catch {
-        refuse(typeText(file.name));
+        refuse(file.name, KIND_WHY);
         continue;
       }
       if (!headMatches(claim, head)) {
-        refuse(typeText(file.name));
+        refuse(file.name, KIND_WHY);
         continue;
       }
       bytes += file.size;

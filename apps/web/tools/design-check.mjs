@@ -524,8 +524,8 @@ const STATES = [
     } },
   { name: "chat-uploading", route: "/chat/iris?hold=upload", shot: true, open: uploadingSend },
   { name: "chat-server-refused", route: "/chat/alba?chatfx=CF-FILES", shot: true, open: serverPick(() => [paddedPicture("big-screenshot.png", 11 * 1048576), { name: "setup.exe", mimeType: "application/x-msdownload", buffer: Buffer.from("MZ") }, { name: "IMG_0001.HEIC", mimeType: "image/heic", buffer: Buffer.from("0000ftypheic") }], "This picture is in Apple's format.") },
-  { name: "chat-server-refused-count", route: "/chat/alba?chatfx=CF-FILES", shot: true, open: serverPick(() => [1, 2, 3, 4, 5, 6].map((n) => pictureFile("screenshot-" + n + ".png", "phone-search-1.png")), "A message can carry up to 5 files.") },
-  { name: "chat-server-refused-together", route: "/chat/alba?chatfx=CF-FILES", shot: true, open: serverPick(() => ["a", "b", "c"].map((n) => paddedPicture("export-" + n + ".png", 9 * 1048576)), "These files are too big together.") },
+  { name: "chat-server-refused-count", route: "/chat/alba?chatfx=CF-FILES", shot: true, open: serverPick(() => [1, 2, 3, 4, 5, 6].map((n) => pictureFile("screenshot-" + n + ".png", "phone-search-1.png")), "A message holds 5 files at most.") },
+  { name: "chat-server-refused-together", route: "/chat/alba?chatfx=CF-FILES", shot: true, open: serverPick(() => ["a", "b", "c"].map((n) => paddedPicture("export-" + n + ".png", 9 * 1048576)), "With it this message would be") },
   { name: "chat-secret-request", route: "/chat/alba", shot: true, open: (vp, p) => p.locator(T("secret-request")).scrollIntoViewIfNeeded() },
   {
     name: "chat-secret-box",

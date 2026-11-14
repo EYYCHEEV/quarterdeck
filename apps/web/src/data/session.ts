@@ -1,5 +1,5 @@
 import { useCallback, useSyncExternalStore } from "react";
-import type { InspectedFile, PrepareFiles } from "../domain/file-inspection";
+import type { InspectedFile, PrepareFiles, Refusal } from "../domain/file-inspection";
 import { EMPTY_MAIL_QUERY, type MailQuery } from "../domain/mail-query";
 import type { PageQuery } from "../domain/pages";
 import { EMPTY_QUERY, type QueueQuery } from "../domain/query";
@@ -49,10 +49,10 @@ const EMPTY_DRAFT: ChatDraft = { text: "", quote: null, files: [] };
 
 export const useChatDraft = (botId: string) => useSession<ChatDraft>("chat.draft." + botId, EMPTY_DRAFT);
 
-const attachmentBatches = new Map<string, Promise<string[]>>();
+const attachmentBatches = new Map<string, Promise<Refusal[]>>();
 let generation = 0;
 
-export function attachChatFiles(botId: string, files: File[], prepare: PrepareFiles): Promise<string[]> {
+export function attachChatFiles(botId: string, files: File[], prepare: PrepareFiles): Promise<Refusal[]> {
   const key = "chat.draft." + botId;
   const at = generation;
   const add = async () => {
