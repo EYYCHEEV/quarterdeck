@@ -7338,7 +7338,10 @@ it("Motion on a server build with chat on: his message rises from the box at onc
       await m.during("his confirmed message", '[data-message-id="iris-m31"]', async () => {
         equal(shapesOf(await animationsOf(sent.locator('[data-testid="chat-delivered"]'))), [STANDARD + " height+marginTop", STANDARD + " opacity"], "the Delivered line under it grows in and fades in, at the standard speed");
         equal(shapesOf(await animationsOf(sent)), [STANDARD + " height+marginTop", STANDARD + " opacity", STANDARD + " translate"], "it is still rising, at the standard speed, and nothing else in it moves");
-        equal(await animationsOf(T(page, "chat-thread").locator(':scope > li:not([data-message-id="iris-m31"])')), [], "nothing already there moves");
+        const rest = T(page, "chat-thread").locator(':scope > li:not([data-message-id="iris-m31"])');
+        const old = await animationsOf(rest.locator('[data-row="out"]'));
+        equal([old.length, old.every((one) => one.duration === STANDARD && one.properties.includes("height") && one.properties.includes("opacity"))], [1, true], "the line under his older message, which left at the Send press, folds away at the standard speed");
+        equal((await animationsOf(rest)).length, old.length, "nothing else already there moves");
       });
       await resume();
       await settle(page);
