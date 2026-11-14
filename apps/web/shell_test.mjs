@@ -505,9 +505,11 @@ it("Task Card: the owner line names the project and the due", PHONE, async (p) =
   equal(line, "Alba · quarterdeck Due Wed Nov 4, 5 PM ET, in 2 days", "owner line");
 });
 
+const shownCaps = (key) => key.locator("kbd").evaluateAll((caps) => caps.filter((cap) => getComputedStyle(cap).display !== "none").map((cap) => getComputedStyle(cap, "::after").content));
+
 it("Task Card: Answer A on a two-way pick sends in one tap and the next card opens with Got it", PHONE, async (p) => {
   await open(p, "/queue/alba-1");
-  equal([await nameOf(T(p, "send")), await T(p, "send").evaluate((el) => getComputedStyle(el, "::after").content)], ["Answer A", "none"], "the key's words, and no key cap on a phone");
+  equal([await nameOf(T(p, "send")), await shownCaps(T(p, "send"))], ["Answer A", []], "the key's words, and no key cap on a phone");
   await T(p, "send").tap();
   await shown(p, "Got it: How many results should each Search group show, A, 10:00 AM");
   await shown(p, "Should the bridge retry a failed message?");
@@ -518,7 +520,7 @@ it("Task Card on the Mac: the Answer key names the pick and carries the Enter ca
   await open(p, "/queue/alba-1");
   const key = T(p, "card-pane").getByTestId("send");
   await key.waitFor();
-  equal([await nameOf(key), await key.evaluate((el) => getComputedStyle(el, "::after").content)], ["Answer A", '"Enter"'], "the key's words and its cap");
+  equal([await nameOf(key), await shownCaps(key), await T(p, "card-pane").getByRole("button", { name: "Answer A", exact: true }).count()], ["Answer A", ['"Enter"'], 1], "the key's words, its cap, and its name for a screen reader");
 });
 
 it("Card keys on the Mac: the key list says Enter answer", MAC, async (p) => {
@@ -5824,20 +5826,21 @@ it("Server Chat: past the app's own cap Send shows the rate words on his row wit
   equal(asked.posts.length, refused.posts, "POSTs after Try again");
 });
 
-it("Server Chat: a message over 4,000 characters stays in the box with the words Not sent: the message is over 4,000 characters. and no POST or row, and trimmed to 4,000 it sends", MAC, async (p) => {
+it("Server Chat: a message of 20,000 characters sends whole, and one too long for a single send stays in the box with the words Not sent: this message is too long. Shorten it or split it in two. and no POST or row", MAC, async (p) => {
   const asked = await serverBuildChat(p);
   await chatOpened(p);
   const rows = await T(p, "chat-my-message").count();
-  await T(p, "chat-input").fill("x".repeat(4001));
+  const long = "x".repeat(114_687);
+  await T(p, "chat-input").fill(long);
   await T(p, "chat-send").click();
-  const line = p.getByRole("alert").filter({ hasText: "Not sent: the message is over 4,000 characters." });
+  const line = p.getByRole("alert").filter({ hasText: "Not sent: this message is too long. Shorten it or split it in two." });
   await line.waitFor();
-  await boxReads(p, "x".repeat(4001));
-  equal([asked.posts.length, (await T(p, "chat-input").inputValue()).length, await T(p, "chat-my-message").count()], [0, 4001, rows], "POSTs, the box keeps his text, rows");
-  await T(p, "chat-input").fill("x".repeat(4000));
+  await boxReads(p, long);
+  equal([asked.posts.length, (await T(p, "chat-input").inputValue()).length, await T(p, "chat-my-message").count()], [0, 114_687, rows], "POSTs, the box keeps his text, rows");
+  await T(p, "chat-input").fill("x".repeat(20_000));
   await T(p, "chat-send").click();
   await p.locator('[data-message-id="iris-m31"]').waitFor();
-  equal([asked.posts.length, asked.posts[0].text.length, await line.count(), await T(p, "chat-input").inputValue()], [1, 4000, 0, ""], "POSTs, the text sent, the words, the box");
+  equal([asked.posts.length, asked.posts[0].text.length, await line.count(), await T(p, "chat-input").inputValue()], [1, 20_000, 0, ""], "POSTs, the text sent, the words, the box");
 });
 
 for (const [found, name] of [[true, "the re-read holds the clientId, so his row reads Sent after one POST and no failure line ever shows"], [false, "the re-read does not hold it, so five seconds later the app reads again and sends once more by itself with the same clientId, one message shows, and no failure line ever shows"]])
