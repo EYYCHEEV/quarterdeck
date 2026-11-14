@@ -494,7 +494,7 @@ export function createApiClient(options: { send?: Send; openEvents?: (address: s
 
     async function sendChat(bot: string, outgoing: WireOutgoing, onList?: TokenList, chain?: ChatChain): Promise<ChatReceipt> {
       const lib = await import("./chat-client");
-      return submit(CHAT_PATH, () => lib.checkOutgoing(bot, outgoing), (token) => lib.chatBody(bot, outgoing, token), (raw) => lib.chatReceiptOf(raw, outgoing.clientId), onList, { limit: 16384, refuse, chain });
+      return submit(CHAT_PATH, () => lib.checkOutgoing(bot, outgoing), (token) => lib.chatBody(bot, outgoing, token), (raw) => lib.chatReceiptOf(raw, outgoing.clientId), onList, { limit: lib.RECEIPT_LIMIT, refuse, chain });
     }
 
     async function chainToken(onList?: TokenList): Promise<string> {

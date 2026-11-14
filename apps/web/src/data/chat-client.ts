@@ -225,6 +225,8 @@ export function parseChatThread(body: unknown): ChatRead {
   return made;
 }
 
+export const RECEIPT_LIMIT = SEND_CEILING;
+
 export function chatReceiptOf(raw: unknown, clientId: string): ChatReceipt {
   if (!isRecord(raw)) throw new NotConfirmed();
   let message: ChatMessage;

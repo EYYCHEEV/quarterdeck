@@ -79,7 +79,7 @@ The 429, 422, 400 and 502 refusals carry `{"error": "rate"}`, `bot`, `text` and 
 
 Bounds the client chose where the contract gives none (a thread with a field outside them is unreadable, as with every field): a message with up to 50 files, a file name up to 512 characters and a type up to 255; up to 64 feature names (unknown names are ignored, repeats collapse); a card id of 1 to 64 letters, digits and hyphens; a `rev` that is a whole number from 0 up.
 
-A message text, a working note and a quoted text have no length check of their own on the way in. The 1,048,576 bytes the client reads of one answer bound them. On the way out, one send is at most 131,072 bytes as a request. The client keeps 16,384 of those for the fields beside the text, so the text, counted as the request writes it (in quotes, with its escapes), may take up to 114,688 bytes.
+A message text, a working note and a quoted text have no length check of their own on the way in. The 1,048,576 bytes the client reads of one answer bound them. On the way out, one send is at most 131,072 bytes as a request. The client keeps 16,384 of those for the fields beside the text, so the text, counted as the request writes it (in quotes, with its escapes), may take up to 114,688 bytes. The send's own answer carries the text back, so the client reads up to 131,072 bytes of it.
 
 ## The bots files
 
