@@ -5853,6 +5853,7 @@ it("Server Chat on a phone: a message of 20,000 characters with no space in it s
   await sendSettles(row);
   const took = Date.now() - from;
   equal([asked.posts.length, asked.posts[0]?.text.length, took < 5_000], [1, 20_000, true], "POSTs, the text sent, and the row showed in time (it took " + took + " ms)");
+  console.log("info Server Chat on a phone: the row of the 20,000 character word showed " + took + " ms after the tap");
   const fit = await row.evaluate((el) => {
     const pane = document.querySelector('[data-testid="chat-scroll"]');
     const box = el.getBoundingClientRect();
