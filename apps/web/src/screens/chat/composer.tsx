@@ -166,14 +166,9 @@ export function Composer({
   }, []);
 
   useEffect(() => {
-    const cancel = (event: KeyboardEvent) => {
-      if (event.key === "Escape") clearPaste();
-    };
-    window.addEventListener("keydown", cancel);
     window.addEventListener("popstate", clearPaste);
     window.addEventListener("hashchange", clearPaste);
     return () => {
-      window.removeEventListener("keydown", cancel);
       window.removeEventListener("popstate", clearPaste);
       window.removeEventListener("hashchange", clearPaste);
     };

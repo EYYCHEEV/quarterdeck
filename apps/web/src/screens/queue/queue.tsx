@@ -275,10 +275,6 @@ export function QueueScreen({ cardId, wide, pane }: { cardId: string | null; wid
             <Kbd>/</Kbd>
             search
           </span>
-          <span className="inline-flex items-center gap-s1">
-            <Kbd>Esc</Kbd>
-            out
-          </span>
         </p>
       </section>
       <div ref={paneBox} tabIndex={-1} className="-mx-s1 min-w-0 flex-1 overflow-y-auto px-s1 outline-none" data-pane="" data-testid="card-pane">
