@@ -646,16 +646,16 @@ for (const status of [401, 403]) {
   });
 }
 
-test("a 500 or 503 on the chat POST is not confirmed and finds nothing, is sent once more, and the send throws NotConfirmed", async () => {
+test("a 500 or 503 on the chat POST is not confirmed and finds nothing, is sent twice more, and the send throws NotConfirmed", async () => {
   for (const status of [500, 503]) {
     const h = serve(lib, { post: () => new Response("", { status }) });
     await h.boot();
     await h.source.chat.openThread("steward");
     const from = h.calls.length;
     const state = watchSend(h, h.source.chat.send("steward", { text: "hello", clientId: "client-8" }));
-    await pass(h, 10_000);
+    await pass(h, 25_000);
     assert.equal(state.error?.name, "NotConfirmed", String(status));
-    assert.deepEqual(POSTS(h, from), ["client-8", "client-8"], String(status));
+    assert.deepEqual(POSTS(h, from), ["client-8", "client-8", "client-8"], String(status));
   }
 });
 
@@ -2000,16 +2000,17 @@ test("Try Again after a lost send answer posts the same ids with no upload insid
   const outgoing = { text: "two", clientId: "client-f8", files: [photo("one.png"), doc("two.txt")] };
   const from = h.calls.length;
   const first = watchSend(h, h.source.chat.send("steward", outgoing));
-  await pass(h, 10_000);
+  await pass(h, 25_000);
   assert.equal(first.error?.name, "NotConfirmed");
-  assert.deepEqual(h.requests(from), [TOKEN, UPLOAD, UPLOAD, POST, THREAD("steward"), THREAD("steward"), TOKEN, POST, THREAD("steward")]);
-  assert.deepEqual(chatPosts(h, from).map((call) => call.body.files), [["f-1", "f-2"], ["f-1", "f-2"]]);
+  assert.deepEqual(h.requests(from), [TOKEN, UPLOAD, UPLOAD, POST, THREAD("steward"), THREAD("steward"), TOKEN, POST, THREAD("steward"), THREAD("steward"), TOKEN, POST, THREAD("steward")]);
+  assert.deepEqual(chatPosts(h, from).map((call) => call.body.files), [["f-1", "f-2"], ["f-1", "f-2"], ["f-1", "f-2"]]);
+  await h.time.advance(60_000);
   const again = h.calls.length;
   const second = watchSend(h, h.source.chat.send("steward", outgoing));
-  await pass(h, 10_000);
+  await pass(h, 25_000);
   assert.equal(second.error?.name, "NotConfirmed");
   assert.equal(uploads(h, again).length, 0);
-  assert.deepEqual(chatPosts(h, again).map((call) => call.body.files), [["f-1", "f-2"], ["f-1", "f-2"]]);
+  assert.deepEqual(chatPosts(h, again).map((call) => call.body.files), [["f-1", "f-2"], ["f-1", "f-2"], ["f-1", "f-2"]]);
   await h.time.advance(55 * 60_000);
   lost = false;
   const late = h.calls.length;
