@@ -51,7 +51,7 @@ export type Send = (path: string, init: RequestInit) => Promise<Response>;
 
 export type AnswerSent = { message: string; stale: boolean; rev: number };
 
-export type SessionRequest = { kind: "list" | "card" | "token" | "mail" | "chat" | "bots" | "post"; automatic: boolean; sent?: number; wait?: boolean };
+export type SessionRequest = { kind: "list" | "card" | "token" | "mail" | "chat" | "bots" | "post"; automatic: boolean; sent?: number; wait?: boolean; tokenRefused?: boolean };
 
 export type TokenList = (listing: CardListing, sent: number | undefined) => void;
 
@@ -427,17 +427,21 @@ export function createApiClient(options: { send?: Send; openEvents?: (address: s
       const controller = new AbortController();
       let stop = (): void => undefined;
       try {
-        const response = await request(wait ? { kind: "post", automatic: false, wait } : { kind: "post", automatic: false }, async () => {
+        const meta: SessionRequest = wait ? { kind: "post", automatic: false, wait } : { kind: "post", automatic: false };
+        const response = await request(meta, async () => {
           stop = (options.schedule ?? later)(() => controller.abort(), POST_TIMEOUT);
           csrf = null;
+          let answer: Response;
           try {
-            return await send(path, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json" }, body, credentials: "same-origin", redirect: "manual", signal: controller.signal });
+            answer = await send(path, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json" }, body, credentials: "same-origin", redirect: "manual", signal: controller.signal });
           } catch {
             throw controller.signal.aborted && more.cut ? more.cut() : new NotConfirmed();
           }
+          if (stale && (await stale(answer))) meta.tokenRefused = true;
+          return answer;
         });
         if (response.type === "opaqueredirect" || response.status === 303) throw new FreshSignInRequired();
-        if (stale && (await stale(response))) {
+        if (meta.tokenRefused) {
           stale = undefined;
           token = null;
           continue;

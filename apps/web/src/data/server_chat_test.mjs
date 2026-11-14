@@ -1964,7 +1964,7 @@ test("rows and threads without a rev read nothing extra, whatever else changes",
   assert.deepEqual(h.chatRequests(from), [LIST]);
 });
 
-test("one busy minute with read on and each reply unread costs sixteen credits, and the last list read waits for the automatic budget of twenty-one", async () => {
+test("one busy minute with read on and each reply unread costs sixteen credits, and no list read is left waiting for credits", async () => {
   const state = marking({ features: ["read"], firstUnread: null, unread: [] });
   const h = serve(lib, v2(state));
   await h.boot();
@@ -1994,9 +1994,9 @@ test("one busy minute with read on and each reply unread costs sixteen credits, 
   assert.equal(total(), 16, own().map((call) => call.method + " " + call.path).join(", "));
   assert.ok(total() <= 29);
   const lists = () => h.chatRequests(from).filter((one) => one === LIST).length;
-  const before = lists();
+  assert.equal(lists(), 4);
   await h.time.advance(60_000);
-  assert.equal(lists(), before + 1);
+  assert.equal(lists(), 4, "no list read was left waiting for credits");
 });
 
 const bare = (answer) => {

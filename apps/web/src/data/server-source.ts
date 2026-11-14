@@ -555,7 +555,7 @@ export function createServerSource(client: ApiClient, clock: () => number = Date
       if (meta.kind === "post") posting += 1;
       try {
         const response = await send();
-        if (response.status === 401 || response.status === 403) sessionEnded();
+        if (response.status === 401 || (response.status === 403 && !meta.tokenRefused)) sessionEnded();
         else if (mine === generation) {
           if (job) job.status = response.status;
           if (response.status === 200 || response.status === 304) confirmedAt = Math.max(confirmedAt ?? -Infinity, sent);
