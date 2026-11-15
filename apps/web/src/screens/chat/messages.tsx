@@ -3,6 +3,7 @@ import type { Attachment, ChatMessage, SentQuote, Working } from "../../data/cha
 import { useQd } from "../../data/hooks";
 import { busyText, DELIVERED_TEXT, QUIET_TEXT, readableText, readText, resolveQuote, SEND_FAILED_TEXT, SEND_RETRY_TEXT, workingStatus } from "../../domain/chat";
 import { UPLOADING_TEXT } from "../../domain/files-r1";
+import { shownText } from "../../domain/hidden-chars";
 import { parseMarkdown } from "../../domain/markdown";
 import { referenceInfo } from "../../domain/references";
 import { href, linkedParts, referenceHref } from "../../domain/routes";
@@ -18,6 +19,7 @@ import { ARRIVE, lineMotion, RISE, useShown } from "../../ui/motion";
 import { RefChip } from "../../ui/reference";
 import { ErrorLine } from "../../ui/states";
 import { AttachmentList } from "./attachments";
+import { drawMarks, MARKS } from "./marks";
 import { Actionable } from "./message-actions";
 import { QuoteBlock } from "./quote";
 
@@ -33,7 +35,7 @@ type OnQuote = (selected: string | null) => void;
 
 export function BotMessage({ message, name, color, world, fresh, onQuote, onOpen }: { message: ChatMessage; name: string; color?: string; world: World; fresh?: boolean; onQuote?: OnQuote; onOpen: (file: Attachment, from: HTMLElement) => void }) {
   const blocks = useMemo(() => parseMarkdown(message.text), [message.text]);
-  const plain = useMemo(() => readableText(message.text), [message.text]);
+  const plain = useMemo(() => shownText(readableText(message.text)), [message.text]);
   const shownQuote = message.quote ? resolveQuote(message.quote, world, name) : null;
   return (
     <Actionable id={message.id} title={name + " · " + clockTime(message.at)} copy={plain} onQuote={onQuote} align="start" className={cx("chat-bot-message", fresh && ARRIVE)} testId="chat-bot-message">
@@ -45,7 +47,7 @@ export function BotMessage({ message, name, color, world, fresh, onQuote, onOpen
       <div className="chat-bot-bubble">
         {shownQuote && <QuoteBlock quote={shownQuote} />}
         <div data-message-text="">
-          <Markdown blocks={blocks} botName={name} className="text-lead" renderText={(text, key) => <LinkedText key={key} parts={linkedParts(text, world)} />} />
+          <Markdown blocks={blocks} botName={name} className="text-lead" marks={MARKS} renderText={(text, key) => <LinkedText key={key} parts={linkedParts(text, world)} draw={drawMarks} />} />
         </div>
         {message.attachments && message.attachments.length > 0 && (
           <div className="mt-s2">
@@ -145,12 +147,12 @@ export function MyMessage({
   const line = note === "read" ? { seen: true, text: readText(seenAt, qd.now()) } : note === "delivered" ? { seen: false, text: DELIVERED_TEXT } : null;
   const lines = useShown(line ? [line] : [], noteId, "");
   return (
-    <Actionable id={id} title={"You · " + clockTime(at)} copy={id && text ? text : undefined} onQuote={actions} align="end" className={cx("chat-my-message flex flex-col gap-s1", rise && RISE)} testId="chat-my-message">
+    <Actionable id={id} title={"You · " + clockTime(at)} copy={id && text ? shownText(text) : undefined} onQuote={actions} align="end" className={cx("chat-my-message flex flex-col gap-s1", rise && RISE)} testId="chat-my-message">
       {shownQuote && <QuoteBlock quote={shownQuote} />}
       {attachments && attachments.length > 0 && <AttachmentList items={attachments} align="end" onOpen={onOpen} />}
       {text && (
         <p data-message-text="" className="chat-my-bubble text-lead whitespace-pre-line [overflow-wrap:anywhere]">
-          <LinkedText parts={linkedParts(text, world)} />
+          <LinkedText parts={linkedParts(text, world)} draw={drawMarks} />
         </p>
       )}
       {note === "failed" ? (

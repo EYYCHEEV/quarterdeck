@@ -6,6 +6,7 @@ import { Button, IconButton, LinkButton } from "../../ui/button";
 import { cx } from "../../ui/cx";
 import { go, Link } from "../../ui/link";
 import { PriorityTile } from "../../ui/priority";
+import { drawMarks } from "./marks";
 
 const FRAME = "chat-quote-block relative flex items-start gap-s2 rounded-key border border-line-3 border-l-[length:var(--line-w-key)] border-l-hand bg-panel py-s2 pr-s1 pl-s3 text-left";
 
@@ -68,7 +69,7 @@ export function QuoteBlock({ quote, onRemove }: { quote: Quote; onRemove?: () =>
       <span className="eyebrow block text-ink-2">{quote.label}</span>
       {quote.title && <b className="mt-s1 block text-body font-strong [overflow-wrap:anywhere]">{quote.title}</b>}
       <span id={textId} ref={clamped} className={cx("mt-s1 text-meta whitespace-pre-line [overflow-wrap:anywhere] text-ink-2", open ? "block" : "line-clamp-4")} data-testid="chat-quote-text">
-        {quote.text}
+        {drawMarks(quote.text)}
       </span>
     </>
   );

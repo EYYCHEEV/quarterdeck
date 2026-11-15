@@ -512,6 +512,7 @@ const STATES = [
       await tap(vp, p, T("chat-file"));
       await p.getByText("Could not open this file.", { exact: true }).waitFor();
     }, pop: () => '[data-pop="file-viewer"]', closes: dialogCloses },
+  { name: "chat-hidden-marks", route: "/chat/alba?chatfx=CF-MARKS", shot: true, open: (vp, p) => p.locator(T("hidden-mark")).first().waitFor() },
   { name: "chat-card-changes", route: "/chat/alba", shot: true, open: showCardChanges },
   { name: "chat-file-open", route: "/chat/alba", open: async (vp, p) => {
       await tap(vp, p, T("chat-file"));

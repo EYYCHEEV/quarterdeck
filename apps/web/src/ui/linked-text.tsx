@@ -1,9 +1,9 @@
-import { Fragment } from "react";
+import { Fragment, type ReactNode } from "react";
 import { Link } from "./link";
 
 export type TextLink = { text: string; to: string | null };
 
-export function LinkedText({ parts }: { parts: TextLink[] }) {
+export function LinkedText({ parts, draw }: { parts: TextLink[]; draw?: (text: string) => ReactNode }) {
   return (
     <>
       {parts.map((part, n) =>
@@ -12,7 +12,7 @@ export function LinkedText({ parts }: { parts: TextLink[] }) {
             {part.text}
           </Link>
         ) : (
-          <Fragment key={n}>{part.text}</Fragment>
+          <Fragment key={n}>{draw ? draw(part.text) : part.text}</Fragment>
         ),
       )}
     </>
