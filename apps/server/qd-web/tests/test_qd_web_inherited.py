@@ -511,6 +511,29 @@ class LongSendAdmissionTests(unittest.TestCase):
                 fake = chat_send(size, pairs)
                 self.assertEqual((read_of(fake), fake.sign_in.calls), ((self.REFUSED, 0), []))
 
+    def test_an_origin_and_a_forwarded_host_that_both_name_another_host_are_refused_by_the_sign_in_service_host_check(self):
+        service = types.SimpleNamespace(trusted_proxy="127.0.0.1", forwarded_host="quarterdeck.invalid", _headers=approval_app.ApprovalApplication._headers)
+
+        class HostCheck(SignIn):
+            def __call__(self, payload):
+                self.calls.append(payload)
+                facts = payload["request"]
+                asked_as = approval_app.Request(facts["method"], facts["path"], dict(facts["headers"]), bytearray(), facts["peer"])
+                try:
+                    approval_app.ApprovalApplication._caller(service, asked_as)
+                except approval_security.ApprovalRefused:
+                    raise application.SessionRefused("Captain auth session was refused") from None
+                return {"ok": True, "csrf": "spare", "freshUntil": 0.0, "freshRequired": False}
+
+        other = (("Origin", "https://other.invalid"), ("X-Forwarded-Host", "other.invalid")) + without("Origin", without("X-Forwarded-Host"))
+        for size in self.LONG:
+            with self.subTest(size=size):
+                fake = chat_send(size, other, sign_in=HostCheck())
+                self.assertEqual(read_of(fake), (self.SESSION, 0))
+                self.assertEqual((fake.rfile.calls, asked(fake)), (0, [("authenticate", "GET", "/captain/api/chat")]))
+        fake = chat_send(16385, sign_in=HostCheck())
+        self.assertEqual((read_of(fake), asked(fake)), ((16385, 16385), [("authenticate", "GET", "/captain/api/chat")]))
+
     def test_a_gate_that_says_too_many_or_fails_is_answered_before_the_body(self):
         cases = (
             (approval_security.ApprovalRateLimited("too many"), (429, {"error": "rate"})),

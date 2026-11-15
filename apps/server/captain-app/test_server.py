@@ -14,8 +14,10 @@ import application
 import approval_app
 import approval_security
 import auth_bridge
+import captain_auth_socket
 import chat_bot_list
 import server
+import test_signin_support
 
 
 ROOT = Path(__file__).resolve().parent
@@ -677,6 +679,89 @@ class BodyLimitTests(unittest.TestCase):
         server.Handler._handle(fake)
         self.assertEqual([(response.status, json.loads(response.body)) for response in sent], [REFUSED])
         self.assertEqual(fake.rfile.tell(), 0)
+
+
+class _NoGoogle:
+    def authorization_url(self, **values):
+        raise AssertionError("Google is not used by these tests")
+
+    def exchange_code(self, code, verifier, nonce):
+        raise AssertionError("Google is not used by these tests")
+
+
+class SignInServiceAdmissionTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(dir=ROOT)
+        self.addCleanup(self.temporary.cleanup)
+        root = Path(self.temporary.name)
+        root.chmod(0o700)
+        state = approval_security.ApprovalState(
+            root / "approval.sqlite",
+            b"s" * 32,
+            clock=lambda: 1000.0,
+        )
+        self.token = state.start_browser_session(
+            "account-user-subject",
+            device_hash=None,
+            kind="Other browser",
+            fresh_from=1000.0,
+        ).token
+        approval = object.__new__(approval_app.ApprovalApplication)
+        approval.state = state
+        approval.sign_in = test_signin_support.production_sign_in(state, _NoGoogle())
+        self.addCleanup(setattr, approval.sign_in, "_authority", None)
+        approval.trusted_proxy = "127.0.0.1"
+        approval.public_origin = "https://quarterdeck.invalid"
+        approval.forwarded_host = "quarterdeck.invalid"
+        service = object.__new__(captain_auth_socket.CaptainAuthSocketService)
+        service.sign_in = approval.sign_in
+        service.application = approval
+        self.asked = []
+
+        def answer(payload):
+            self.asked.append((payload["operation"], payload["request"]["method"], payload["request"]["path"]))
+            try:
+                csrf, fresh_until = service._authorize(payload)
+            except approval_security.FreshSignInRequired:
+                raise
+            except Exception:
+                raise application.SessionRefused("Captain auth session was refused") from None
+            return {"ok": True, "csrf": csrf, "freshUntil": fresh_until, "freshRequired": False}
+
+        self.answer = answer
+
+    def pairs(self, host="quarterdeck.invalid", token=None):
+        return (
+            ("Cookie", f"__Host-qd-approval={self.token if token is None else token}"),
+            ("Origin", "https://" + host),
+            ("X-Forwarded-For", "192.0.2.10"),
+            ("X-Forwarded-Host", host),
+            ("X-Forwarded-Proto", "https"),
+        )
+
+    def read(self, size, pairs):
+        fake = BodyLimitTests.framed(size, pairs=pairs, sign_in=self.answer)
+        return BodyLimitTests.read_of(fake), fake.timeouts
+
+    def test_the_sign_in_service_itself_admits_a_signed_long_send_asked_as_a_read(self):
+        for size in BodyLimitTests.LONG:
+            with self.subTest(size=size):
+                self.assertEqual(self.read(size, self.pairs()), ((size, size), [5]))
+        self.assertEqual(self.asked, [("authenticate", "GET", CHAT_SEND)] * 2)
+
+    def test_an_origin_and_a_forwarded_host_that_both_name_another_host_are_refused_by_the_sign_in_service(self):
+        for size in BodyLimitTests.LONG:
+            with self.subTest(size=size):
+                self.assertEqual(self.read(size, self.pairs("other.invalid")), ((REFUSED, 0), []))
+        self.assertEqual(self.asked, [("authenticate", "GET", CHAT_SEND)] * 2)
+
+    def test_the_sign_in_service_itself_refuses_a_session_it_does_not_know(self):
+        unknown = self.token[::-1]
+        self.assertNotEqual(unknown, self.token)
+        for size in BodyLimitTests.LONG:
+            with self.subTest(size=size):
+                self.assertEqual(self.read(size, self.pairs(token=unknown)), ((REFUSED, 0), []))
+        self.assertEqual(self.asked, [("authenticate", "GET", CHAT_SEND)] * 2)
 
 
 if __name__ == "__main__":
