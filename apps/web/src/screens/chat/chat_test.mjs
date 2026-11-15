@@ -1327,6 +1327,76 @@ it("Chat: Copy says Copied only after the clipboard took the text, and says it f
   assert.equal(await T(p, "message-actions").getByRole("button", { name: "Copied" }).count(), 0);
 });
 
+const LISTED = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069\u200B\u2060\uFEFF]/u;
+const MARKS_PLAIN = String.raw`Send the pay\u{202E}eta\u{202C} file. Hidden: a\u{200B}b c\u{2060}d e\u{FEFF}f. Marks: g\u{61C}h i\u{200E}j k\u{200F}l m\u{202A}n o\u{202B}p q\u{202D}r s\u{2066}t u\u{2067}v w\u{2068}x y\u{2069}z.`;
+const MARKS_KEPT = "Family \u{1F468}\u200D\u{1F469}\u200D\u{1F467}, a heart \u2764\uFE0F and \u0645\u06CC\u200C\u062E\u0648\u0627\u0647\u0645 stay as they are.";
+const said = (p, words) => T(p, "chat-bot-message").filter({ hasText: words });
+
+for (const [name, size] of [["the Mac", MAC], ["a phone", PHONE]])
+  it("Chat on " + name + ": a hidden or reordering character in a bot's message is drawn as a small marker that reads its code, in plain text, inline code, a code block and a link's words, and none of those characters is left in the messages", size, async (p) => {
+    await open(p, "/chat/alba?chatfx=CF-MARKS");
+    const plain = said(p, "Send the pay").locator("[data-message-text]");
+    await plain.waitFor();
+    assert.equal(await plain.innerText(), MARKS_PLAIN);
+    assert.deepEqual(await plain.getByTestId("hidden-mark").allInnerTexts(), MARKS_PLAIN.match(/\\u\{[0-9A-F]+\}/g));
+    assert.equal(await plain.getByTestId("hidden-mark").count(), 15);
+    const code = said(p, "Run").locator("[data-message-text]");
+    assert.equal(await code.locator("p code").innerText(), String.raw`rm\u{202E} -rf`);
+    assert.equal(await code.locator("pre code").innerText(), String.raw`echo a\u{200B}b\u{2069}`);
+    assert.equal(await code.getByTestId("hidden-mark").count(), 3);
+    const link = said(p, "site").getByTestId("bot-link");
+    assert.equal(await link.locator("span").first().innerText(), String.raw`Trusted\u{200B} site`);
+    const kept = said(p, "stay as they are").locator("[data-message-text]");
+    assert.equal(await kept.innerText(), MARKS_KEPT);
+    assert.equal(await kept.getByTestId("hidden-mark").count(), 0);
+    const all = (await T(p, "chat-bot-message").locator("[data-message-text]").evaluateAll((list) => list.map((el) => el.textContent))).join("\n");
+    assert.equal(LISTED.test(all), false, "a listed character is still in the messages");
+    const marker = plain.getByTestId("hidden-mark").first();
+    const look = await marker.evaluate((el) => {
+      const style = getComputedStyle(el);
+      const around = getComputedStyle(el.parentElement);
+      return { smaller: parseFloat(style.fontSize) < parseFloat(around.fontSize), muted: style.color !== around.color, direction: style.unicodeBidi };
+    });
+    assert.deepEqual(look, { smaller: true, muted: true, direction: "isolate" });
+  });
+
+it("Chat: his own message with a hidden character shows the marker too, and Copy gives the text as shown", MAC, async (p) => {
+  await p.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await open(p, "/chat/iris");
+  await T(p, "chat-input").fill("my pay\u202Eeta\u200B words");
+  await T(p, "chat-send").click();
+  const sent = mine(p, "my pay");
+  await sent.waitFor();
+  assert.equal(await sent.locator("[data-message-text]").innerText(), String.raw`my pay\u{202E}eta\u{200B} words`);
+  assert.equal(await sent.getByTestId("hidden-mark").count(), 2);
+  await p.locator('[data-testid="chat-my-message"][data-message-id]').filter({ hasText: "my pay" }).waitFor();
+  await p.mouse.move(0, 0);
+  await sent.hover();
+  await sent.getByTestId("message-actions").getByRole("button", { name: /^Copy$/ }).click();
+  await sent.getByTestId("message-actions").getByRole("button", { name: "Copied" }).waitFor();
+  assert.equal(await p.evaluate(() => navigator.clipboard.readText()), String.raw`my pay\u{202E}eta\u{200B} words`);
+});
+
+it("Chat: Copy on a bot's message and Copy code give the text as shown, with each marker's text in place of its character and none of the hidden characters", MAC, async (p) => {
+  await p.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await open(p, "/chat/alba?chatfx=CF-MARKS");
+  const copied = async (message) => {
+    await message.hover();
+    await message.getByTestId("message-actions").getByRole("button", { name: /^Copy$/ }).click();
+    await message.getByTestId("message-actions").getByRole("button", { name: "Copied" }).waitFor();
+    return p.evaluate(() => navigator.clipboard.readText());
+  };
+  await said(p, "Send the pay").waitFor();
+  assert.equal(await copied(said(p, "Send the pay")), MARKS_PLAIN);
+  const whole = await copied(said(p, "Run"));
+  assert.equal(LISTED.test(whole), false, "a listed character is in the copied text");
+  assert.ok(whole.includes(String.raw`rm\u{202E} -rf`) && whole.includes(String.raw`echo a\u{200B}b\u{2069}`), whole);
+  assert.equal(await copied(said(p, "stay as they are")), MARKS_KEPT);
+  await said(p, "Run").getByRole("button", { name: "Copy code" }).click();
+  await said(p, "Run").getByRole("button", { name: "Copied" }).waitFor();
+  assert.equal(await p.evaluate(() => navigator.clipboard.readText()), String.raw`echo a\u{200B}b\u{2069}`);
+});
+
 it("Chat: pressing and holding a message on the phone opens Reply, Copy and Select, and a quick tap does not", PHONE, async (p) => {
   await p.clock.install();
   await open(p, "/chat/iris");

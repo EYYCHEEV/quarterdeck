@@ -270,6 +270,61 @@ it("Chat on a phone (390 x 844): a new reply from the bot while selecting keeps 
   assert.deepEqual([now.whole, now.selectable], [true, true], "the whole text still selected, and still selectable");
 });
 
+const MARKED = String.raw`Send the pay\u{202E}eta\u{202C} file. Hidden: a\u{200B}b c\u{2060}d e\u{FEFF}f. Marks: g\u{61C}h i\u{200E}j k\u{200F}l m\u{202A}n o\u{202B}p q\u{202D}r s\u{2066}t u\u{2067}v w\u{2068}x y\u{2069}z.`;
+const LISTED = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069\u200B\u2060\uFEFF]/u;
+
+const selectAcross = async (message, from, to) => {
+  let timer;
+  const late = new Promise((done) => {
+    timer = setTimeout(() => done("no selectionchange within 5 s"), 5000);
+  });
+  const seen = message
+    .locator("[data-message-text]")
+    .evaluate((root, [first, last]) => {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      let start = null;
+      let end = null;
+      for (let node = walker.nextNode(); node && !end; node = walker.nextNode()) {
+        if (!start && node.textContent.includes(first)) start = [node, node.textContent.indexOf(first)];
+        if (start && node.textContent.includes(last)) end = [node, node.textContent.indexOf(last) + last.length];
+      }
+      if (!start || !end) return "the words are not in the message";
+      const range = document.createRange();
+      range.setStart(start[0], start[1]);
+      range.setEnd(end[0], end[1]);
+      const changed = new Promise((done) => document.addEventListener("selectionchange", () => done(getSelection().toString()), { once: true }));
+      getSelection().removeAllRanges();
+      getSelection().addRange(range);
+      return changed;
+    }, [from, to])
+    .catch((error) => String(error?.message ?? error));
+  const result = await Promise.race([seen, late]);
+  clearTimeout(timer);
+  return result;
+};
+
+it("Chat on a phone (390 x 844): a part selected across a hidden-character marker is copied as shown, with the marker's text in place of the character", TOUCH[0][1], async (p) => {
+  const { first } = await openIris(p, "/chat/alba?chatfx=CF-MARKS");
+  await startSelect(p, first);
+  assert.equal(await selectAcross(first, "pay", "eta"), String.raw`pay\u{202E}eta`, "the selected part");
+  await frames(p);
+  await barOf(p).getByRole("button", { name: "Copy", exact: true }).tap();
+  await barOf(p).getByRole("button", { name: "Copied", exact: true }).waitFor();
+  const copied = await p.evaluate(() => window.qdCopied);
+  assert.deepEqual(copied, [String.raw`pay\u{202E}eta`], "what Copy put on the clipboard");
+  assert.equal(LISTED.test(copied.join("")), false, "a hidden character on the clipboard");
+});
+
+it("Chat on a phone (390 x 844): Select then Copy of a whole message with hidden characters copies exactly the text as shown", TOUCH[0][1], async (p) => {
+  const { first } = await openIris(p, "/chat/alba?chatfx=CF-MARKS");
+  await startSelect(p, first);
+  await barOf(p).waitFor();
+  assert.equal((await selectedText(p)).trim(), MARKED, "the selected text");
+  await barOf(p).getByRole("button", { name: "Copy", exact: true }).tap();
+  await barOf(p).getByRole("button", { name: "Copied", exact: true }).waitFor();
+  assert.deepEqual(await p.evaluate(() => window.qdCopied), [MARKED], "what Copy put on the clipboard");
+});
+
 it("Chat on the Mac (1512 x 982): nothing changes; hover offers Reply and Copy, no Select shows anywhere, a right-click keeps the browser's menu, and a mouse selection still offers Reply", MAC, async (p) => {
   const { first } = await openIris(p);
   await first.hover();

@@ -535,6 +535,21 @@
         "The rejected link is plain text with the shared blocked-address line.",
         "Rejected media reaches the existing picture/file failed states with no unsafe request or download."
       ]
+    },
+    {
+      "fixture": "CF-MARKS hidden and reordering characters in message text",
+      "bot": "alba",
+      "messages": [
+        { "id": "fx-marks-plain", "from": "Alba", "at": "2026-11-02T10:00:00-05:00", "text": "Send the pay\u202eeta\u202c file. Hidden: a\u200bb c\u2060d e\ufefff. Marks: g\u061ch i\u200ej k\u200fl m\u202an o\u202bp q\u202dr s\u2066t u\u2067v w\u2068x y\u2069z." },
+        { "id": "fx-marks-code", "from": "Alba", "at": "2026-11-02T10:01:00-05:00", "text": "Run `rm\u202e -rf` then:\n\n```sh\necho a\u200bb\u2069\n```" },
+        { "id": "fx-marks-link", "from": "Alba", "at": "2026-11-02T10:02:00-05:00", "text": "[Trusted\u200b site](https://example.com/review)" },
+        { "id": "fx-marks-kept", "from": "Alba", "at": "2026-11-02T10:03:00-05:00", "text": "Family \ud83d\udc68\u200d\ud83d\udc69\u200d\ud83d\udc67, a heart \u2764\ufe0f and \u0645\u06cc\u200c\u062e\u0648\u0627\u0647\u0645 stay as they are." }
+      ],
+      "expect": [
+        "Each of the 15 hidden or reordering characters is drawn as a small muted marker that reads its code, in plain text, inline code, a code block and a link's words, and has no effect on the text around it.",
+        "Copy, Copy code and Select then Copy give the text as shown, with each marker's text in place of its character.",
+        "A joined emoji, a variation selector and a zero width non-joiner stay as they are, with no marker."
+      ]
     }
   ]
 }
