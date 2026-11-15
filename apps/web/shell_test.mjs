@@ -5718,7 +5718,7 @@ for (const [where, size] of [["a phone", PHONE], ["the Mac", MAC]])
     const sent = p.locator('[data-message-id="iris-m31"]');
     const time = sent.locator("time");
     await time.waitFor();
-    const [line, now] = [await time.locator("xpath=..").boundingBox(), await sent.boundingBox()];
+    const [line, now] = await sent.evaluate((el) => [el.querySelector("time").parentElement, el].map((part) => part.getBoundingClientRect()).map(({ y, height }) => ({ y, height })));
     const endless = (await barMotion(sent)).filter(([, , iterations]) => iterations === "endless");
     equal(
       [await sent.getByTestId("chat-sending-bar").count(), await sent.getByText("Sending...", { exact: true }).count(), line.height, line.y - now.y, endless],
