@@ -7,8 +7,8 @@
   "files": {
     "README.md": "16320187aa9dbff2ec9a108aae2f6fe0f80c409b6b27d90fabe6e4445dd9314a",
     "THIRD_PARTY_NOTICES.md": "c0d03710f1a83bae60a93b22e544e5d80a46627efb8b733190e53e3c1f7d9cc7",
-    "application.py": "cef61ca067e36a5e517f60efb3ebf672da06b3adaa820bc9dca56435a7f87eaa",
-    "auth_bridge.py": "8db17a4d92e7f33cabfa3b5e3c814e9e54abc3669e9c24e6bfeb90eee6893550",
+    "application.py": "b6454c91d78c37ecf1df4bdb24361556ec2949dfd28637c6ad2c13f4ece76a36",
+    "auth_bridge.py": "8e39d0f746a54c66d3906aa3bf47367bb3f1740306ab89c9c18bb1e6450df182",
     "captain_auth.py": "6ec59f88bef20206072ee9e324f62714bacd337c696b01cf8fd0e7eea849e5e8",
     "cards.py": "9852594d549a8a7920c5fc4d7e42c07533a0764363308f0ac9f3d7ccdc58ce30",
     "chat.css": "122c376dbd0154853162e146283983a90ffa09391d35ac3df5d0ed4087350931",
@@ -23,6 +23,6 @@
     "packaging_plan.py": "dc46493391bd1ae1b56c2469484d422323e5ee9aad2204e8c8413818129793ad",
     "runtime-config.template.json": "3cd9520453f8131e839494b39c472d9f22ca354227638df9c238f4782ad9eb6e",
     "security.py": "c9cd25407bef7b449456f6834339b099209ea2f0df57a474476cb670cef6542a",
-    "server.py": "e6a1019ceca59bc19fa59ce926457ceaf66336bc475190001992c99f7c2b69cd"
+    "server.py": "3cc62847d96f3fbc9ba4d39371f994772464360a7f1998c3833240786df7e533"
   }
 }

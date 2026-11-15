@@ -115,6 +115,12 @@ def _load_object(path: str) -> dict[str, Any]:
     return document
 
 
+class Answered(Exception):
+    def __init__(self, response: approval_app.Response) -> None:
+        super().__init__()
+        self.response = response
+
+
 class Handler(BaseHTTPRequestHandler):
     application: webapp.QdWeb
 
@@ -132,6 +138,10 @@ class Handler(BaseHTTPRequestHandler):
         length = int(raw)
         if length > application.body_limit(self.command, self.path):
             raise ValueError("request body is too large")
+        if length > application.MAX_BODY_BYTES:
+            refusal = self.application.large_body_refusal(Handler._request(self, bytearray()))
+            if refusal is not None:
+                raise Answered(refusal)
         self.connection.settimeout(5)
         body = bytearray(length)
         offset = 0
@@ -256,6 +266,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._handle_events(request)
                 return
             self._send(self.application.handle(request))
+        except Answered as answered:
+            self._send(answered.response)
         except Exception:
             body[:] = b"\x00" * len(body)
             body.clear()

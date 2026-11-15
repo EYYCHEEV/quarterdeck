@@ -156,6 +156,16 @@ class ChatApi:
             self._log(route, response, cause, started)
         return response
 
+    def large_body_refusal(self, request: approval_app.Request) -> approval_app.Response | None:
+        started = time.monotonic()
+        try:
+            self.sessions.admit_post(request)
+        except Exception as error:
+            response = self._failure(error)
+            self._log("send", response, self._root(error), started)
+            return response
+        return None
+
     def _chats(self, request: approval_app.Request) -> approval_app.Response:
         self.sessions.authenticate(request)
         if urlsplit(request.path).query:
