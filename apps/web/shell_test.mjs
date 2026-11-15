@@ -3139,6 +3139,24 @@ it("Sign out: a chat draft typed before Sign out is gone after Sign in", PHONE, 
   equal(await T(p, "chat-input").inputValue(), "", "draft");
 });
 
+it("Sign out: a chat whose alerts were turned off has them on again after Sign in, and so has every other chat", MAC, async (p) => {
+  await open(p, "/chat/iris");
+  await T(p, "chat-more").click();
+  await T(p, "chat-alerts").click();
+  equal(await T(p, "chat-alerts").getAttribute("aria-checked"), "false", "alerts before Sign out");
+  await p.keyboard.press("Escape");
+  await signOutFromMenu(p, false);
+  equal(await p.evaluate(() => localStorage.getItem("quarterdeck-chat-alerts-off")), null, "the stored choice after Sign out");
+  await p.getByRole("button", { name: "Sign in with Google" }).click();
+  for (const bot of ["iris", "alba"]) {
+    await p.locator('[data-testid="pinned-bot"][data-id="' + bot + '"]').click();
+    await p.waitForFunction((id) => location.pathname === "/chat/" + id, bot);
+    await T(p, "chat-more").click();
+    equal(await T(p, "chat-alerts").getAttribute("aria-checked"), "true", bot + " alerts after Sign in");
+    await p.keyboard.press("Escape");
+  }
+});
+
 it("Sign out: Back after Sign out still shows only Signed out", PHONE, async (p) => {
   await open(p, "/projects");
   await openDrawer(p, true);

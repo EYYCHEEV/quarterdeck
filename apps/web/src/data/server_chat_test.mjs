@@ -2666,3 +2666,20 @@ test("a 403 that is not a token refusal, to a send's POST with a stored token, e
   assert.deepEqual(h.requests(from), [POST]);
   await assert.rejects(h.source.chat.openThread("iris"), named("SignInRequired"));
 });
+
+test("signing out forgets which chats have alerts off, and a key the app does not own stays", async () => {
+  const held = { "quarterdeck-chat-alerts-off": '["steward"]', "not-the-apps": "kept" };
+  const store = { getItem: (key) => held[key] ?? null, setItem: (key, value) => void (held[key] = String(value)), removeItem: (key) => void delete held[key] };
+  const before = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  Object.defineProperty(globalThis, "localStorage", { value: store, configurable: true, writable: true });
+  try {
+    const h = serve();
+    await h.boot();
+    await h.source.signOut();
+    assert.deepEqual(h.navigations, ["/captain/logout"]);
+  } finally {
+    if (before) Object.defineProperty(globalThis, "localStorage", before);
+    else delete globalThis.localStorage;
+  }
+  assert.deepEqual(held, { "not-the-apps": "kept" });
+});

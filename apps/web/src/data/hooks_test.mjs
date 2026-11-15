@@ -80,6 +80,20 @@ test("Sign out: a screen listening on a key that held no value is told", async (
   assert.equal(heard, 1);
 });
 
+test("Sign out: which chats have alerts off is forgotten, and a key the app does not own stays", async () => {
+  const held = { "quarterdeck-chat-alerts-off": '["iris","alba"]', "not-the-apps": "kept" };
+  const store = { getItem: (key) => held[key] ?? null, setItem: (key, text) => void (held[key] = String(text)), removeItem: (key) => void delete held[key] };
+  const before = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  Object.defineProperty(globalThis, "localStorage", { value: store, configurable: true, writable: true });
+  try {
+    await signOut();
+  } finally {
+    if (before) Object.defineProperty(globalThis, "localStorage", before);
+    else delete globalThis.localStorage;
+  }
+  assert.deepEqual(held, { "not-the-apps": "kept" });
+});
+
 test("Sign out: an attachment batch that finishes after Sign out writes nothing to the draft and makes no blob link", async () => {
   let release;
   const gate = new Promise((done) => { release = done; });
