@@ -32,7 +32,6 @@ export function saveSettings(next: Settings) {
 export function clearSettings() {
   current = DEFAULTS;
   removeJson(KEY);
-  removeJson(ALERTS_OFF);
   for (const listener of [...listeners]) listener();
 }
 
@@ -56,4 +55,8 @@ export const alertsOn = (botId: string): boolean => !alertsOff().includes(botId)
 export function setAlerts(botId: string, on: boolean) {
   const others = alertsOff().filter((id) => id !== botId);
   writeJson(ALERTS_OFF, on ? others : [...others, botId]);
+}
+
+export function forgetAlerts(): void {
+  removeJson(ALERTS_OFF);
 }
