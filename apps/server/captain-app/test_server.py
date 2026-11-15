@@ -2,7 +2,9 @@ import contextlib
 import gzip
 import io
 import json
+import socket
 import tempfile
+import threading
 import time
 import types
 import unittest
@@ -762,6 +764,68 @@ class SignInServiceAdmissionTests(unittest.TestCase):
             with self.subTest(size=size):
                 self.assertEqual(self.read(size, self.pairs(token=unknown)), ((REFUSED, 0), []))
         self.assertEqual(self.asked, [("authenticate", "GET", CHAT_SEND)] * 2)
+
+
+class EarlyAnswerOverASocketTests(unittest.TestCase):
+    FOLLOW = (
+        f"GET {CHAT_SEND} HTTP/1.1\r\n"
+        "Host: quarterdeck.invalid\r\n"
+        "Cookie: __Host-qd-approval=good-session\r\n"
+        "\r\n"
+    ).encode("ascii")
+    HEAD = (
+        f"POST {CHAT_SEND} HTTP/1.1\r\n"
+        "Host: quarterdeck.invalid\r\n"
+        "Connection: keep-alive\r\n"
+        "Content-Type: application/json\r\n"
+        "Content-Length: 16385\r\n"
+        "Origin: https://quarterdeck.invalid\r\n"
+        "X-Forwarded-For: 192.0.2.10\r\n"
+        "X-Forwarded-Host: quarterdeck.invalid\r\n"
+        "X-Forwarded-Proto: https\r\n"
+        "\r\n"
+    ).encode("ascii")
+
+    def setUp(self):
+        self.sign_in = SignIn()
+        app = application.CardApplication(
+            auth_bridge.SocketApprovalGate(self.sign_in),
+            None,
+            None,
+            clock=lambda: 1000.0,
+        )
+        self.httpd = server.PrivateServer(("127.0.0.1", 0), server.handler_for(app))
+        self.addCleanup(self.httpd.server_close)
+        threading.Thread(
+            target=self.httpd.serve_forever,
+            kwargs={"poll_interval": 0.05},
+            daemon=True,
+        ).start()
+        self.addCleanup(self.httpd.shutdown)
+
+    def exchange(self, data):
+        received = b""
+        with socket.create_connection(self.httpd.server_address, timeout=5) as connection:
+            try:
+                connection.sendall(data)
+            except OSError:
+                pass
+            try:
+                while chunk := connection.recv(4096):
+                    received += chunk
+            except OSError:
+                pass
+        return received
+
+    def test_a_refused_long_send_closes_the_connection_and_what_follows_it_is_never_a_request(self):
+        body = self.FOLLOW + b"x" * (16385 - len(self.FOLLOW))
+        received = self.exchange(self.HEAD + body + self.FOLLOW)
+        head, _, answer = received.partition(b"\r\n\r\n")
+        self.assertEqual(received.count(b"HTTP/1."), 1)
+        self.assertEqual((int(head.split(b" ", 2)[1]), json.loads(answer)), REFUSED)
+        self.assertEqual(self.sign_in.calls, [])
+        self.assertEqual(self.exchange(self.FOLLOW).count(b"HTTP/1."), 1)
+        self.assertEqual(BodyLimitTests.asked(self), [("authenticate", "GET", CHAT_SEND)])
 
 
 if __name__ == "__main__":

@@ -619,6 +619,27 @@ class LongSendOverASocketTests(Running):
         self.assertEqual((status, json.loads(body)), (400, {"error": "request refused"}))
         self.assertEqual(self.auth.requests, [])
 
+    def test_a_refused_long_send_closes_the_connection_and_what_follows_it_is_never_a_request(self):
+        follow = b"GET /captain/cards HTTP/1.1\r\nHost: quarterdeck.invalid\r\nCookie: __Host-qd-approval=good\r\n\r\n"
+        head = self.head(16385, session=None).replace(b"\r\n\r\n", b"\r\nConnection: keep-alive\r\n\r\n")
+        received = b""
+        with socket.create_connection(("127.0.0.1", self.port), timeout=5) as connection:
+            try:
+                connection.sendall(head + follow + b"x" * (16385 - len(follow)) + follow)
+            except OSError:
+                pass
+            try:
+                while chunk := connection.recv(4096):
+                    received += chunk
+            except OSError:
+                pass
+        answer_head, _, answer = received.partition(b"\r\n\r\n")
+        self.assertEqual(received.count(b"HTTP/1."), 1)
+        self.assertEqual((int(answer_head.split(b" ", 2)[1]), json.loads(answer)), (401, {"error": "session"}))
+        self.assertEqual(self.auth.requests, [])
+        status, _ = self.raw(follow)
+        self.assertEqual((status, [request["request"]["path"] for request in self.auth.requests]), (200, ["/captain/cards"]))
+
 
 class ChecksTests(unittest.TestCase):
     def test_the_checker_adapter_loads_the_real_checker_with_a_registry(self):
