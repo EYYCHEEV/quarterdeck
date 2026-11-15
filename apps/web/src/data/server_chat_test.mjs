@@ -2676,7 +2676,8 @@ test("signing out forgets which chats have alerts off, and a key the app does no
   try {
     const h = serve();
     await h.boot();
-    await h.source.signOut();
+    void h.source.signOut();
+    for (let n = 0; n < 10; n += 1) await tick();
     assert.deepEqual(h.navigations, ["/captain/logout"]);
   } finally {
     if (before) Object.defineProperty(globalThis, "localStorage", before);
