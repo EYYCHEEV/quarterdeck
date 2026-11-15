@@ -2745,6 +2745,26 @@ test("a send of the longest text the composer allows costs three credits too", a
   assert.equal(h.source.limited(), true);
 });
 
+test("a long send whose connection drops because the session has ended looks for itself in the thread once, is answered 401 there, and says sign in again: one POST, one read and no retry", async () => {
+  let ended = false;
+  const post = () => {
+    throw new TypeError("Failed to fetch");
+  };
+  const h = serve(lib, { post, read: (path) => (ended && path.startsWith("/captain/api/chat?") ? json({ error: "session" }, 401) : null) });
+  await h.boot();
+  await h.source.chat.openThread("steward");
+  const from = h.calls.length;
+  ended = true;
+  const state = watchSend(h, h.source.chat.send("steward", { text: "a".repeat(17_000), clientId: "client-k6" }));
+  await pass(h, 1_000);
+  assert.equal(state.error?.name, "SignInRequired");
+  assert.deepEqual(h.requests(from), [POST, THREAD("steward")]);
+  await pass(h, 30_000);
+  assert.deepEqual(POSTS(h, from), ["client-k6"]);
+  await assert.rejects(h.source.chat.openThread("iris"), named("SignInRequired"));
+  assert.deepEqual(h.requests(from), [POST, THREAD("steward")]);
+});
+
 test("the session check before a long send mints one spare token on the server: with six other tokens minted since, the token stored just before the long send still sends it as one POST, and the next plain send is one POST with the token that answer gave", async () => {
   const s = tokenServer();
   await s.client.cards();
