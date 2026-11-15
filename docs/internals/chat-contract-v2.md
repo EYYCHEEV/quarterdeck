@@ -56,6 +56,8 @@ The server makes `name` from the id by the naming rule: split at hyphens, drop e
 | Files | new `GET /captain/api/files/<id>`, a new door route |
 | Newer only (sync) | `GET /captain/api/chat?bot=<id>&after=<message id>` answers only the messages after that id, oldest first, with the thread's other fields and `rev`. An unknown or dropped id answers 409 `{"error": "cursor"}`, and the app then reads the newest page. The thread lists `"cursor"` in `features` when this is on; the app never sends `after` before that |
 
+The `csrf` of a send or of a mark-read may come from an earlier answer in the same session (a card list 200 or a POST receipt), not only from a list read made for it. The app spends such a token only while it is under 240 seconds old (the server keeps it 300), and each token once. A 403 `{"error": "request refused"}` for such a token makes the app read the card list once and try once more with the same `clientId`; the session does not end on that 403. Card answers, comments and file sends keep their own token read.
+
 Example rows, mark-read request and answer:
 
 ```json
