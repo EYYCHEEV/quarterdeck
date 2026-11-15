@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from collections import defaultdict
 from datetime import datetime
 from typing import Any
@@ -49,6 +50,7 @@ class CaptainMailbox:
         self.account_name = account_name
         self.oversight_bot = oversight_bot
         self._closed = False
+        self._sending = threading.Lock()
 
     @classmethod
     def open(
@@ -205,14 +207,15 @@ class CaptainMailbox:
         body: str,
         resend_key: str,
     ) -> str:
-        if self._closed:
-            raise security.SecurityRefused("Captain mailbox is closed")
-        return self.mailbox.send(
-            recipient,
-            subject,
-            body,
-            resend_key,
-        )
+        with self._sending:
+            if self._closed:
+                raise security.SecurityRefused("Captain mailbox is closed")
+            return self.mailbox.send(
+                recipient,
+                subject,
+                body,
+                resend_key,
+            )
 
     def send_chat(self, recipient: str, subject: str, body: str, resend_key: str) -> tuple[str, bool]:
         wanted = json.loads(body)
