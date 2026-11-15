@@ -2453,7 +2453,7 @@ function tokenServer() {
   const send = async (path, init) => {
     const body = typeof init.body === "string" && init.body ? JSON.parse(init.body) : null;
     const headers = new Headers(init.headers ?? {});
-    const call = { line: init.method + " " + path, csrf: body?.csrf ?? headers.get("X-QD-Csrf"), clientId: body?.clientId ?? null, conditional: headers.has("If-None-Match") };
+    const call = { line: init.method + " " + path, csrf: body?.csrf ?? headers.get("X-QD-Csrf"), clientId: body?.clientId ?? null, conditional: headers.has("If-None-Match"), bytes: typeof init.body === "string" ? Buffer.byteLength(init.body) : 0 };
     calls.push(call);
     if (path === "/captain/cards") {
       await server.holdList?.(call);
@@ -2464,6 +2464,7 @@ function tokenServer() {
     await server.hold?.(call);
     const made = server.answer?.(call);
     if (made) return made;
+    if (path === "/captain/api/chat" && call.bytes > 16_384) issue();
     if (!spend(call.csrf)) return json({ error: "request refused" }, 403);
     landed.push(call);
     const next = { csrf: issue(), freshUntil: Math.floor(NOW / 1000) + 1800 };
@@ -2682,4 +2683,91 @@ test("signing out forgets which chats have alerts off, and a key the app does no
     else delete globalThis.localStorage;
   }
   assert.deepEqual(held, { "not-the-apps": "kept" });
+});
+
+async function withCreditsLeft(left) {
+  const probe = serve();
+  await probe.boot();
+  await probe.source.chat.openThread("steward");
+  let room = 0;
+  while (!probe.source.limited()) {
+    await probe.source.chat.openThread("iris");
+    room += 1;
+  }
+  const sizes = [];
+  const post = (body, init, server) => {
+    sizes.push(Buffer.byteLength(init.body));
+    return store(body, server);
+  };
+  const h = serve(lib, { post });
+  await h.boot();
+  await h.source.chat.openThread("steward");
+  for (let n = 0; n < room - left; n += 1) await h.source.chat.openThread("iris");
+  const csrf = "token-" + h.calls.filter((call) => call.path === "/captain/cards").length;
+  const sized = (bytes, clientId) => ({ text: "a".repeat(bytes - Buffer.byteLength(JSON.stringify({ bot: "steward", text: "", clientId, csrf }))), clientId });
+  return { h, sizes, sized, from: h.calls.length };
+}
+
+test("a send whose body is 16,384 bytes costs two credits: with three left it goes out as one POST and one credit is still free", async () => {
+  const { h, sizes, sized, from } = await withCreditsLeft(3);
+  assert.equal(h.source.limited(), false);
+  await h.source.chat.send("steward", sized(16_384, "client-k1"));
+  assert.deepEqual([h.requests(from), sizes], [[POST], [16_384]]);
+  assert.equal(h.source.limited(), false, "a send of 16,384 bytes took a third credit");
+  await h.source.chat.openThread("iris");
+  assert.equal(h.source.limited(), true);
+});
+
+test("a send whose body is 16,385 bytes costs three credits, one for the session check the server makes before it reads a long body: with three left it goes out as one POST and no credit is left", async () => {
+  const { h, sizes, sized, from } = await withCreditsLeft(3);
+  await h.source.chat.send("steward", sized(16_385, "client-k2"));
+  assert.deepEqual([h.requests(from), sizes], [[POST], [16_385]]);
+  assert.equal(h.source.limited(), true, "a send of 16,385 bytes left a credit: it was counted as two");
+  await assert.rejects(h.source.chat.openThread("iris"), named("RateLimited"));
+  assert.deepEqual(h.requests(from), [POST]);
+});
+
+test("with two credits left a send of 16,385 bytes is refused as rate limited with no request, and a send of 16,384 bytes goes out", async () => {
+  const long = await withCreditsLeft(2);
+  await assert.rejects(long.h.source.chat.send("steward", long.sized(16_385, "client-k3")), named("RateLimited"));
+  assert.deepEqual([long.h.requests(long.from), long.sizes], [[], []]);
+  const plain = await withCreditsLeft(2);
+  await plain.h.source.chat.send("steward", plain.sized(16_384, "client-k4"));
+  assert.deepEqual([plain.h.requests(plain.from), plain.sizes], [[POST], [16_384]]);
+  assert.equal(plain.h.source.limited(), true);
+});
+
+test("a send of the longest text the composer allows costs three credits too", async () => {
+  const { h, sizes, sized, from } = await withCreditsLeft(3);
+  await h.source.chat.send("steward", sized(114_000, "client-k5"));
+  assert.deepEqual([h.requests(from), sizes], [[POST], [114_000]]);
+  assert.equal(h.source.limited(), true);
+});
+
+test("the session check before a long send mints one spare token on the server: with six other tokens minted since, the token stored just before the long send still sends it as one POST, and the next plain send is one POST with the token that answer gave", async () => {
+  const s = tokenServer();
+  await s.client.cards();
+  s.elsewhere(6);
+  await s.client.chat.send("steward", { text: "a".repeat(17_000), clientId: "client-t8" });
+  await hello(s.client, 9);
+  assert.deepEqual(s.lines(1), [POST, POST]);
+  assert.ok(s.calls[1].bytes > 16_384, "the first send was " + s.calls[1].bytes + " bytes");
+  assert.deepEqual(s.calls.slice(1).map((call) => call.csrf), ["t-1", "t-9"]);
+  assert.deepEqual(s.landed, s.calls.slice(1));
+});
+
+test("the spare token takes one of the eight places: with seven other tokens minted since, the stored token is refused for a long send, and one token read and one retry with the same client id land it", async () => {
+  const s = tokenServer();
+  await s.client.cards();
+  s.elsewhere(7);
+  await s.client.chat.send("steward", { text: "a".repeat(17_000), clientId: "client-t10" });
+  assert.deepEqual(s.lines(1), [POST, TOKEN, POST]);
+  const [first, read, again] = s.calls.slice(1);
+  assert.deepEqual([first.csrf, read.conditional, again.clientId], ["t-1", false, "client-t10"]);
+  assert.deepEqual(s.landed, [again]);
+  const plain = tokenServer();
+  await plain.client.cards();
+  plain.elsewhere(7);
+  await hello(plain.client, 11);
+  assert.deepEqual(plain.lines(1), [POST]);
 });
