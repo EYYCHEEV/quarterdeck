@@ -2771,3 +2771,33 @@ test("the spare token takes one of the eight places: with seven other tokens min
   await hello(plain.client, 11);
   assert.deepEqual(plain.lines(1), [POST]);
 });
+
+test("a 401 to the token read that follows a refused stored token ends the session: the send fails as sign in again with no second POST, and the next read says sign in again with no request", async () => {
+  let signedOut = false;
+  const h = serve(lib, { post: () => json({ error: "request refused" }, 403), cards: () => (signedOut ? json({ error: "session" }, 401) : null) });
+  await h.boot();
+  await h.source.chat.openThread("steward");
+  signedOut = true;
+  const from = h.calls.length;
+  await assert.rejects(h.source.chat.send("steward", { text: "hello", clientId: "client-r3" }), named("SignInRequired"));
+  assert.deepEqual(h.requests(from), [POST, TOKEN]);
+  await assert.rejects(h.source.chat.openThread("iris"), named("SignInRequired"));
+  assert.deepEqual(h.requests(from), [POST, TOKEN]);
+});
+
+test("a 401 to the POST that retries after a refused stored token ends the session: no third POST, no second token read, and the next read says sign in again with no request", async () => {
+  let posts = 0;
+  const post = () => {
+    posts += 1;
+    return posts === 1 ? json({ error: "request refused" }, 403) : json({ error: "session" }, 401);
+  };
+  const h = serve(lib, { post });
+  await h.boot();
+  await h.source.chat.openThread("steward");
+  const from = h.calls.length;
+  await assert.rejects(h.source.chat.send("steward", { text: "hello", clientId: "client-r4" }), named("SignInRequired"));
+  assert.deepEqual(h.requests(from), [POST, TOKEN, POST]);
+  assert.deepEqual(POSTS(h, from), ["client-r4", "client-r4"]);
+  await assert.rejects(h.source.chat.openThread("iris"), named("SignInRequired"));
+  assert.deepEqual(h.requests(from), [POST, TOKEN, POST]);
+});
