@@ -5,6 +5,8 @@ From later releases this file also lists changes to the web app and the server. 
 
 ## 0.2.0
 
+- App: in a chat, 15 characters that are invisible or that change the order of the text are shown as a small marker with their code, such as `\u{202E}`, in a bot's messages, in your own and in quoted messages. Copy, Copy code and copying a selection give the text as you see it, with the marker's text in place of the character. Joined emoji and Persian text are unchanged.
+- App: Sign out also forgets which chats have alerts turned off on this device.
 - App: in a chat, the line under your message ("Delivered" or "Read") no longer makes the chat jump when you send again. The old line folds away and the new one grows in. With Reduce Motion they change at once.
 - App: on a phone or an iPad, press and hold a chat message for Reply, Copy and Select. Select lets you mark part of that message's text. Done ends it.
 - App: a chat message usually goes out in one round trip instead of two. The app reuses the one-time token from the server's last answer while it is under four minutes old, instead of asking for a new one before every message.
@@ -17,7 +19,7 @@ From later releases this file also lists changes to the web app and the server. 
 - App: when mail is busy, your chat message waits and goes out again by itself. Its row counts down: "Mail is busy. Sending again in N seconds".
 - App: when a chat send fails because mail failed, the server had an error or no answer came back, the app tries it twice more by itself before it reads "Not Delivered". Before, it tried once more.
 - App: a screen that gets no answer from the server stops waiting after 20 seconds and says so.
-- Server: a chat message has no 4,000 character limit, in the app and on the plain chat page. One send can be up to 128 KB, and a page of a chat with long messages stays small enough for the app to read.
+- Server: a chat message has no 4,000 character limit, in the app and on the plain chat page. One send can be up to 128 KB, and a send over 16 KB is read only from a signed-in browser on the app's own address. A chat with long messages is read in shorter pages.
 - App: a new look. The app is drawn in IBM Plex Sans and IBM Plex Mono, on solid surfaces, with one colour for what is yours and amber for what waits on you, in the dark and the light look. Every screen keeps its layout.
 
 ## 0.1.3
