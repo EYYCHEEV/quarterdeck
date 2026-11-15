@@ -269,6 +269,10 @@ export function chatBody(botId: string, outgoing: WireOutgoing, csrf: string): s
   return json;
 }
 
+export const LONG_SEND = 16_384;
+
+export const longSend = (body: string): boolean => body.length * 3 > LONG_SEND && new TextEncoder().encode(body).length > LONG_SEND;
+
 export function checkRead(botId: string, upTo: string): void {
   if (typeof botId !== "string" || !BOT_ID.test(botId)) throw new Refused(CHAT_WORDS.bot);
   if (typeof upTo !== "string" || upTo === "" || upTo.length > MAX_ID || CONTROL.test(upTo)) throw new Refused(CHAT_WORDS.mail);

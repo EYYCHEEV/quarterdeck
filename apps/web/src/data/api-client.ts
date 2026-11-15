@@ -51,7 +51,7 @@ export type Send = (path: string, init: RequestInit) => Promise<Response>;
 
 export type AnswerSent = { message: string; stale: boolean; rev: number };
 
-export type SessionRequest = { kind: "list" | "card" | "token" | "mail" | "chat" | "bots" | "post"; automatic: boolean; sent?: number; wait?: boolean; tokenRefused?: boolean };
+export type SessionRequest = { kind: "list" | "card" | "token" | "mail" | "chat" | "bots" | "post"; automatic: boolean; sent?: number; wait?: boolean; tokenRefused?: boolean; long?: boolean };
 
 export type TokenList = (listing: CardListing, sent: number | undefined) => void;
 
@@ -404,7 +404,7 @@ export function createApiClient(options: { send?: Send; openEvents?: (address: s
 
   const signOutToken = async (): Promise<string> => (await tokenRead()).csrf;
 
-  type Submit = { limit?: number; refuse?: (response: Response, mine: number) => Promise<Error>; cut?: () => Error; chain?: ChatChain; stale?: (response: Response) => Promise<boolean> };
+  type Submit = { limit?: number; refuse?: (response: Response, mine: number) => Promise<Error>; cut?: () => Error; chain?: ChatChain; stale?: (response: Response) => Promise<boolean>; long?: (body: string) => boolean };
 
   async function submit<T extends CommentReceipt>(path: string, check: () => void, bodyOf: (token: string) => string, receiptOf: (raw: unknown) => T, onList?: TokenList, more: Submit = {}): Promise<T> {
     check();
@@ -428,6 +428,7 @@ export function createApiClient(options: { send?: Send; openEvents?: (address: s
       let stop = (): void => undefined;
       try {
         const meta: SessionRequest = wait ? { kind: "post", automatic: false, wait } : { kind: "post", automatic: false };
+        if (more.long?.(body)) meta.long = true;
         const response = await request(meta, async () => {
           stop = (options.schedule ?? later)(() => controller.abort(), POST_TIMEOUT);
           csrf = null;
@@ -521,7 +522,7 @@ export function createApiClient(options: { send?: Send; openEvents?: (address: s
 
     async function sendChat(bot: string, outgoing: WireOutgoing, onList?: TokenList, chain?: ChatChain): Promise<ChatReceipt> {
       const lib = await import("./chat-client");
-      return submit(CHAT_PATH, () => lib.checkOutgoing(bot, outgoing), (token) => lib.chatBody(bot, outgoing, token), (raw) => lib.chatReceiptOf(raw, outgoing.clientId), onList, { limit: lib.RECEIPT_LIMIT, refuse, chain, stale: tokenRefused });
+      return submit(CHAT_PATH, () => lib.checkOutgoing(bot, outgoing), (token) => lib.chatBody(bot, outgoing, token), (raw) => lib.chatReceiptOf(raw, outgoing.clientId), onList, { limit: lib.RECEIPT_LIMIT, refuse, chain, stale: tokenRefused, long: lib.longSend });
     }
 
     async function chainToken(onList?: TokenList): Promise<string> {

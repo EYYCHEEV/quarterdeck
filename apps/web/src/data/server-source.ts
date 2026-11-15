@@ -537,7 +537,7 @@ export function createServerSource(client: ApiClient, clock: () => number = Date
       const job = meta.kind === "list" ? current : null;
       if (paused && !job?.probe) throw new SignInRequired();
       if (unconfirmed && meta.kind !== "list" && meta.kind !== "token") throw new SessionUnconfirmed();
-      const cost = meta.kind === "post" ? 2 : 1;
+      const cost = meta.kind === "post" ? (meta.long ? 3 : 2) : 1;
       while (budgetAt(cost, meta.automatic) > clock()) {
         if (!meta.wait) throw new RateLimited();
         await creditsBack(cost, meta.automatic);
