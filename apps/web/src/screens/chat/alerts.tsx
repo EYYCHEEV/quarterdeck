@@ -1,27 +1,19 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useChatRows } from "../../data/chat-hooks";
+import { alertsOn, setAlerts } from "../../data/settings";
 import { href } from "../../domain/routes";
 import type { Bot } from "../../domain/types";
 import { canPush } from "../../platform/push";
-import { readJson, writeJson } from "../../platform/storage";
 import { Avatar } from "../../ui/avatar";
 import { IconButton } from "../../ui/button";
 import { Icon } from "../../ui/icon";
 import { Link } from "../../ui/link";
 import { MENU_ROW } from "../../ui/more-sheet";
 
-const OFF_KEY = "quarterdeck-chat-alerts-off";
-
-function alertsOff(): string[] {
-  const stored = readJson(OFF_KEY);
-  return Array.isArray(stored) ? stored.filter((id): id is string => typeof id === "string") : [];
-}
-
 export function AlertSwitch({ botId }: { botId: string }) {
-  const [on, setOn] = useState(() => !alertsOff().includes(botId));
+  const [on, setOn] = useState(() => alertsOn(botId));
   const toggle = () => {
-    const others = alertsOff().filter((id) => id !== botId);
-    writeJson(OFF_KEY, on ? [...others, botId] : others);
+    setAlerts(botId, !on);
     setOn(!on);
   };
   return (

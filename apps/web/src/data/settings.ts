@@ -8,6 +8,7 @@ const APPEARANCES: Appearance[] = ["system", "light", "dark"];
 export type Settings = { appearance: Appearance; email: string };
 
 const KEY = "qd.settings";
+const ALERTS_OFF = "quarterdeck-chat-alerts-off";
 const DEFAULTS: Settings = { appearance: "system", email: "captain@example.com" };
 const listeners = new Set<() => void>();
 
@@ -31,6 +32,7 @@ export function saveSettings(next: Settings) {
 export function clearSettings() {
   current = DEFAULTS;
   removeJson(KEY);
+  removeJson(ALERTS_OFF);
   for (const listener of [...listeners]) listener();
 }
 
@@ -42,4 +44,16 @@ export function useSettings(): Settings {
     },
     readSettings,
   );
+}
+
+function alertsOff(): string[] {
+  const stored = readJson(ALERTS_OFF);
+  return Array.isArray(stored) ? stored.filter((id): id is string => typeof id === "string") : [];
+}
+
+export const alertsOn = (botId: string): boolean => !alertsOff().includes(botId);
+
+export function setAlerts(botId: string, on: boolean) {
+  const others = alertsOff().filter((id) => id !== botId);
+  writeJson(ALERTS_OFF, on ? others : [...others, botId]);
 }
