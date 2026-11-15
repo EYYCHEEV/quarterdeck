@@ -4,7 +4,7 @@ import fs from "node:fs";
 import test from "node:test";
 
 async function bundle(flag) {
-  const contents = ["api-client", "server-source"].map((name) => 'export * from "./src/data/' + name + '";').join("\n");
+  const contents = ["api-client", "server-source", "settings"].map((name) => 'export * from "./src/data/' + name + '";').join("\n");
   const define = { __QD_SOURCE__: '"server"', "process.env.NODE_ENV": '"production"' };
   if (flag !== undefined) define.__QD_CHAT__ = JSON.stringify(flag);
   const built = await esbuild.build({ stdin: { contents, resolveDir: process.cwd(), loader: "ts" }, bundle: true, write: false, format: "esm", platform: "node", logLevel: "silent", define });
@@ -2686,6 +2686,26 @@ test("signing out forgets which chats have alerts off, and a key the app does no
   assert.deepEqual(held, { "not-the-apps": "kept" });
 });
 
+test("a list read answered 401 forgets the alerts choice but keeps the device appearance", async (t) => {
+  const held = { "qd.settings": '{"appearance":"dark"}' };
+  const store = { getItem: (key) => held[key] ?? null, setItem: (key, value) => void (held[key] = String(value)), removeItem: (key) => void delete held[key] };
+  const before = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  Object.defineProperty(globalThis, "localStorage", { value: store, configurable: true, writable: true });
+  t.after(() => {
+    if (before) Object.defineProperty(globalThis, "localStorage", before);
+    else delete globalThis.localStorage;
+  });
+  let ended = false;
+  const h = serve(lib, { read: (path) => (ended && path === "/captain/api/chats" ? json({ error: "session" }, 401) : null) });
+  await h.boot();
+  lib.setAlerts("steward", false);
+  assert.equal(store.getItem("quarterdeck-chat-alerts-off"), '["steward"]');
+  ended = true;
+  await assert.rejects(h.source.chat.listChats(), named("SignInRequired"));
+  assert.equal(store.getItem("qd.settings"), '{"appearance":"dark"}');
+  assert.equal(store.getItem("quarterdeck-chat-alerts-off"), null, "a 401 list read forgets the alerts choice");
+});
+
 async function withCreditsLeft(left) {
   const probe = serve();
   await probe.boot();
@@ -2745,7 +2765,15 @@ test("a send of the longest text the composer allows costs three credits too", a
   assert.equal(h.source.limited(), true);
 });
 
-test("a long send whose connection drops because the session has ended looks for itself in the thread once, is answered 401 there, and says sign in again: one POST, one read and no retry", async () => {
+test("a long send whose connection drops because the session has ended looks for itself in the thread once, is answered 401 there, and says sign in again: one POST, one read and no retry", async (t) => {
+  const held = {};
+  const store = { getItem: (key) => held[key] ?? null, setItem: (key, value) => void (held[key] = String(value)), removeItem: (key) => void delete held[key] };
+  const before = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  Object.defineProperty(globalThis, "localStorage", { value: store, configurable: true, writable: true });
+  t.after(() => {
+    if (before) Object.defineProperty(globalThis, "localStorage", before);
+    else delete globalThis.localStorage;
+  });
   let ended = false;
   const post = () => {
     throw new TypeError("Failed to fetch");
@@ -2753,6 +2781,8 @@ test("a long send whose connection drops because the session has ended looks for
   const h = serve(lib, { post, read: (path) => (ended && path.startsWith("/captain/api/chat?") ? json({ error: "session" }, 401) : null) });
   await h.boot();
   await h.source.chat.openThread("steward");
+  lib.setAlerts("steward", false);
+  assert.equal(store.getItem("quarterdeck-chat-alerts-off"), '["steward"]');
   const from = h.calls.length;
   ended = true;
   const state = watchSend(h, h.source.chat.send("steward", { text: "a".repeat(17_000), clientId: "client-k6" }));
@@ -2763,6 +2793,7 @@ test("a long send whose connection drops because the session has ended looks for
   assert.deepEqual(POSTS(h, from), ["client-k6"]);
   await assert.rejects(h.source.chat.openThread("iris"), named("SignInRequired"));
   assert.deepEqual(h.requests(from), [POST, THREAD("steward")]);
+  assert.equal(store.getItem("quarterdeck-chat-alerts-off"), null, "the dropped long send's 401 thread read forgets the alerts choice");
 });
 
 test("the session check before a long send mints one spare token on the server: with six other tokens minted since, the token stored just before the long send still sends it as one POST, and the next plain send is one POST with the token that answer gave", async () => {

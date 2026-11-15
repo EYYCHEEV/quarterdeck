@@ -5333,6 +5333,42 @@ const chatOpened = async (p) => {
   await open(p, "/chat/iris");
   await p.locator('[data-message-id="iris-m30"] [data-message-text]').getByText(CHAT_LAST, { exact: true }).waitFor();
 };
+
+it("Server Chat: after a 401 session end and Sign in, a chat's alerts are on again and its stored choice is gone", MAC, async (p) => {
+  await serverBuildChat(p);
+  const listing = readFileSync(new URL("./src/data/server-payloads/list-fixed-only.json", import.meta.url), "utf8");
+  let ended = false;
+  let refusals = 0;
+  let logins = 0;
+  await p.route("**/captain/cards", (route) => {
+    if (ended) {
+      refusals += 1;
+      return chatReply(route, 401, { error: "sign in required" });
+    }
+    return route.fulfill({ status: 200, contentType: "application/json", body: listing });
+  });
+  await p.route("**/captain/login", (route) => {
+    logins += 1;
+    ended = false;
+    return route.fulfill({ status: 303, headers: { Location: "/chat/iris" } });
+  });
+  await chatOpened(p);
+  await T(p, "chat-more").click();
+  await T(p, "chat-alerts").click();
+  equal(await T(p, "chat-alerts").getAttribute("aria-checked"), "false", "alerts before the 401");
+  equal(await p.evaluate(() => localStorage.getItem("quarterdeck-chat-alerts-off")), '["iris"]', "the stored choice before the 401");
+  await p.keyboard.press("Escape");
+  ended = true;
+  await open(p, "/queue");
+  await shown(p, "Signed out");
+  equal(refusals > 0, true, "the stand-in server answered 401");
+  await p.getByRole("button", { name: "Sign in with Google" }).click();
+  await p.locator('[data-message-id="iris-m30"] [data-message-text]').getByText(CHAT_LAST, { exact: true }).waitFor();
+  equal(logins, 1, "one fresh sign-in");
+  await T(p, "chat-more").click();
+  equal(await T(p, "chat-alerts").getAttribute("aria-checked"), "true", "alerts after the 401 and Sign in");
+  equal(await p.evaluate(() => localStorage.getItem("quarterdeck-chat-alerts-off")), null, "the stored choice after the 401 and Sign in");
+}, /401 \(Unauthorized\)/);
 const bubble = (p, text) => T(p, "chat-my-message").filter({ has: p.getByText(text, { exact: true }) });
 const beforeOf = (list, item) => list.slice(Math.max(0, list.indexOf(item) - 2), list.indexOf(item) + 1);
 
