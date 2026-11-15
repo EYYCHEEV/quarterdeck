@@ -572,6 +572,54 @@ class StartupFailureTests(Folder):
         fake.close.assert_called_once_with()
 
 
+class LongSendOverASocketTests(Running):
+    def head(self, length, *, session="good", origin="https://quarterdeck.invalid"):
+        lines = [
+            "POST /captain/api/chat HTTP/1.1",
+            "Host: quarterdeck.invalid",
+            "Content-Type: application/json",
+            f"Content-Length: {length}",
+            "X-Forwarded-For: 192.0.2.10",
+            "X-Forwarded-Host: quarterdeck.invalid",
+            "X-Forwarded-Proto: https",
+        ]
+        if origin is not None:
+            lines.append(f"Origin: {origin}")
+        if session is not None:
+            lines.append(f"Cookie: __Host-qd-approval={session}")
+        return ("\r\n".join(lines) + "\r\n\r\n").encode("ascii")
+
+    def asked(self):
+        return [(request["operation"], request["request"]["method"], request["request"]["path"]) for request in self.auth.requests]
+
+    def test_no_cookie_and_16_kib_plus_one_byte_is_answered_with_no_body_byte_sent(self):
+        status, body = self.raw(self.head(16385, session=None))
+        self.assertEqual((status, json.loads(body)), (401, {"error": "session"}))
+        self.assertEqual(self.auth.requests, [])
+
+    def test_a_wrong_origin_is_answered_with_no_body_byte_sent_and_no_session_check(self):
+        for origin in (None, "https://other.invalid", "http://quarterdeck.invalid"):
+            with self.subTest(origin=origin):
+                status, body = self.raw(self.head(131072, origin=origin))
+                self.assertEqual((status, json.loads(body)), (403, {"error": "request refused"}))
+        self.assertEqual(self.auth.requests, [])
+
+    def test_a_session_the_sign_in_service_refuses_is_answered_with_no_body_byte_sent(self):
+        status, body = self.raw(self.head(131072, session="unknown"))
+        self.assertEqual((status, json.loads(body)), (401, {"error": "session"}))
+        self.assertEqual(self.asked(), [("authenticate", "GET", "/captain/api/chat")])
+
+    def test_a_signed_long_send_is_read_after_one_session_check(self):
+        status, body = self.raw(self.head(16385) + b"x" * 16385)
+        self.assertEqual((status, json.loads(body)), (400, {"error": "request refused"}))
+        self.assertEqual(self.asked(), [("authenticate", "GET", "/captain/api/chat")])
+
+    def test_a_send_of_16_kib_is_read_with_no_session_check_before_it(self):
+        status, body = self.raw(self.head(16384, session=None) + b"x" * 16384)
+        self.assertEqual((status, json.loads(body)), (400, {"error": "request refused"}))
+        self.assertEqual(self.auth.requests, [])
+
+
 class ChecksTests(unittest.TestCase):
     def test_the_checker_adapter_loads_the_real_checker_with_a_registry(self):
         checker = checker_adapter.LaneAChecker(REGISTRY)
