@@ -40,7 +40,7 @@ function withGlobal(name, value, run) {
 
 const memory = () => {
   const held = new Map();
-  return { held, getItem: (key) => held.get(key) ?? null, setItem: (key, text) => void held.set(key, String(text)), removeItem: (key) => void held.set(key, null) };
+  return { held, getItem: (key) => held.get(key) ?? null, setItem: (key, text) => void held.set(key, String(text)), removeItem: (key) => void held.delete(key) };
 };
 
 function make(responses, extra = {}) {
