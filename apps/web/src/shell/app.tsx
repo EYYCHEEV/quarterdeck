@@ -160,7 +160,7 @@ function screenFor(route: Route, size: Size, onSignedOut: () => void): ReactNode
     case "artifact":
       return <ArtifactScreen key={route.ref} projectId={route.projectId} artifactRef={route.ref} />;
     case "chat":
-      return <ChatScreen key={route.botId} botId={route.botId} />;
+      return <ChatScreen key={route.botId} botId={route.botId} wide={wide} />;
     case "mail":
       return <MailScreen mailRef={route.ref} wide={wide} />;
     case "settings":

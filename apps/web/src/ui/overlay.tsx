@@ -114,6 +114,8 @@ export function Sheet({
   onClear,
   footer,
   menu,
+  handle,
+  closeLabel = "Done",
   children,
   pop,
 }: {
@@ -123,6 +125,8 @@ export function Sheet({
   onClear?: () => void;
   footer?: ReactNode;
   menu?: boolean;
+  handle?: boolean;
+  closeLabel?: string;
   children: ReactNode;
   pop: string;
 }) {
@@ -139,7 +143,7 @@ export function Sheet({
         </Button>
       )}
       <Button kind="plain" className="min-h-hit px-s4 py-0" onClick={onClose} data-autofocus="">
-        Done
+        {closeLabel}
       </Button>
     </div>
   );
@@ -184,6 +188,7 @@ export function Sheet({
         data-pop={pop}
         className={cx("absolute inset-x-0 bottom-0 mx-auto flex max-h-[85dvh] max-w-[720px] flex-col overflow-hidden rounded-t-sheet border-t border-line bg-panel pt-s3 outline-none", RISE)}
       >
+        {handle && <div className="mx-auto mb-s1 h-s1 w-handle flex-none rounded-round bg-line-3" aria-hidden="true" data-testid="sheet-handle" />}
         {head}
         <div className="min-h-0 flex-1 overflow-y-auto px-s2">{children}</div>
         {footer ? (

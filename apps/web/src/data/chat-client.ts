@@ -1,5 +1,5 @@
 import { avatarColor, avatarSlot } from "../domain/avatar";
-import { QUOTE_LIMIT, SEND_FAILED_TEXT, withinLimit } from "../domain/chat";
+import { fitsSend, QUOTE_LIMIT, SEND_CEILING, SEND_FAILED_TEXT, SEND_LONG_TEXT } from "../domain/chat";
 import { claimedType, EXPIRED_TEXT, FILES_OFF_TEXT, typeText, type FileLimits } from "../domain/files-r1";
 import { plainText } from "../domain/markdown";
 import type { Bot } from "../domain/types";
@@ -46,7 +46,6 @@ export const CHAT_WORDS = {
   expired: EXPIRED_TEXT,
 };
 
-const BODY_LIMIT = 16384;
 const MAX_ROWS = 200;
 const MAX_MESSAGES = 50;
 const MAX_ID = 512;
@@ -105,15 +104,10 @@ const idOrNull = (value: unknown, what: string): string | null => (value === nul
 
 const timeOrNull = (value: unknown, what: string): string | null => (value === null ? null : timeOf(value, what, false));
 
-function boundedText(value: unknown, what: string): string {
-  if (typeof value !== "string" || !withinLimit(value)) throw unreadable(what);
-  return value;
-}
-
 function workingOf(value: unknown): Working | null {
   if (value === null) return null;
   if (!isRecord(value)) throw unreadable("working");
-  return { note: boundedText(value.note, "the working note"), since: timeOf(value.since, "the working time", false), updatedAt: timeOf(value.updatedAt, "the working time", false) };
+  return { note: stringOf(value, "note"), since: timeOf(value.since, "the working time", false), updatedAt: timeOf(value.updatedAt, "the working time", false) };
 }
 
 function featuresOf(value: unknown): ChatFeature[] {
@@ -139,7 +133,7 @@ function quoteOf(value: unknown): SentQuote | undefined {
   }
   const from = value.from;
   if (from !== "captain" && from !== "bot") throw unreadable("a quote sender");
-  return { id: messageIdOf(value.id, "a quote id"), from, at: timeOf(value.at, "a quote time", false), text: boundedText(value.text, "a quote text") };
+  return { id: messageIdOf(value.id, "a quote id"), from, at: timeOf(value.at, "a quote time", false), text: stringOf(value, "text") };
 }
 
 function fileOf(item: unknown): Attachment | null {
@@ -231,6 +225,8 @@ export function parseChatThread(body: unknown): ChatRead {
   return made;
 }
 
+export const RECEIPT_LIMIT = SEND_CEILING;
+
 export function chatReceiptOf(raw: unknown, clientId: string): ChatReceipt {
   if (!isRecord(raw)) throw new NotConfirmed();
   let message: ChatMessage;
@@ -255,7 +251,8 @@ function wireQuoteOk(quote: unknown): boolean {
 export function checkWords(botId: string, outgoing: Pick<WireOutgoing, "text" | "clientId" | "quote">, withFiles: boolean): void {
   if (typeof botId !== "string" || !BOT_ID.test(botId)) throw new Refused(CHAT_WORDS.bot);
   if (outgoing.quote !== undefined && !wireQuoteOk(outgoing.quote)) throw new Refused(CHAT_WORDS.quoteGone);
-  if (typeof outgoing.text !== "string" || (outgoing.text.length === 0 && !withFiles) || !withinLimit(outgoing.text)) throw new Refused(CHAT_WORDS.text);
+  if (typeof outgoing.text !== "string" || (outgoing.text.length === 0 && !withFiles)) throw new Refused(CHAT_WORDS.text);
+  if (!fitsSend(outgoing.text)) throw new Refused(SEND_LONG_TEXT);
   if (typeof outgoing.clientId !== "string" || !CLIENT_ID.test(outgoing.clientId)) throw new Refused(CHAT_WORDS.clientId);
 }
 
@@ -268,9 +265,13 @@ export function checkOutgoing(botId: string, outgoing: WireOutgoing): void {
 export function chatBody(botId: string, outgoing: WireOutgoing, csrf: string): string {
   if (typeof csrf !== "string" || csrf === "") throw new Refused(CHAT_WORDS.token);
   const json = JSON.stringify({ bot: botId, text: outgoing.text, clientId: outgoing.clientId, csrf, ...(outgoing.quote === undefined ? {} : { quote: outgoing.quote }), ...(outgoing.files?.length ? { files: outgoing.files } : {}) });
-  if (new TextEncoder().encode(json).length > BODY_LIMIT) throw new Refused(CHAT_WORDS.text);
+  if (new TextEncoder().encode(json).length > SEND_CEILING) throw new Refused(SEND_LONG_TEXT);
   return json;
 }
+
+export const LONG_SEND = 16_384;
+
+export const longSend = (body: string): boolean => body.length * 3 > LONG_SEND && new TextEncoder().encode(body).length > LONG_SEND;
 
 export function checkRead(botId: string, upTo: string): void {
   if (typeof botId !== "string" || !BOT_ID.test(botId)) throw new Refused(CHAT_WORDS.bot);

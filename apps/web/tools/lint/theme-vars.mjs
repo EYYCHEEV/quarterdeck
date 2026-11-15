@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
 const ROOT = ".";
 const THEME = "src/ui/theme.css";
@@ -11,6 +12,9 @@ const TEST = /_test\.mjs$/;
 const PACKAGE_FILES = /^package(?:-lock)?\.json$/;
 const BOT_PAGES = /^src\/data\/pages\/[^/]+\.html$/;
 const LITERAL = /^\s*(--[\w-]+)\s*[,)]/;
+const SET = /(--[\w-]+)["'`]?\s*:/g;
+const SET_IN_CODE = /setProperty\(\s*["'`](--[\w-]+)/g;
+const RULE = /([^{}]+)\{([^{}]*)\}/g;
 
 function walk(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -35,61 +39,81 @@ function themeBlocks(text) {
   return blocks;
 }
 
-const css = spawnSync(path.join("node_modules", ".bin", "tailwindcss"), ["-i", THEME, "--minify"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-if (css.status) {
-  process.stderr.write(css.stderr);
-  process.exit(css.status);
-}
+const withoutThemeBlocks = (text) => themeBlocks(text).reduce((kept, [from, to]) => kept.slice(0, from) + kept.slice(from, to).replace(/[^\n]/g, " ") + kept.slice(to), text);
 
-const themeNames = new Set();
-for (const file of [THEME, TAILWIND_THEME]) {
-  const text = fs.readFileSync(file, "utf8");
-  for (const [from, to] of themeBlocks(text)) {
-    for (const match of text.slice(from, to).matchAll(/(--[\w-]+)\s*:/g)) themeNames.add(match[1]);
-  }
-}
+const namespaceOf = (variable) => /^--([a-z0-9]+)/i.exec(variable)?.[1] ?? "";
 
-const dark = new Set();
-const lightOnly = new Set();
-for (const match of css.stdout.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-  const into = /data-appearance=["']?light\b/.test(match[1]) ? lightOnly : /:root|:host/.test(match[1]) ? dark : null;
-  if (into) for (const declared of match[2].matchAll(/(--[\w-]+)\s*:/g)) into.add(declared[1]);
-}
-
-const themeText = fs.readFileSync(THEME, "utf8");
-const themeRules = themeBlocks(themeText).reduce((text, [from, to]) => text.slice(0, from) + text.slice(from, to).replace(/[^\n]/g, " ") + text.slice(to), themeText);
-
-const files = walk(ROOT)
-  .map((file) => file.split(path.sep).join("/"))
-  .filter((name) => !TEST.test(name) && !BOT_PAGES.test(name));
-const problems = [];
-const runtime = [];
-for (const name of files) {
-  const text = name === THEME ? themeRules : fs.readFileSync(name, "utf8");
-  text.split("\n").forEach((line, at) => {
-    for (const read of line.matchAll(/var\(/g)) {
-      const after = line.slice(read.index + read[0].length);
-      const literal = LITERAL.exec(after);
-      if (!literal) {
-        runtime.push(`${name}:${at + 1}: ${line.slice(read.index).trim()}`);
-        continue;
-      }
-      const variable = literal[1];
-      if (!themeNames.has(variable)) continue;
-      const missing = [];
-      if (!dark.has(variable)) missing.push("dark");
-      if (!dark.has(variable) && !lightOnly.has(variable)) missing.push("light");
-      if (missing.length) problems.push(`${name}:${at + 1}: ${variable} is a theme variable the built app.css does not define in the ${missing.join(" or ")} look; define it in @theme static in ${THEME}`);
+export function themeVarProblems(files, themes, built) {
+  const themeNames = new Set();
+  for (const text of themes) {
+    for (const [from, to] of themeBlocks(text)) {
+      for (const match of text.slice(from, to).matchAll(SET)) themeNames.add(match[1]);
     }
-  });
+  }
+  const namespaces = new Set([...themeNames].map(namespaceOf));
+
+  const dark = new Set();
+  const lightOnly = new Set();
+  const set = new Set();
+  for (const match of built.matchAll(RULE)) {
+    const into = /data-appearance=["']?light\b/.test(match[1]) ? lightOnly : /:root|:host/.test(match[1]) ? dark : null;
+    for (const declared of match[2].matchAll(SET)) {
+      set.add(declared[1]);
+      if (into) into.add(declared[1]);
+    }
+  }
+  for (const { text } of files) {
+    for (const declared of text.matchAll(SET)) set.add(declared[1]);
+    for (const declared of text.matchAll(SET_IN_CODE)) set.add(declared[1]);
+  }
+
+  const problems = [];
+  const runtime = [];
+  for (const { name, text } of files) {
+    const reads = name === THEME ? withoutThemeBlocks(text) : text;
+    reads.split("\n").forEach((line, at) => {
+      for (const read of line.matchAll(/var\(/g)) {
+        const after = line.slice(read.index + read[0].length);
+        const literal = LITERAL.exec(after);
+        if (!literal) {
+          runtime.push(`${name}:${at + 1}: ${line.slice(read.index).trim()}`);
+          continue;
+        }
+        const variable = literal[1];
+        if (!themeNames.has(variable)) {
+          const namespace = namespaceOf(variable);
+          if (namespaces.has(namespace) && !set.has(variable)) problems.push(`${name}:${at + 1}: ${variable} is in the theme's --${namespace} names but nothing defines it; read a name ${THEME} defines`);
+          continue;
+        }
+        const missing = [];
+        if (!dark.has(variable)) missing.push("dark");
+        if (!dark.has(variable) && !lightOnly.has(variable)) missing.push("light");
+        if (missing.length) problems.push(`${name}:${at + 1}: ${variable} is a theme variable the built app.css does not define in the ${missing.join(" or ")} look; define it in @theme static in ${THEME}`);
+      }
+    });
+  }
+  return { problems, runtime };
 }
 
-const unchecked = runtime.length
-  ? `${runtime.length} var() reads build their name at run time and are not checked:\n${runtime.map((read) => "  " + read).join("\n")}`
-  : "no var() read builds its name at run time";
-if (problems.length) {
-  for (const problem of problems) console.log(problem);
-  console.log(`theme-vars: FAIL, ${problems.length} reads of theme variables missing from the built app.css; ${unchecked}`);
-  process.exit(1);
+export function themeVarReport({ problems, runtime }, count) {
+  const unchecked = runtime.length
+    ? `${runtime.length} var() reads build their name at run time and are not checked:\n${runtime.map((read) => "  " + read).join("\n")}`
+    : "no var() read builds its name at run time";
+  if (problems.length) return { ok: false, lines: [...problems, `theme-vars: FAIL, ${problems.length} reads of theme variables that the built app.css lacks or that nothing defines; ${unchecked}`] };
+  return { ok: true, lines: [`theme-vars: PASS, ${count} files under ${ROOT}/ read only theme variables the built app.css defines in both looks, and no name in a theme namespace that nothing defines; ${unchecked}`] };
 }
-console.log(`theme-vars: PASS, ${files.length} files under ${ROOT}/ read only theme variables the built app.css defines in both looks; ${unchecked}`);
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const css = spawnSync(path.join("node_modules", ".bin", "tailwindcss"), ["-i", THEME, "--minify"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  if (css.status) {
+    process.stderr.write(css.stderr);
+    process.exit(css.status);
+  }
+  const files = walk(ROOT)
+    .map((file) => file.split(path.sep).join("/"))
+    .filter((name) => !TEST.test(name) && !BOT_PAGES.test(name))
+    .map((name) => ({ name, text: fs.readFileSync(name, "utf8") }));
+  const report = themeVarReport(themeVarProblems(files, [THEME, TAILWIND_THEME].map((file) => fs.readFileSync(file, "utf8")), css.stdout), files.length);
+  for (const line of report.lines) console.log(line);
+  if (!report.ok) process.exit(1);
+}

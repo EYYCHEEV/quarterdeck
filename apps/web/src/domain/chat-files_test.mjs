@@ -3,7 +3,7 @@ import test from "node:test";
 import { crc32 } from "node:zlib";
 import { loadTs } from "../../tools/load-ts.mjs";
 
-const { checkFile, sizeText, kindOf, MAX_FILES, admit, canRead, extensionOf, pictureCaption, inspectFile } = await loadTs("src/domain/chat-files.ts");
+const { checkFile, sizeText, kindOf, MAX_FILES, admit, canRead, extensionOf, pictureCaption, inspectFile, shortName, totalText, kindTile, sizeToTenth, refusalText } = await loadTs("src/domain/chat-files.ts");
 
 const MB = 1024 * 1024;
 const file = (name, size, type) => ({ name, size, type });
@@ -133,14 +133,47 @@ test("a batch keeps the inspected files that pass, in order, and names each refu
   const batch = [new File([PNG], "a.png", { type: "image/png" }), new File(["program"], "setup.exe"), new File(["program"], "other.exe"), new File(["log"], "b.log"), new File([], "c.log")];
   const { accepted, refused } = await admit(batch, 0);
   assert.deepEqual(accepted.map((f) => f.name), ["a.png", "b.log"]);
-  assert.deepEqual(refused, ["Can't send setup.exe here. .exe files are not allowed.", "Can't send other.exe here. .exe files are not allowed.", "c.log is empty."]);
+  assert.deepEqual(refused, [
+    { name: null, why: "Can't send setup.exe here. .exe files are not allowed." },
+    { name: null, why: "Can't send other.exe here. .exe files are not allowed." },
+    { name: null, why: "c.log is empty." },
+  ]);
 });
 
 test("a batch counts the files already attached against the limit of a message", async () => {
   const batch = [new File(["log"], "a.log"), new File(["log"], "b.log")];
   const { accepted, refused } = await admit(batch, MAX_FILES - 1);
   assert.deepEqual(accepted.map((f) => f.name), ["a.log"]);
-  assert.deepEqual(refused, ["A message can carry up to " + MAX_FILES + " files."]);
+  assert.deepEqual(refused, [{ name: null, why: "A message can carry up to " + MAX_FILES + " files." }]);
+});
+
+test("a refusal that names a file reads Not added, the name, then why, and one with no name is its sentence alone", () => {
+  assert.equal(refusalText({ name: "notes.pages", why: "Quarterdeck cannot send this kind of file." }), "Not added: notes.pages. Quarterdeck cannot send this kind of file.");
+  assert.equal(refusalText({ name: null, why: "Could not read these files." }), "Could not read these files.");
+});
+
+test("a long file name is cut in the middle so its ending always shows: over 28 characters keeps the first 15 and the last 12", () => {
+  assert.equal(shortName("Screenshot 2026-11-02 at 9.41.12 AM.png"), "Screenshot 2026\u202641.12 AM.png");
+  assert.equal(shortName("a".repeat(28)), "a".repeat(28));
+  assert.equal(shortName("a".repeat(16) + "b".repeat(13)), "a".repeat(15) + "\u2026" + "b".repeat(12));
+  assert.equal(shortName("\u{1F600}".repeat(29)), "\u{1F600}".repeat(15) + "\u2026" + "\u{1F600}".repeat(12));
+  assert.equal(shortName("build.log"), "build.log");
+});
+
+test("a file that is not a picture shows its kind as up to four capitals, and FILE when its name has none", () => {
+  assert.deepEqual(["build.log", "clip.MP4", "notes.docx", "data.json", "archive.tar.gz", "notes.markdown", "README", "notes."].map(kindTile), ["LOG", "MP4", "DOCX", "JSON", "GZ", "MARK", "FILE", "FILE"]);
+});
+
+test("a size beside a limit reads to one decimal with no .0, in KB under 1000 KB and never under 0.1 KB, and rounds up when asked so a size over a limit never reads as the limit", () => {
+  assert.deepEqual([5, 300, 14 * 1024, 320 * 1024, Math.round(2.4 * MB), 2 * MB, 12.5 * MB, 25 * MB].map((bytes) => sizeToTenth(bytes)), ["0.1 KB", "0.3 KB", "14 KB", "320 KB", "2.4 MB", "2 MB", "12.5 MB", "25 MB"]);
+  assert.deepEqual([10 * MB + 1, 25 * MB + 1, Math.floor(48.2 * MB), 11 * MB].map((bytes) => sizeToTenth(bytes, Math.ceil)), ["10.1 MB", "25.1 MB", "48.2 MB", "11 MB"]);
+});
+
+test("the total line counts the files and their size against the message limit, and leaves the limit out when the server gives none", () => {
+  assert.equal(totalText(5, 12.5 * MB, 25 * MB), "5 files, 12.5 MB of 25 MB");
+  assert.equal(totalText(1, Math.round(2.4 * MB), 25 * MB), "1 file, 2.4 MB of 25 MB");
+  assert.equal(totalText(3, 320 * 1024, 25 * MB), "3 files, 320 KB of 25 MB");
+  assert.equal(totalText(2, Math.round(3.8 * MB), null), "2 files, 3.8 MB");
 });
 
 test("text and logs can be read in place, pictures and archives cannot", () => {

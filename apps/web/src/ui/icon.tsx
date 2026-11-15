@@ -24,6 +24,7 @@ const PATHS = {
   picture: <><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M3.5 9h17M7.5 13h9M7.5 16h5.5"/></>,
   copy: <><rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6A1.5 1.5 0 0 0 14 4.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/></>,
   reply: <><path d="M9.5 5.5L4 11l5.5 5.5"/><path d="M4 11h9.5a6.5 6.5 0 0 1 6.5 6.5v1"/></>,
+  select: <><path d="M9 4.5h6M9 19.5h6M12 4.5v15"/></>,
   page: <><rect x="4" y="3.5" width="16" height="17" rx="2.5"/><path d="M4 8h16M8 12h8M8 15.5h5"/></>,
   file: <><path d="M7 3.5h6.5l4.5 4.5v12.5H7a1.5 1.5 0 0 1-1.5-1.5V5A1.5 1.5 0 0 1 7 3.5z"/><path d="M13.5 3.5V8H18"/></>,
   terminal: <><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M7.5 9.5l3 2.5-3 2.5M12.5 15h4"/></>,

@@ -1,8 +1,8 @@
-import { cacheInspection, cachedInspection, FILE_LIMIT_TEXT, MAX_FILES, type FileAdmission, type FileInspection, type InspectedFile } from "./file-inspection";
+import { cacheInspection, cachedInspection, FILE_LIMIT_TEXT, MAX_FILES, type FileAdmission, type FileInspection, type InspectedFile, type Refusal } from "./file-inspection";
 import { FILE_MIMES, extensionOf, type FileInfo } from "./file-kind";
 import { whenText } from "./time";
 
-export { MAX_FILES } from "./file-inspection";
+export { MAX_FILES, notAdded, refusalText, type Refusal } from "./file-inspection";
 export { extensionOf, kindOf, type FileInfo, type FileKind } from "./file-kind";
 
 const KB = 1024;
@@ -21,6 +21,24 @@ export function sizeText(bytes: number): string {
   const mb = kb / KB;
   return (mb < 10 ? mb.toFixed(1) : String(Math.round(mb))) + " MB";
 }
+
+export function sizeToTenth(bytes: number, round: (value: number) => number = Math.round): string {
+  const tenth = (value: number): number => round(value * 10) / 10;
+  const kb = bytes / KB;
+  if (kb < 10) return Math.max(0.1, tenth(kb)) + " KB";
+  return kb < 1000 ? round(kb) + " KB" : tenth(kb / KB) + " MB";
+}
+
+export function totalText(count: number, bytes: number, limit: number | null): string {
+  return count + (count === 1 ? " file, " : " files, ") + sizeToTenth(bytes) + (limit === null ? "" : " of " + sizeToTenth(limit));
+}
+
+export function shortName(name: string): string {
+  const letters = [...name];
+  return letters.length > 28 ? letters.slice(0, 15).join("") + "\u2026" + letters.slice(-12).join("") : name;
+}
+
+export const kindTile = (name: string): string => (extensionOf(name) || "file").slice(0, 4).toUpperCase();
 
 export function normalizedFilename(name: string): string {
   const leaf = name.replace(/\\/g, "/").split("/").pop() ?? "";
@@ -48,11 +66,11 @@ export function checkFile(info: FileInfo, alreadyAttached: number): FileCheck {
 
 export async function admit(files: File[], alreadyAttached: number): Promise<FileAdmission> {
   const accepted: InspectedFile[] = [];
-  const refused: string[] = [];
+  const refused: Refusal[] = [];
   for (const file of files) {
     const check = await inspectFile(file, alreadyAttached + accepted.length);
     if (check.ok) accepted.push(check.file);
-    else if (!refused.includes(check.reason)) refused.push(check.reason);
+    else if (!refused.some((one) => one.why === check.reason)) refused.push({ name: null, why: check.reason });
   }
   return { accepted, refused };
 }

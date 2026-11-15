@@ -20,7 +20,7 @@ import cards
 ET = ZoneInfo("America/New_York")
 COOKIE = "__Host-qd-approval"
 CHATS_PATH = "/captain/api/chats"
-CHAT_PATH = "/captain/api/chat"
+CHAT_PATH = application.CHAT_SEND_PATH
 READ_PATH = "/captain/api/chat/read"
 SEND_FIELDS = {"bot", "text", "clientId", "csrf"}
 SEND_OPTIONAL = frozenset({"quote"})
@@ -156,6 +156,16 @@ class ChatApi:
             self._log(route, response, cause, started)
         return response
 
+    def large_body_refusal(self, request: approval_app.Request) -> approval_app.Response | None:
+        started = time.monotonic()
+        try:
+            self.sessions.admit_post(request)
+        except Exception as error:
+            response = self._failure(error)
+            self._log("send", response, self._root(error), started)
+            return response
+        return None
+
     def _chats(self, request: approval_app.Request) -> approval_app.Response:
         self.sessions.authenticate(request)
         if urlsplit(request.path).query:
@@ -248,7 +258,12 @@ class ChatApi:
     def _send(self, request: approval_app.Request) -> approval_app.Response:
         if urlsplit(request.path).query:
             raise cards.CardRefused("chat query is invalid")
-        payload = application.CardApplication._json(request, SEND_FIELDS, SEND_OPTIONAL)
+        payload = application.CardApplication._json(
+            request,
+            SEND_FIELDS,
+            SEND_OPTIONAL,
+            application.CHAT_SEND_BODY_BYTES,
+        )
         csrf = payload["csrf"]
         if not isinstance(csrf, str):
             raise cards.CardRefused("chat csrf is invalid")

@@ -5,10 +5,25 @@ import { Sheet } from "./overlay";
 
 export const MENU_ROW = "flex min-h-s7 w-full cursor-pointer items-center gap-s3 rounded-key px-s3 text-left text-body font-strong hover:bg-raised";
 
-export function MoreSheet({ items, from, onClose, children }: { items: FloatMoreItem[]; from: RefObject<HTMLElement | null>; onClose: () => void; children?: ReactNode }) {
+export function MoreSheet({
+  items,
+  from,
+  onClose,
+  menu = false,
+  handle,
+  closeLabel,
+  children,
+}: {
+  items: FloatMoreItem[];
+  from: RefObject<HTMLElement | null>;
+  onClose: () => void;
+  menu?: boolean;
+  handle?: boolean;
+  closeLabel?: string;
+  children?: ReactNode;
+}) {
   return (
-    <Sheet title="More" wide={false} onClose={onClose} pop="more">
-      {children}
+    <Sheet title="More" wide={menu} menu={menu} handle={handle} closeLabel={closeLabel} onClose={onClose} pop="more">
       <ul className="grid gap-hair pb-s1">
         {items.map((item) => (
           <li key={item.label}>
@@ -27,6 +42,7 @@ export function MoreSheet({ items, from, onClose, children }: { items: FloatMore
           </li>
         ))}
       </ul>
+      {children && <div className="border-t border-line pt-s1 pb-s1">{children}</div>}
     </Sheet>
   );
 }

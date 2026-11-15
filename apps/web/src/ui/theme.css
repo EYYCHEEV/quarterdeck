@@ -130,11 +130,14 @@
   --spacing-s7: 48px;
   --spacing-hit: 44px;
   --spacing-key-h: 34px;
+  --spacing-file-h: 40px;
+  --spacing-thumb: 28px;
   --spacing-row: 36px;
   --spacing-float-pad: 76px;
   --spacing-col-glyph: 14px;
   --spacing-mark-new: 7px;
   --spacing-progress-h: 3px;
+  --spacing-handle: 40px;
 
   --line-w: 1px;
   --line-w-rail: 2px;
@@ -195,6 +198,7 @@
 @media (max-width: 1399px), (pointer: coarse) {
   :root {
     --spacing-key-h: 44px;
+    --spacing-file-h: 46px;
     --spacing-row: 44px;
   }
 }
@@ -290,6 +294,23 @@
     color: var(--color-ink-3);
     box-shadow: none;
     cursor: default;
+  }
+  .key-cap {
+    display: inline-block;
+    padding: 0 var(--spacing-s1);
+    border: var(--line-w) solid currentColor;
+    border-bottom-width: var(--line-w-rail);
+    border-radius: var(--radius-tag);
+    font: inherit;
+    white-space: nowrap;
+  }
+  .key-cap::after {
+    content: attr(data-cap);
+  }
+  @media (pointer: coarse) {
+    .key-cap {
+      display: none;
+    }
   }
   @media (hover: hover) and (pointer: fine) {
     .key:hover:not(:disabled, [aria-disabled="true"]) {

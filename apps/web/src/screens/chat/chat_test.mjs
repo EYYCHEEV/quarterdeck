@@ -475,7 +475,7 @@ await check("chat admission: concurrent batches count against one ten-file limit
   const [, refused] = await Promise.all([u.attachChatFiles("admission-limit", first, u.admit), u.attachChatFiles("admission-limit", second, u.admit)]);
   const draft = u.readSession(key, null);
   assert.equal(draft.files.length, 10);
-  assert.deepEqual(refused, ["A message can carry up to 10 files."]);
+  assert.deepEqual(refused, [{ name: null, why: "A message can carry up to 10 files." }]);
   for (const item of draft.files) URL.revokeObjectURL(item.url);
 });
 
@@ -852,6 +852,7 @@ const { server, origin } = await startAppServer();
 
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 const MAC = { viewport: { width: 1512, height: 982 } };
+const IPAD_UPRIGHT = { viewport: { width: 744, height: 1133 }, hasTouch: true, isMobile: true };
 const T = (p, id) => p.locator(`[data-testid="${id}"]`);
 const shown = (p, text) => p.getByText(text, { exact: true }).first().waitFor();
 const namesOf = (keys) => keys.evaluateAll((list) => list.map((el) => el.getAttribute("aria-label") ?? el.textContent.replace(/\s+/g, " ").trim()));
@@ -1326,7 +1327,77 @@ it("Chat: Copy says Copied only after the clipboard took the text, and says it f
   assert.equal(await T(p, "message-actions").getByRole("button", { name: "Copied" }).count(), 0);
 });
 
-it("Chat: pressing and holding a message on the phone opens Reply and Copy, and a quick tap does not", PHONE, async (p) => {
+const LISTED = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069\u200B\u2060\uFEFF]/u;
+const MARKS_PLAIN = String.raw`Send the pay\u{202E}eta\u{202C} file. Hidden: a\u{200B}b c\u{2060}d e\u{FEFF}f. Marks: g\u{61C}h i\u{200E}j k\u{200F}l m\u{202A}n o\u{202B}p q\u{202D}r s\u{2066}t u\u{2067}v w\u{2068}x y\u{2069}z.`;
+const MARKS_KEPT = "Family \u{1F468}\u200D\u{1F469}\u200D\u{1F467}, a heart \u2764\uFE0F and \u0645\u06CC\u200C\u062E\u0648\u0627\u0647\u0645 stay as they are.";
+const said = (p, words) => T(p, "chat-bot-message").filter({ hasText: words });
+
+for (const [name, size] of [["the Mac", MAC], ["a phone", PHONE]])
+  it("Chat on " + name + ": a hidden or reordering character in a bot's message is drawn as a small marker that reads its code, in plain text, inline code, a code block and a link's words, and none of those characters is left in the messages", size, async (p) => {
+    await open(p, "/chat/alba?chatfx=CF-MARKS");
+    const plain = said(p, "Send the pay").locator("[data-message-text]");
+    await plain.waitFor();
+    assert.equal(await plain.innerText(), MARKS_PLAIN);
+    assert.deepEqual(await plain.getByTestId("hidden-mark").allInnerTexts(), MARKS_PLAIN.match(/\\u\{[0-9A-F]+\}/g));
+    assert.equal(await plain.getByTestId("hidden-mark").count(), 15);
+    const code = said(p, "Run").locator("[data-message-text]");
+    assert.equal(await code.locator("p code").innerText(), String.raw`rm\u{202E} -rf`);
+    assert.equal(await code.locator("pre code").innerText(), String.raw`echo a\u{200B}b\u{2069}`);
+    assert.equal(await code.getByTestId("hidden-mark").count(), 3);
+    const link = said(p, "site").getByTestId("bot-link");
+    assert.equal(await link.locator("span").first().innerText(), String.raw`Trusted\u{200B} site`);
+    const kept = said(p, "stay as they are").locator("[data-message-text]");
+    assert.equal(await kept.innerText(), MARKS_KEPT);
+    assert.equal(await kept.getByTestId("hidden-mark").count(), 0);
+    const all = (await T(p, "chat-bot-message").locator("[data-message-text]").evaluateAll((list) => list.map((el) => el.textContent))).join("\n");
+    assert.equal(LISTED.test(all), false, "a listed character is still in the messages");
+    const marker = plain.getByTestId("hidden-mark").first();
+    const look = await marker.evaluate((el) => {
+      const style = getComputedStyle(el);
+      const around = getComputedStyle(el.parentElement);
+      return { smaller: parseFloat(style.fontSize) < parseFloat(around.fontSize), muted: style.color !== around.color, direction: style.unicodeBidi };
+    });
+    assert.deepEqual(look, { smaller: true, muted: true, direction: "isolate" });
+  });
+
+it("Chat: his own message with a hidden character shows the marker too, and Copy gives the text as shown", MAC, async (p) => {
+  await p.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await open(p, "/chat/iris");
+  await T(p, "chat-input").fill("my pay\u202Eeta\u200B words");
+  await T(p, "chat-send").click();
+  const sent = mine(p, "my pay");
+  await sent.waitFor();
+  assert.equal(await sent.locator("[data-message-text]").innerText(), String.raw`my pay\u{202E}eta\u{200B} words`);
+  assert.equal(await sent.getByTestId("hidden-mark").count(), 2);
+  await p.locator('[data-testid="chat-my-message"][data-message-id]').filter({ hasText: "my pay" }).waitFor();
+  await p.mouse.move(0, 0);
+  await sent.hover();
+  await sent.getByTestId("message-actions").getByRole("button", { name: /^Copy$/ }).click();
+  await sent.getByTestId("message-actions").getByRole("button", { name: "Copied" }).waitFor();
+  assert.equal(await p.evaluate(() => navigator.clipboard.readText()), String.raw`my pay\u{202E}eta\u{200B} words`);
+});
+
+it("Chat: Copy on a bot's message and Copy code give the text as shown, with each marker's text in place of its character and none of the hidden characters", MAC, async (p) => {
+  await p.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await open(p, "/chat/alba?chatfx=CF-MARKS");
+  const copied = async (message) => {
+    await message.hover();
+    await message.getByTestId("message-actions").getByRole("button", { name: /^Copy$/ }).click();
+    await message.getByTestId("message-actions").getByRole("button", { name: "Copied" }).waitFor();
+    return p.evaluate(() => navigator.clipboard.readText());
+  };
+  await said(p, "Send the pay").waitFor();
+  assert.equal(await copied(said(p, "Send the pay")), MARKS_PLAIN);
+  const whole = await copied(said(p, "Run"));
+  assert.equal(LISTED.test(whole), false, "a listed character is in the copied text");
+  assert.ok(whole.includes(String.raw`rm\u{202E} -rf`) && whole.includes(String.raw`echo a\u{200B}b\u{2069}`), whole);
+  assert.equal(await copied(said(p, "stay as they are")), MARKS_KEPT);
+  await said(p, "Run").getByRole("button", { name: "Copy code" }).click();
+  await said(p, "Run").getByRole("button", { name: "Copied" }).waitFor();
+  assert.equal(await p.evaluate(() => navigator.clipboard.readText()), String.raw`echo a\u{200B}b\u{2069}`);
+});
+
+it("Chat: pressing and holding a message on the phone opens Reply, Copy and Select, and a quick tap does not", PHONE, async (p) => {
   await p.clock.install();
   await open(p, "/chat/iris");
   const reply = T(p, "chat-bot-message").first();
@@ -1342,7 +1413,7 @@ it("Chat: pressing and holding a message on the phone opens Reply and Copy, and 
   await p.clock.runFor(600);
   const sheet = p.locator('[data-pop="message-actions"]');
   await sheet.waitFor();
-  assert.deepEqual(await namesOf(sheet.getByRole("button")), ["Done", "Reply", "Copy"]);
+  assert.deepEqual(await namesOf(sheet.getByRole("button")), ["Done", "Reply", "Copy", "Select"]);
   await sheet.getByRole("button", { name: "Reply" }).tap();
   await sheet.waitFor({ state: "detached" });
   await draftQuote(p).getByText("Iris · 8:30 AM").waitFor();
@@ -1616,12 +1687,15 @@ it("Chat: a name in the secret box that looks like a key is refused, and nothing
   assert.equal(await T(p, "secret-line").count(), 0);
 });
 
-it("Chat: Esc closes the secret box he opened, and nothing is saved", MAC, async (p) => {
+it("Chat: Esc leaves the secret box open with what he typed, and its Close key closes it with nothing saved", MAC, async (p) => {
   await open(p, "/chat/iris");
   const box = await openSecretBox(p);
   await box.getByTestId("secret-name-field").fill("R2_TOKEN");
   await box.getByTestId("secret-value").fill(SECRET_VALUE);
   await p.keyboard.press("Escape");
+  assert.equal(await box.count(), 1, "the box is still open after Esc");
+  assert.deepEqual([await box.getByTestId("secret-name-field").inputValue(), await box.getByTestId("secret-value").inputValue()], ["R2_TOKEN", SECRET_VALUE]);
+  await box.getByRole("button", { name: "Close the secret box" }).click();
   await box.waitFor({ state: "detached" });
   assert.equal(await T(p, "secret-line").count(), 0);
 });
@@ -1667,18 +1741,20 @@ it("Chat: a value typed in a bot's secret request never reaches the message box 
   assert.equal(await p.evaluate((value) => JSON.stringify({ ...sessionStorage, ...localStorage }).includes(value), SECRET_VALUE), false);
 });
 
-it("Chat: picked files show in a preview strip with an x each, and the x takes one away", PHONE, async (p) => {
+it("Chat: picked files show as chips with an x each under a line that counts them, and the x takes one away", PHONE, async (p) => {
   await open(p, "/chat/iris");
   await T(p, "pick-photos").setInputFiles(PICTURE);
   await T(p, "pick-files").setInputFiles(LOG);
   const tiles = T(p, "draft-file");
   await tiles.nth(1).waitFor();
   assert.match(await tiles.first().locator("img").getAttribute("src"), /^blob:/);
-  assert.equal(await tiles.nth(1).innerText().then((text) => text.replace(/\s+/g, " ")), "build.log 14 KB");
+  assert.equal(await tiles.nth(1).innerText().then((text) => text.replace(/\s+/g, " ")), "LOG build.log 14 KB, ready");
+  assert.match(await T(p, "draft-total").innerText(), /^2 files, [0-9.]+ [KM]B$/);
   assert.equal(await T(p, "chat-send").isEnabled(), true);
   await p.getByRole("button", { name: "Remove screenshot.png" }).tap();
   await tiles.nth(1).waitFor({ state: "detached" });
-  assert.equal(await tiles.first().innerText().then((text) => text.replace(/\s+/g, " ")), "build.log 14 KB");
+  assert.equal(await tiles.first().innerText().then((text) => text.replace(/\s+/g, " ")), "LOG build.log 14 KB, ready");
+  assert.equal(await T(p, "draft-total").innerText(), "1 file, 14 KB");
 });
 
 it("Chat: on the Mac a pasted screenshot joins the preview strip", MAC, async (p) => {
@@ -1691,18 +1767,19 @@ it("Chat: on the Mac a pasted screenshot joins the preview strip", MAC, async (p
   await T(p, "draft-file").getByRole("button", { name: "Remove image.png" }).waitFor();
 });
 
-it("Chat: on the Mac a dragged file shows a hint and joins the preview strip when dropped", MAC, async (p) => {
+it("Chat: on the Mac a dragged file turns the composer's edge to a dashed line with a note in it, and joins the chips when dropped", MAC, async (p) => {
   await open(p, "/chat/iris");
   await T(p, "chat-thread").waitFor();
   const dataTransfer = await filesDragged(p, { name: "trace.log", type: "text/plain", text: "trace" });
   await T(p, "chat").dispatchEvent("dragenter", { dataTransfer });
-  await T(p, "drop-hint").getByText("Drop to attach to Iris").waitFor();
+  await T(p, "drop-hint").getByText("Drop to attach. Up to 10 files in one message.", { exact: true }).waitFor();
+  assert.deepEqual(await T(p, "drop-hint").evaluate((hint) => [hint.closest(".chat-composer-form") !== null, getComputedStyle(hint.closest(".chat-composer-form") ?? hint).borderTopStyle]), [true, "dashed"]);
   await T(p, "chat").dispatchEvent("drop", { dataTransfer });
   await T(p, "drop-hint").waitFor({ state: "detached" });
   await T(p, "draft-file").getByRole("button", { name: "Remove trace.log" }).waitFor();
 });
 
-it("Chat: a picture over 10 MB and a file over 50 MB are refused by name before sending, and the log beside them stays", MAC, async (p) => {
+it("Chat: a picture over 10 MB and a file over 50 MB are refused by name before sending, each in its own note with its own Dismiss, and the log beside them stays", MAC, async (p) => {
   await open(p, "/chat/alba");
   await T(p, "chat-thread").waitFor();
   const strip = fixture("CF-2").composerStrip;
@@ -1710,13 +1787,19 @@ it("Chat: a picture over 10 MB and a file over 50 MB are refused by name before 
   const dataTransfer = await sizedFilesDragged(p, ...strip.map((item) => ({ name: item.name, type: typeOf(item), bytes: item.bytes })));
   await T(p, "chat").dispatchEvent("dragenter", { dataTransfer });
   await T(p, "chat").dispatchEvent("drop", { dataTransfer });
-  const notice = p.getByRole("alert");
-  await notice.getByText("big-screenshot.png is too large (11 MB). Pictures can be up to 10 MB. phone-recording.mov is too large (60 MB). Files can be up to 50 MB.", { exact: true }).waitFor();
+  const notes = p.getByRole("alert").locator('[data-testid="draft-note"]');
+  await notes.nth(1).waitFor();
+  const lines = ["big-screenshot.png is too large (11 MB). Pictures can be up to 10 MB.", "phone-recording.mov is too large (60 MB). Files can be up to 50 MB."];
+  assert.deepEqual(await notes.locator("p").allInnerTexts(), lines);
   assert.equal(await T(p, "draft-file").count(), 1);
   await T(p, "draft-file").getByRole("button", { name: "Remove search-run.log" }).waitFor();
   assert.equal(await T(p, "chat-send").isEnabled(), true);
-  await notice.getByRole("button", { name: "Dismiss" }).click();
-  await notice.waitFor({ state: "detached" });
+  await notes.first().getByRole("button", { name: "Dismiss this note" }).click();
+  await notes.nth(1).waitFor({ state: "detached" });
+  assert.deepEqual(await notes.locator("p").allInnerTexts(), [lines[1]]);
+  await notes.getByRole("button", { name: "Dismiss this note" }).click();
+  await p.getByRole("alert").waitFor({ state: "detached" });
+  assert.equal(await T(p, "draft-file").count(), 1);
 });
 
 it("Chat: a program is refused by its kind with a plain line, and the PDF picked with it stays", PHONE, async (p) => {
@@ -2123,6 +2206,20 @@ it("Chat: the x takes the quote away and sends nothing", PHONE, async (p) => {
   assert.equal(await T(p, "chat-my-message").count(), before);
 });
 
+for (const [name, size, pane] of [["the Mac", MAC, true], ["a phone", PHONE, false], ["an iPad upright", IPAD_UPRIGHT, false]]) {
+  it("Chat on " + name + ": a talk opened from a card has a Back to card key in the quoted card, and it returns to that card with the hand on its Answer key", size, async (p) => {
+    await open(p, "/queue/alba-1");
+    if (pane) await T(p, "card-pane").getByTestId("talk-to").click();
+    else await T(p, "talk-to").first().tap();
+    await draftQuote(p).getByText("How many results should each Search group show?").waitFor();
+    const back = draftQuote(p).getByRole("button", { name: "Back to card", exact: true });
+    assert.equal(await back.count(), 1, "the Back to card key");
+    await back.click();
+    await T(p, "send").waitFor();
+    assert.deepEqual([new URL(p.url()).pathname, await focusedTestId(p)], ["/queue/alba-1", "send"]);
+  });
+}
+
 it("Chat: a bot that does not exist says there is no chat with it", PHONE, async (p) => {
   await open(p, "/chat/nobody");
   await shown(p, "No chat with this bot.");
@@ -2214,13 +2311,12 @@ it("Chat: Send anyway requires a fresh paste and ordinary Send, and permits only
   assert.equal(await mine(p, FAKE_PASTE).count(), 1);
 });
 
-for (const reset of ["Escape", "Dismiss", "chat change", "navigation", "harmless paste", "file paste"]) {
+for (const reset of ["Dismiss", "chat change", "navigation", "harmless paste", "file paste"]) {
   it("Chat: the one-paste bypass clears on " + reset, MAC, async (p) => {
     await open(p, "/chat/iris");
     await pasteText(p, FAKE_PASTE);
     await p.getByRole("button", { name: "Send anyway", exact: true }).click();
-    if (reset === "Escape") await p.keyboard.press("Escape");
-    else if (reset === "Dismiss") await T(p, "secret-paste-notice").getByRole("button", { name: "Dismiss" }).click();
+    if (reset === "Dismiss") await T(p, "secret-paste-notice").getByRole("button", { name: "Dismiss" }).click();
     else if (reset === "harmless paste") {
       await pasteText(p, "Harmless text");
       assert.equal(await T(p, "chat-input").inputValue(), "Harmless text");
@@ -2248,6 +2344,42 @@ for (const reset of ["Escape", "Dismiss", "chat change", "navigation", "harmless
     assert.equal(await T(p, "chat-input").inputValue(), "");
   });
 }
+
+it("Chat: Esc leaves a blocked paste warning in place, and Cancel removes it", MAC, async (p) => {
+  await open(p, "/chat/iris");
+  await pasteText(p, FAKE_PASTE);
+  await T(p, "secret-paste-warning").waitFor();
+  await T(p, "chat-input").focus();
+  await p.keyboard.press("Escape");
+  await p.keyboard.type("ok");
+  assert.equal(await T(p, "chat-input").inputValue(), "ok");
+  assert.equal(await T(p, "secret-paste-warning").count(), 1, "the warning is still shown after Esc");
+  await T(p, "secret-paste-warning").getByRole("button", { name: "Cancel" }).click();
+  assert.equal(await T(p, "secret-paste-warning").count(), 0);
+});
+
+it("Chat: Esc leaves the one-paste bypass and its note in place, and the next paste is added", MAC, async (p) => {
+  await open(p, "/chat/iris");
+  await pasteText(p, FAKE_PASTE);
+  await p.getByRole("button", { name: "Send anyway", exact: true }).click();
+  await T(p, "secret-paste-notice").waitFor();
+  await p.keyboard.press("Escape");
+  await p.keyboard.type("ok");
+  assert.equal(await T(p, "chat-input").inputValue(), "ok");
+  assert.equal(await T(p, "secret-paste-notice").count(), 1, "the note is still shown after Esc");
+  await T(p, "chat-input").fill("");
+  await pasteText(p, FAKE_PASTE);
+  assert.equal(await T(p, "chat-input").inputValue(), FAKE_PASTE);
+});
+
+it("Chat: Esc in an open chat changes nothing", MAC, async (p) => {
+  await open(p, "/chat/iris");
+  await T(p, "chat-input").fill("A draft he is still writing");
+  await p.keyboard.press("Escape");
+  await p.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur());
+  await p.keyboard.press("Escape");
+  assert.deepEqual([new URL(p.url()).pathname, await T(p, "chat-input").inputValue(), await p.locator("[data-pop]").count()], ["/chat/iris", "A draft he is still writing", 0]);
+});
 
 const PASTE_SIZES = [
   ["mac-1512", MAC],
@@ -2471,6 +2603,107 @@ it("Chat motion: when his send is confirmed during its rise, the row that was Se
   }),
 );
 
+const spaceUnder = (row) => row.evaluate((el) => el.getBoundingClientRect().bottom - el.querySelector("[data-message-text]").getBoundingClientRect().bottom);
+const REST_LIMIT = 5000;
+const rested = (row) => {
+  const limit = Promise.withResolvers();
+  const late = setTimeout(limit.reject, REST_LIMIT, new Error("something under the message is still moving after " + REST_LIMIT + " ms"));
+  return Promise.race([row.evaluate((el) => Promise.allSettled(el.getAnimations({ subtree: true }).map((one) => one.finished)).then(() => null)), limit.promise]).finally(() => clearTimeout(late));
+};
+const steppedLine = (row, name) =>
+  row.evaluate((el, wanted) => {
+    const motion = el.getAnimations({ subtree: true }).find((one) => one.animationName === wanted);
+    if (!motion) return null;
+    const space = () => el.getBoundingClientRect().bottom - el.querySelector("[data-message-text]").getBoundingClientRect().bottom;
+    const { duration } = motion.effect.getComputedTiming();
+    const spaces = [];
+    for (let frame = 0; (frame * 1000) / 60 < duration; frame += 1) {
+      motion.currentTime = (frame * 1000) / 60;
+      spaces.push(space());
+    }
+    motion.currentTime = duration;
+    spaces.push(space());
+    motion.currentTime = 0;
+    return { duration, spaces, line: motion.effect.target.scrollHeight };
+  }, name);
+const gentle = (motion, name, what) => {
+  assert.notEqual(motion, null, "an animation named " + name + " runs on " + what);
+  assert.equal(motion.duration, STANDARD, what + " moves at the standard speed");
+  const steps = motion.spaces.slice(1).map((space, at) => Math.abs(space - motion.spaces[at]));
+  assert.ok(Math.abs(motion.spaces.at(-1) - motion.spaces[0]) >= motion.line, `over its whole run the space changes by at least the line's ${motion.line} px: ${motion.spaces.map((space) => space.toFixed(1)).join(", ")}`);
+  assert.ok(Math.max(...steps) <= motion.line / 2, `at 60 frames a second no frame changes the space by more than half a line (${motion.line / 2} px): ${steps.map((step) => step.toFixed(1)).join(", ")}`);
+};
+
+it("Chat motion: when he sends again, the Read line under his older message folds away at the standard speed, by no more than half a line in any frame, and with Reduce Motion it is gone at once", PHONE, (p) =>
+  motionPair(p, PHONE, async (page, m) => {
+    await page.clock.install({ time: new Date("2026-11-02T15:00:00Z") });
+    await open(page, "/chat/dale");
+    await T(page, "chat-bot-message").first().waitFor();
+    await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
+    const replies = await T(page, "chat-bot-message").count();
+    await T(page, "chat-input").fill("Fold check one");
+    await T(page, "chat-send").tap();
+    await page.clock.runFor(3600);
+    await T(page, "chat-bot-message").nth(replies).getByText("Seen. I will check it and come back with the details.").waitFor();
+    const older = mine(page, "Fold check one");
+    const line = older.locator('[data-testid="chat-seen"]');
+    await line.waitFor();
+    await rested(older);
+    const height = await line.evaluate((el) => el.scrollHeight);
+    const before = await spaceUnder(older);
+    await T(page, "chat-input").fill("Fold check two");
+    const resume = await m.hold();
+    await T(page, "chat-send").tap();
+    await mine(page, "Fold check two").waitFor();
+    const after = await spaceUnder(older);
+    if (m.still) assert.ok(before - after >= height, `with Reduce Motion the space under the older message closes at once by its line (${before} to ${after} px, a ${height} px line)`);
+    else assert.ok(Math.abs(after - before) < 1, `at the Send press the space under the older message is still whole; it went from ${before} to ${after} px in one frame`);
+    await page.clock.resume();
+    await m.during("the old line", '[data-row="out"]', async () => gentle(await steppedLine(older, "fold"), "fold", "the old line"));
+    await resume();
+    await settle(page);
+    await T(page, "chat-bot-message").nth(replies + 1).waitFor({ timeout: 10_000 });
+    await settle(page);
+    assert.deepEqual(
+      [await T(page, "chat-seen").count(), await line.count(), await mine(page, "Fold check two").locator('[data-testid="chat-seen"]').count(), await page.locator('[data-row="out"]').count()],
+      [1, 0, 1, 0],
+      "at the end: Read lines in the thread, under the older message, under the newest, and lines still folding",
+    );
+    assert.ok(before - (await spaceUnder(older)) >= height, "at the end the space under the older message is smaller by its line");
+  }),
+);
+
+it("Chat motion: when his message is delivered, the line under it grows in at the standard speed, by no more than half a line in any frame, and with Reduce Motion it is there at once", PHONE, (p) =>
+  motionPair(p, PHONE, async (page, m) => {
+    await page.clock.install({ time: new Date("2026-11-02T15:00:00Z") });
+    await open(page, "/chat/dale");
+    await T(page, "chat-bot-message").first().waitFor();
+    await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
+    const replies = await T(page, "chat-bot-message").count();
+    await T(page, "chat-input").fill("Grow check");
+    const resume = await m.hold();
+    await T(page, "chat-send").tap();
+    const row = mine(page, "Grow check");
+    await row.getByText("Sending...", { exact: true }).waitFor();
+    const before = await spaceUnder(row);
+    await page.clock.runFor(400);
+    const line = row.locator('[data-testid="chat-delivered"]');
+    await line.waitFor({ state: "attached" });
+    const height = await line.evaluate((el) => el.scrollHeight);
+    const after = await spaceUnder(row);
+    if (m.still) assert.ok(after - before >= height, `with Reduce Motion the line is there at once (${before} to ${after} px, a ${height} px line)`);
+    else assert.ok(Math.abs(after - before) < 1, `at delivery the space under his message is still as it was; it went from ${before} to ${after} px in one frame`);
+    await page.clock.resume();
+    await m.during("the new line", '[data-row="in"]', async () => gentle(await steppedLine(row, "unfold"), "unfold", "the new line"));
+    await resume();
+    await settle(page);
+    await T(page, "chat-bot-message").nth(replies).waitFor({ timeout: 10_000 });
+    await settle(page);
+    assert.deepEqual([await row.locator('[data-testid="chat-seen"]').count(), await T(page, "chat-delivered").count()], [1, 0], "at the end: the Read line under his message, and no Delivered line");
+    assert.ok((await spaceUnder(row)) - before >= height, "at the end the space under his message is larger by its line");
+  }),
+);
+
 it("Chat on a phone: Menu, the bot's name and role, and More float over the page in one row", PHONE, async (p) => {
   await open(p, "/chat/iris");
   const label = p.locator('[data-float="label"]');
@@ -2495,6 +2728,90 @@ it("Chat on a phone: Search from More opens, and closing it puts focus back on M
   await p.keyboard.press("Escape");
   await p.locator('[data-pop="search"]').waitFor({ state: "detached" });
   assert.equal(await focusedTestId(p), "float-more");
+});
+
+const moreList = (p) => p.locator('[data-pop="more"]');
+
+it("Chat on the Mac: the three dots open a small menu under them, not a sheet", MAC, async (p) => {
+  await open(p, "/chat/iris");
+  await T(p, "chat-more").click();
+  const menu = moreList(p);
+  await menu.waitFor();
+  const dots = await T(p, "chat-more").boundingBox();
+  const box = await menu.boundingBox();
+  assert.equal(box.width <= 340, true, "a small box, not " + box.width + " wide");
+  assert.equal(box.y >= dots.y + dots.height && box.y <= dots.y + dots.height + 16, true, "the box hangs under the three dots");
+  assert.equal(Math.abs(box.x + box.width - (dots.x + dots.width)) <= 1, true, "the right edges line up");
+  assert.equal(await menu.getAttribute("aria-modal"), null, "not a modal sheet");
+  assert.equal(await menu.getByRole("heading").count(), 0, "no title");
+  assert.deepEqual(await menu.getByTestId("more-item").allInnerTexts(), ["Search", "Settings", "Add bot"]);
+  assert.equal(await menu.getByTestId("chat-alerts").count(), 1, "the Alerts row");
+});
+
+for (const shut of ["outside", "Escape"]) {
+  it("Chat on the Mac: " + shut + " closes the three dots menu with focus back on the three dots", MAC, async (p) => {
+    await open(p, "/chat/iris");
+    await T(p, "chat-more").click();
+    const menu = moreList(p);
+    await menu.waitFor();
+    if (shut === "outside") await p.mouse.click(400, 600);
+    else await p.keyboard.press("Escape");
+    await menu.waitFor({ state: "detached" });
+    assert.equal(await focusedTestId(p), "chat-more");
+  });
+}
+
+it("Chat on the Mac: Search from the three dots menu opens, and closing it puts focus back on the three dots", MAC, async (p) => {
+  await open(p, "/chat/iris");
+  await T(p, "chat-more").click();
+  await moreList(p).getByRole("button", { name: "Search", exact: true }).click();
+  await moreList(p).waitFor({ state: "detached" });
+  await p.locator('[data-pop="search"]').waitFor();
+  await p.keyboard.press("Escape");
+  await p.locator('[data-pop="search"]').waitFor({ state: "detached" });
+  assert.equal(await focusedTestId(p), "chat-more");
+});
+
+for (const [name, size, dots] of [["a phone", PHONE, "float-more"], ["an iPad upright", IPAD_UPRIGHT, "chat-more"]]) {
+  it("Chat on " + name + ": the three dots open the More sheet with a handle, its title and a Close key", size, async (p) => {
+    await open(p, "/chat/iris");
+    await T(p, dots).tap();
+    const sheet = moreList(p);
+    await sheet.waitFor();
+    assert.equal(await sheet.getAttribute("aria-modal"), "true");
+    assert.equal(await sheet.getByRole("heading").innerText(), "More");
+    assert.equal(await sheet.getByTestId("sheet-handle").count(), 1, "the handle");
+    assert.deepEqual([await sheet.getByRole("button", { name: "Close", exact: true }).count(), await sheet.getByRole("button", { name: "Done", exact: true }).count()], [1, 0], "a Close key, no Done key");
+    assert.deepEqual(await sheet.getByTestId("more-item").allInnerTexts(), ["Search", "Settings", "Add bot"]);
+    assert.equal(await sheet.getByTestId("chat-alerts").count(), 1, "the Alerts row");
+    const box = await sheet.boundingBox();
+    assert.equal(Math.round(box.y + box.height), p.viewportSize().height, "the sheet sits on the foot");
+    assert.equal(box.width <= 720, true, "held to a readable width");
+  });
+
+  for (const shut of ["Close", "outside", "Escape"]) {
+    it("Chat on " + name + ": " + shut + " closes the More sheet with focus back on the three dots", size, async (p) => {
+      await open(p, "/chat/iris");
+      await T(p, dots).tap();
+      const sheet = moreList(p);
+      await sheet.waitFor();
+      if (shut === "Close") await sheet.getByRole("button", { name: "Close", exact: true }).tap();
+      else if (shut === "outside") await p.touchscreen.tap(8, 8);
+      else await p.keyboard.press("Escape");
+      await sheet.waitFor({ state: "detached" });
+      assert.equal(await focusedTestId(p), dots);
+    });
+  }
+}
+
+it("Chat on an iPad upright: Search from More opens, and closing it puts focus back on More", IPAD_UPRIGHT, async (p) => {
+  await open(p, "/chat/iris");
+  await T(p, "chat-more").tap();
+  await moreList(p).getByRole("button", { name: "Search", exact: true }).tap();
+  await p.locator('[data-pop="search"]').waitFor();
+  await p.keyboard.press("Escape");
+  await p.locator('[data-pop="search"]').waitFor({ state: "detached" });
+  assert.equal(await focusedTestId(p), "chat-more");
 });
 
 it("Chat: the message box is solid in both looks, so nothing shows through it", PHONE, async (p) => {
@@ -2569,17 +2886,22 @@ it("Chat: a bot with an unread message shows New above its first unread message,
   assert.equal(await T(p, "chat-new").count(), 0, "New lines on a second visit");
 });
 
-it("Chat: the Sound choice is kept after the page loads again", MAC, async (p) => {
+it("Chat: Alerts for this chat says On or Off, and each chat keeps its own choice after the page loads again", MAC, async (p) => {
   await open(p, "/chat/iris");
   await T(p, "chat-more").click();
-  const sound = T(p, "chat-sound");
-  const before = await sound.getAttribute("aria-checked");
-  await sound.click();
-  const after = before === "true" ? "false" : "true";
-  assert.equal(await sound.getAttribute("aria-checked"), after);
+  const alerts = T(p, "chat-alerts");
+  assert.deepEqual([await alerts.getAttribute("role"), await alerts.getAttribute("aria-checked")], ["switch", "true"]);
+  assert.deepEqual((await alerts.innerText()).split("\n").map((line) => line.trim()).filter(Boolean), ["Alerts for this chat", "On"]);
+  await alerts.click();
+  assert.equal(await alerts.getAttribute("aria-checked"), "false");
+  assert.deepEqual((await alerts.innerText()).split("\n").map((line) => line.trim()).filter(Boolean), ["Alerts for this chat", "Off"]);
+  assert.equal(await moreList(p).count(), 1, "the switch leaves the menu open");
   await p.reload();
   await T(p, "chat-more").click();
-  assert.equal(await T(p, "chat-sound").getAttribute("aria-checked"), after);
+  assert.equal(await T(p, "chat-alerts").getAttribute("aria-checked"), "false");
+  await open(p, "/chat/alba");
+  await T(p, "chat-more").click();
+  assert.equal(await T(p, "chat-alerts").getAttribute("aria-checked"), "true", "another chat keeps its own choice");
 });
 
 it("Chat: Turn on notifications says they come with the connection and asks the browser for nothing", MAC, async (p) => {

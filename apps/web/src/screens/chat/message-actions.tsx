@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FocusEvent, type PointerEvent, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type FocusEvent, type PointerEvent, type ReactNode } from "react";
 import { cx } from "../../ui/cx";
 import { useCopy } from "../../ui/copy";
 import { Icon } from "../../ui/icon";
@@ -8,6 +8,10 @@ import { Sheet } from "../../ui/overlay";
 const HOLD_MS = 500;
 const MOVE_PX = 10;
 const FINE_POINTER = "(hover: hover) and (pointer: fine)";
+const PART = "min-h-[36px] cursor-pointer px-s3 text-meta font-strong text-ink-2 enabled:hover:bg-raised enabled:hover:text-ink disabled:cursor-default disabled:text-ink-3 pointer-coarse:min-h-hit";
+const BAR = "flex overflow-hidden rounded-key border border-line bg-control shadow-lift";
+
+export const Selecting = createContext<{ id: string | null; set: (id: string | null) => void }>({ id: null, set: () => undefined });
 
 function selectedWithin(root: Element | null): string | null {
   const selection = window.getSelection();
@@ -38,25 +42,7 @@ function useCopyAction(text: string) {
   return { run: () => copy(text), copied: state === "copied", label: state === "copied" ? "Copied" : state === "failed" ? "Could not copy" : "Copy" };
 }
 
-function ActionBar({ text, onQuote, className }: { text: string; onQuote?: () => void; className: string }) {
-  const { run, label } = useCopyAction(text);
-  const part = "min-h-[36px] cursor-pointer px-s3 text-meta font-strong text-ink-2 hover:bg-raised hover:text-ink pointer-coarse:min-h-hit";
-  return (
-    <div role="toolbar" aria-label="Message actions" className={cx("absolute z-10 flex overflow-hidden rounded-key border border-line bg-control shadow-lift", className)} data-testid="message-actions">
-      {onQuote && (
-        <button type="button" onClick={onQuote} className={part}>
-          Reply
-        </button>
-      )}
-      <button type="button" onClick={run} className={part} aria-live="polite">
-        {label}
-      </button>
-    </div>
-  );
-}
-
-function ActionSheet({ title, selected, text, onQuote, onClose }: { title: string; selected: boolean; text: string; onQuote?: () => void; onClose: () => void }) {
-  const { run, label, copied } = useCopyAction(text);
+function useCloseAfterCopy(copied: boolean, onClose: () => void) {
   const close = useRef(onClose);
   useEffect(() => {
     close.current = onClose;
@@ -66,6 +52,27 @@ function ActionSheet({ title, selected, text, onQuote, onClose }: { title: strin
     const id = window.setTimeout(() => close.current(), 700);
     return () => window.clearTimeout(id);
   }, [copied]);
+}
+
+function ActionBar({ text, onQuote, className }: { text: string; onQuote?: () => void; className: string }) {
+  const { run, label } = useCopyAction(text);
+  return (
+    <div role="toolbar" aria-label="Message actions" className={cx("absolute z-10", BAR, className)} data-testid="message-actions">
+      {onQuote && (
+        <button type="button" onClick={onQuote} className={PART}>
+          Reply
+        </button>
+      )}
+      <button type="button" onClick={run} className={PART} aria-live="polite">
+        {label}
+      </button>
+    </div>
+  );
+}
+
+function ActionSheet({ title, selected, text, onQuote, onSelect, onClose }: { title: string; selected: boolean; text: string; onQuote?: () => void; onSelect?: () => void; onClose: () => void }) {
+  const { run, label, copied } = useCopyAction(text);
+  useCloseAfterCopy(copied, onClose);
   return (
     <Sheet title={title} wide={false} onClose={onClose} pop="message-actions">
       <ul className="grid gap-hair pb-s1">
@@ -90,6 +97,21 @@ function ActionSheet({ title, selected, text, onQuote, onClose }: { title: strin
             <span aria-live="polite">{label}</span>
           </button>
         </li>
+        {onSelect && (
+          <li>
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onSelect();
+              }}
+              className={MENU_ROW}
+            >
+              <Icon name="select" className="text-ink-2" />
+              Select
+            </button>
+          </li>
+        )}
       </ul>
     </Sheet>
   );
@@ -121,7 +143,9 @@ export function Actionable({
   const [hover, setHover] = useState(false);
   const [focus, setFocus] = useState(false);
   const [sheet, setSheet] = useState<{ selected: string | null } | null>(null);
+  const selecting = useContext(Selecting);
   const live = copy !== undefined;
+  const selectingThis = live && id !== undefined && selecting.id === id;
   const selection = () => selectedWithin(root.current?.querySelector("[data-message-text]") ?? null);
   const stop = () => {
     if (hold.current) window.clearTimeout(hold.current.timer);
@@ -134,16 +158,27 @@ export function Actionable({
     },
     [],
   );
+  useEffect(() => {
+    const text = root.current?.querySelector("[data-message-text]");
+    if (!selectingThis || !text) return;
+    root.current?.focus({ preventScroll: true });
+    window.getSelection()?.selectAllChildren(text);
+    return () => {
+      const now = window.getSelection();
+      if (now && text.contains(now.anchorNode)) now.removeAllRanges();
+    };
+  }, [selectingThis]);
 
   const press = (event: PointerEvent<HTMLLIElement>) => {
     touched.current = event.pointerType !== "mouse";
-    if (!live || event.pointerType === "mouse" || (event.target as Element).closest("[data-pop],button,a")) return;
+    if (!live || selectingThis || event.pointerType === "mouse" || (event.target as Element).closest("[data-pop],button,a")) return;
     stop();
     hold.current = {
       x: event.clientX,
       y: event.clientY,
       timer: window.setTimeout(() => {
         hold.current = null;
+        selecting.set(null);
         release.current?.();
         release.current = swallowRelease();
         setSheet({ selected: selection() });
@@ -162,7 +197,7 @@ export function Actionable({
     <li
       ref={root}
       tabIndex={live ? 0 : undefined}
-      className={cx(live && "relative [-webkit-touch-callout:none]", className)}
+      className={cx(live && "relative", live && (selectingThis ? "[-webkit-touch-callout:default] [&_[data-message-text]]:select-text" : "[-webkit-touch-callout:none]"), className)}
       data-testid={testId}
       data-message-id={live ? id : undefined}
       onPointerEnter={(event) => event.pointerType === "mouse" && setHover(true)}
@@ -171,13 +206,15 @@ export function Actionable({
       onPointerMove={move}
       onPointerUp={stop}
       onPointerCancel={stop}
-      onContextMenu={(event) => live && touched.current && event.preventDefault()}
+      onContextMenu={(event) => live && touched.current && !selectingThis && event.preventDefault()}
       onFocus={(event) => setFocus(live && event.target.matches(":focus-visible"))}
       onBlur={leaveFocus}
     >
-      {copy !== undefined && (hover || focus) && !sheet && <ActionBar text={copy} onQuote={onQuote && (() => onQuote(selection()))} className={align === "end" ? "-top-s4 left-0" : "-top-s4 right-0"} />}
+      {copy !== undefined && (hover || focus) && !sheet && !selectingThis && <ActionBar text={copy} onQuote={onQuote && (() => onQuote(selection()))} className={align === "end" ? "-top-s4 left-0" : "-top-s4 right-0"} />}
       {children}
-      {copy !== undefined && sheet && <ActionSheet title={title} selected={sheet.selected !== null} text={copy} onQuote={onQuote && (() => onQuote(sheet.selected))} onClose={() => setSheet(null)} />}
+      {copy !== undefined && sheet && (
+        <ActionSheet title={title} selected={sheet.selected !== null} text={copy} onQuote={onQuote && (() => onQuote(sheet.selected))} onSelect={id !== undefined && copy ? () => selecting.set(id) : undefined} onClose={() => setSheet(null)} />
+      )}
     </li>
   );
 }
@@ -228,6 +265,62 @@ export function SelectionQuote({ onQuote }: { onQuote: (id: string, text: string
         className="min-h-[36px] cursor-pointer rounded-key border border-line-3 bg-control px-s3 text-meta font-strong text-ink shadow-lift hover:bg-raised"
       >
         Reply
+      </button>
+    </div>
+  );
+}
+
+export function SelectBar({ id, onQuote, onEnd }: { id: string; onQuote?: (text: string) => void; onEnd: () => void }) {
+  const bar = useRef<HTMLDivElement>(null);
+  const [picked, setPicked] = useState<string | null>(null);
+  const { run, label, copied } = useCopyAction(picked ?? "");
+  const end = useRef(onEnd);
+  useEffect(() => {
+    end.current = onEnd;
+  });
+  useCloseAfterCopy(copied, onEnd);
+  useEffect(() => {
+    const row = document.querySelector(`[data-message-id="${CSS.escape(id)}"]`);
+    const text = row?.querySelector("[data-message-text]") ?? null;
+    const record = () => {
+      const now = selectedWithin(text);
+      if (now) setPicked(now);
+    };
+    const click = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (!row?.contains(target) && !bar.current?.contains(target)) end.current();
+    };
+    record();
+    document.addEventListener("selectionchange", record);
+    document.addEventListener("click", click, true);
+    return () => {
+      document.removeEventListener("selectionchange", record);
+      document.removeEventListener("click", click, true);
+    };
+  }, [id]);
+  const keep = (event: PointerEvent<HTMLButtonElement>) => event.pointerType === "mouse" && event.preventDefault();
+  return (
+    <div ref={bar} role="toolbar" aria-label="Selected text" className={cx("justify-self-center", BAR)} data-testid="select-bar">
+      {onQuote && (
+        <button
+          type="button"
+          disabled={!picked}
+          onPointerDown={keep}
+          onClick={() => {
+            if (!picked) return;
+            onQuote(picked);
+            onEnd();
+          }}
+          className={PART}
+        >
+          Reply
+        </button>
+      )}
+      <button type="button" disabled={!picked} onPointerDown={keep} onClick={run} className={PART} aria-live="polite">
+        {label}
+      </button>
+      <button type="button" onPointerDown={keep} onClick={onEnd} className={PART}>
+        Done
       </button>
     </div>
   );

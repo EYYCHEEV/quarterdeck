@@ -49,7 +49,7 @@ Some answers are written inline in the tests, for the cases the files do not cov
 
 ## Client rules the answer tests check
 
-- A 403 on a POST ends the session like a 403 on a GET. The client gives `SignInRequired` after the one POST and sends no read of its own, and it drops its token, its freshness and its held list. The source reports it through `sessionEnded`, so the server data goes, the stream stops and the one 61-second timer starts. While that lasts, an answer or a comment sends nothing and says `SignInRequired`, and the source never sends the draft again. A 303 stays a step-up and never ends the session.
+- A 403 on a POST ends the session like a 403 on a GET. The client gives `SignInRequired` after the one POST and sends no read of its own, and it drops its token, its freshness and its held list. The source reports it through `sessionEnded`, so the server data goes, the stream stops and the one 61-second timer starts. While that lasts, an answer or a comment sends nothing and says `SignInRequired`, and the source never sends the draft again. A 303 stays a step-up and never ends the session. The chat token rule below is the one exception.
 - A `NotConfirmed` answer (a 503 after the request left, a network failure, an unreadable receipt) is checked by one GET of the card. If its thread shows an answer at the same revision with the same pick and the same note, it is treated as sent. The note must match: an earlier answer with the same revision and pick but another note does not count.
 - The client does not parse the words of the receipt `message`. It drops a token when it sends it, so the next answer reads the list first.
 - The answer and comment paths take the card id through the same check as the one-card read (letters, digits and hyphens, 1 to 64 characters, no leading hyphen), so an id like `..` or `a/b` can never reach the server.
@@ -66,6 +66,8 @@ Written by hand in `chat/` for the "Server Chat:" cases in `apps/web/shell_test.
 
 The 429, 422, 400 and 502 refusals carry `{"error": "rate"}`, `bot`, `text` and `mail` inline in the tests, and a lost answer is an aborted request.
 
+Token rule for chat: a chat send and a mark-read may spend a token from an earlier answer, a card list 200 or a POST receipt, with no list read first. The client holds one such token at a time, the newest, and only while it is under 240 seconds old; the server keeps a token for 300. A token goes to one POST only and is dropped as it is sent. A token read made for one request is never held for another. With no token held, the POST reads the list first, as an answer does. A 403 with the body `{"error": "request refused"}` on a POST that spent a held token does not end the session: the client reads the card list once and sends the same request once more with that read's token and the same `clientId`. A second 403, a 403 with any other body and a 401 end the session, as in the rules above. Card answers, comments and file sends keep their own token read. `server_chat_test.mjs` checks this against a fake server that takes each token once and can age the held one.
+
 ## The chat v2 samples
 
 `chat/v2/` holds the ten files of the chat contract v2 samples, kept as written. `SHA256SUMS` lists the sha256 of each file; check them with `sha256sum -c SHA256SUMS` inside that folder. Do not edit the files without updating the sums. `chat_client_test.mjs` reads them.
@@ -77,7 +79,9 @@ The 429, 422, 400 and 502 refusals carry `{"error": "rate"}`, `bot`, `text` and 
 - `send-quote-message.json`, `send-quote-card.json` and `send-files.json`: the send bodies for a message quote, a card quote and files.
 - `mail-chat-1-with-quote-and-file.json` and `mail-chat-seen-1.json`: the two mail bodies (server side; the app does not read them).
 
-Bounds the client chose where the contract gives none (a thread with a field outside them is unreadable, as with every field): a working note and a quoted text up to 4,000 code points; a message with up to 50 files, a file name up to 512 characters and a type up to 255; up to 64 feature names (unknown names are ignored, repeats collapse); a card id of 1 to 64 letters, digits and hyphens; a `rev` that is a whole number from 0 up.
+Bounds the client chose where the contract gives none (a thread with a field outside them is unreadable, as with every field): a message with up to 50 files, a file name up to 512 characters and a type up to 255; up to 64 feature names (unknown names are ignored, repeats collapse); a card id of 1 to 64 letters, digits and hyphens; a `rev` that is a whole number from 0 up.
+
+A message text, a working note and a quoted text have no length check of their own on the way in. The 1,048,576 bytes the client reads of one answer bound them. On the way out, one send is at most 131,072 bytes as a request. The client keeps 16,384 of those for the fields beside the text, so the text, counted as the request writes it (in quotes, with its escapes), may take up to 114,688 bytes. The send's own answer carries the text back, so the client reads up to 131,072 bytes of it.
 
 ## The bots files
 

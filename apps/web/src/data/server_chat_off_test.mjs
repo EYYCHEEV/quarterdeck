@@ -138,9 +138,11 @@ for (const [kind, call] of [["answer", (client) => client.answer("alba-1", { rev
   test("the " + kind + " POST carries an abort signal and sets exactly one timer of twenty seconds", async () => {
     const calls = [];
     const scheduled = [];
+    let before = 0;
     const send = async (path, init) => {
       calls.push({ path, init });
       if (init.method === "POST") return new Promise(() => undefined);
+      before = scheduled.length;
       return new Response(LIST, { status: 200, headers: { "Content-Type": "application/json", ETag: ETAG } });
     };
     const client = createApiClient({ send, schedule: (run, delay) => { scheduled.push(delay); return () => undefined; } });
@@ -151,6 +153,6 @@ for (const [kind, call] of [["answer", (client) => client.answer("alba-1", { rev
     const post = calls.find((one) => one.init.method === "POST");
     assert.ok(post, "the POST was never sent");
     assert.ok(post.init.signal instanceof AbortSignal);
-    assert.deepEqual(scheduled, [20_000]);
+    assert.deepEqual(scheduled.slice(before), [20_000], "timers set after the last read went out");
   });
 }

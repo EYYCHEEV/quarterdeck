@@ -310,6 +310,16 @@ it("Queue on the Mac and sideways: Esc in the card pane goes back to its row", M
   }
 });
 
+it("Queue on the Mac: the hint row prints no Esc, and Esc in the card pane still goes back to its row", MAC, async (p) => {
+  await open(p, "/queue");
+  await T(p, "card-pane").getByTestId("talk-to").waitFor();
+  const hints = await T(p, "key-hints").innerText();
+  equal([hints.includes("search"), hints.includes("Esc")], [true, false], "search printed, Esc printed");
+  await T(p, "card-pane").getByTestId("talk-to").focus();
+  await p.keyboard.press("Escape");
+  equal(await p.evaluate(() => document.activeElement?.closest('[data-testid="card-row"]') !== null && document.activeElement?.getAttribute("aria-current") === "true"), true, "focus on the open card's row");
+});
+
 it("Card keys on the Mac and sideways: a letter picks that option, n picks None of these, and Enter sends", MAC, async (p) => {
   for (const [width, height] of WIDE) {
     await p.setViewportSize({ width, height });
@@ -341,7 +351,7 @@ it("Card keys on the Mac and sideways: a held Enter sends one card only", MAC, a
     });
     await p.keyboard.up("Enter");
     await p.keyboard.press("n");
-    await pane.getByTestId("send").getByText("Send: None of these", { exact: true }).waitFor();
+    await pane.getByTestId("send").getByText("Answer: None of these", { exact: true }).waitFor();
     await shown(p, "· 9 waiting");
   }
 });
@@ -453,7 +463,18 @@ it("Card keys on the Mac: the key list on an approval card leaves out the letter
   await open(p, "/queue/c2");
   await T(p, "card-pane").getByTestId("talk-to").waitFor();
   await p.keyboard.press("?");
-  equal(await p.locator('[data-pop="keys"] kbd').allInnerTexts(), ["j / k", "t", "\u2318K", "Esc"], "keys");
+  equal(await p.locator('[data-pop="keys"] kbd').allInnerTexts(), ["j / k", "t", "\u2318K"], "keys");
+});
+
+it("Card keys on the Mac: the key list prints no Esc, and Esc still closes it", MAC, async (p) => {
+  await open(p, "/queue/alba-1");
+  await T(p, "card-pane").getByTestId("talk-to").waitFor();
+  await p.keyboard.press("?");
+  const list = p.locator('[data-pop="keys"]');
+  await list.getByText("Talk to Alba", { exact: true }).waitFor();
+  equal((await list.locator("kbd").allInnerTexts()).includes("Esc"), false, "Esc printed in the key list");
+  await p.keyboard.press("Escape");
+  await gone(list);
 });
 
 it("Card keys: the Keys button is hidden on a touch-only iPad held sideways", TOUCH_SIDEWAYS, async (p) => {
@@ -484,19 +505,39 @@ it("Task Card: the owner line names the project and the due", PHONE, async (p) =
   equal(line, "Alba · quarterdeck Due Wed Nov 4, 5 PM ET, in 2 days", "owner line");
 });
 
-it("Task Card: Send A on a two-way pick sends in one tap and the next card opens with Got it", PHONE, async (p) => {
+const shownCaps = (key) => key.locator("kbd").evaluateAll((caps) => caps.filter((cap) => getComputedStyle(cap).display !== "none").map((cap) => getComputedStyle(cap, "::after").content));
+
+it("Task Card: Answer A on a two-way pick sends in one tap and the next card opens with Got it", PHONE, async (p) => {
   await open(p, "/queue/alba-1");
+  equal([await nameOf(T(p, "send")), await shownCaps(T(p, "send"))], ["Answer A", []], "the key's words, and no key cap on a phone");
   await T(p, "send").tap();
   await shown(p, "Got it: How many results should each Search group show, A, 10:00 AM");
   await shown(p, "Should the bridge retry a failed message?");
   await shown(p, "Queue · 9 waiting");
 });
 
-it("Task Card: None of these changes the note and Send, and the card shows under Answered", PHONE, async (p) => {
+it("Task Card on the Mac: the Answer key names the pick and carries the Enter cap", MAC, async (p) => {
+  await open(p, "/queue/alba-1");
+  const key = T(p, "card-pane").getByTestId("send");
+  await key.waitFor();
+  equal([await nameOf(key), await shownCaps(key), await T(p, "card-pane").getByRole("button", { name: "Answer A", exact: true }).count()], ["Answer A", ['"Enter"'], 1], "the key's words, its cap, and its name for a screen reader");
+});
+
+it("Card keys on the Mac: the key list says Enter answer", MAC, async (p) => {
+  await open(p, "/queue/alba-1");
+  await T(p, "card-pane").getByTestId("talk-to").waitFor();
+  await p.keyboard.press("?");
+  const list = p.locator('[data-pop="keys"]');
+  await list.getByText("Talk to Alba", { exact: true }).waitFor();
+  const words = await list.locator("dt, dd").allInnerTexts();
+  equal(words[words.indexOf("Enter") + 1], "answer", "the words beside Enter");
+});
+
+it("Task Card: None of these changes the note and the Answer key, and the card shows under Answered", PHONE, async (p) => {
   await open(p, "/queue/alba-1");
   await T(p, "none-of-these").tap();
   await p.getByPlaceholder("Your own answer, or what would work instead").fill("Five on the Mac only.");
-  await shown(p, "Send: None of these");
+  await shown(p, "Answer: None of these");
   await T(p, "send").tap();
   await shown(p, "Got it: How many results should each Search group show, None of these, 10:00 AM. Waiting on Alba.");
   await p.getByRole("link", { name: "Queue · 9 waiting" }).tap();
@@ -3098,6 +3139,24 @@ it("Sign out: a chat draft typed before Sign out is gone after Sign in", PHONE, 
   equal(await T(p, "chat-input").inputValue(), "", "draft");
 });
 
+it("Sign out: a chat whose alerts were turned off has them on again after Sign in, and so has every other chat", MAC, async (p) => {
+  await open(p, "/chat/iris");
+  await T(p, "chat-more").click();
+  await T(p, "chat-alerts").click();
+  equal(await T(p, "chat-alerts").getAttribute("aria-checked"), "false", "alerts before Sign out");
+  await p.keyboard.press("Escape");
+  await signOutFromMenu(p, false);
+  equal(await p.evaluate(() => localStorage.getItem("quarterdeck-chat-alerts-off")), null, "the stored choice after Sign out");
+  await p.getByRole("button", { name: "Sign in with Google" }).click();
+  for (const bot of ["iris", "alba"]) {
+    await p.locator('[data-testid="pinned-bot"][data-id="' + bot + '"]').click();
+    await p.waitForFunction((id) => location.pathname === "/chat/" + id, bot);
+    await T(p, "chat-more").click();
+    equal(await T(p, "chat-alerts").getAttribute("aria-checked"), "true", bot + " alerts after Sign in");
+    await p.keyboard.press("Escape");
+  }
+});
+
 it("Sign out: Back after Sign out still shows only Signed out", PHONE, async (p) => {
   await open(p, "/projects");
   await openDrawer(p, true);
@@ -4974,7 +5033,7 @@ const SIGN_IN_AGAIN = "Not sent. Sign in again, reload Quarterdeck, then send.";
 const SIGN_IN_AGAIN_HREF = "/captain/step-up?next=%2Fcaptain%2Fchat";
 const NOT_SURE = "Not sure it was sent. Check Answered before you try again.";
 const SEND_NOTE = "Five, if the keyboard still fits.";
-const SEND_KEPT = [SEND_NOTE, "true", false, false, "Send B"];
+const SEND_KEPT = [SEND_NOTE, "true", false, false, "Answer B"];
 const SEND_DOORS = [["one-way", "a one-way card's pick, through Confirm"], ["two-way", "a two-way card"]];
 const SEND_COMMENTS = [
   "I tried five rows on the iPhone with the keyboard open. The fifth row sits just above it.",
@@ -5076,18 +5135,24 @@ for (const [door, what] of SEND_DOORS) {
   it("Server Task Card on a phone: a send on " + what + " whose session can't be confirmed while its token read is out ends Sending, and after Retry the card says Not sent. Try again. with Try again and his pick and note", PHONE, async (p) => {
     const server = await answerServer(p, door);
     await answerReady(p);
-    await p.clock.runFor(40_000);
+    server.lists = "down";
+    const refused = p.waitForResponse((response) => new URL(response.url()).pathname === "/captain/cards" && response.status() === 503);
+    await p.clock.runFor(53_000);
+    await (await refused).finished();
+    await p.waitForTimeout(300);
     server.lists = "hold-one";
     const asked = p.waitForRequest((request) => new URL(request.url()).pathname === "/captain/cards");
     await sendPick(p, door);
     await asked;
-    await p.clock.runFor(21_000);
+    await p.clock.runFor(9_000);
     const hidden = p.getByRole("alert").filter({ has: p.getByRole("button", { name: "Retry", exact: true }) });
     await hidden.waitFor();
     equal(await T(p, "task-card").count(), 0, "the card hidden while the session can't be confirmed");
     const answered = p.waitForResponse((response) => new URL(response.url()).pathname === "/captain/cards" && response.status() === 200);
     await releaseHeld(server);
     await (await answered).finished();
+    await p.waitForTimeout(300);
+    equal([await hidden.count(), await T(p, "task-card").count(), server.posts.length], [1, 0, 0], "after the held token read answers: the hidden line, the card, and posts");
     server.lists = "open";
     await hidden.getByRole("button", { name: "Retry", exact: true }).tap();
     await T(p, "option").nth(2).waitFor();
@@ -5114,17 +5179,16 @@ for (const [door, what] of SEND_DOORS) {
     await failedLine(p, "Not sent. Try again.", true);
   }, /503 \(Service Unavailable\)/);
 
-  it("Server Task Card on a phone: a send on " + what + " whose token read never answers ends at 45 seconds with " + NOT_SURE + " and no Try again, his pick and note kept and nothing posted", PHONE, async (p) => {
+  it("Server Task Card on a phone: a send on " + what + " whose token read never answers ends at 20 seconds with Not sent. Try again. and Try again, his pick and note kept and nothing posted", PHONE, async (p) => {
     const server = await answerServer(p, door);
     await answerReady(p);
     server.lists = "hold";
     await sendPick(p, door);
-    await p.clock.runFor(44_000);
-    equal(await nameOf(T(p, "send")), "Sending B ...", "Send before 45 seconds");
+    await p.clock.runFor(19_000);
+    equal(await nameOf(T(p, "send")), "Sending B ...", "Send before 20 seconds");
     await p.clock.runFor(1_000);
-    await failedLine(p, NOT_SURE, false);
+    await failedLine(p, "Not sent. Try again.", true);
     equal([await keptOnCard(p), server.posts.length], [SEND_KEPT, 0], "his pick and note on the card, and posts");
-    if (door === "two-way") await sendShot(p, "not-sure-390");
   });
 
   it("Server Task Card on a phone: a send on " + what + " whose post gets no reply is cut at 20 seconds and says " + NOT_SURE + " with no Try again, his pick and note kept", PHONE, async (p) => {
@@ -5138,6 +5202,7 @@ for (const [door, what] of SEND_DOORS) {
     await (await checked).finished();
     await failedLine(p, NOT_SURE, false);
     equal([await keptOnCard(p), server.posts.length], [SEND_KEPT, 1], "his pick and note on the card, and posts");
+    if (door === "two-way") await sendShot(p, "not-sure-390");
   });
 }
 
@@ -5268,6 +5333,42 @@ const chatOpened = async (p) => {
   await open(p, "/chat/iris");
   await p.locator('[data-message-id="iris-m30"] [data-message-text]').getByText(CHAT_LAST, { exact: true }).waitFor();
 };
+
+it("Server Chat: after a 401 session end and Sign in, a chat's alerts are on again and its stored choice is gone", MAC, async (p) => {
+  await serverBuildChat(p);
+  const listing = readFileSync(new URL("./src/data/server-payloads/list-fixed-only.json", import.meta.url), "utf8");
+  let ended = false;
+  let refusals = 0;
+  let logins = 0;
+  await p.route("**/captain/cards", (route) => {
+    if (ended) {
+      refusals += 1;
+      return chatReply(route, 401, { error: "sign in required" });
+    }
+    return route.fulfill({ status: 200, contentType: "application/json", body: listing });
+  });
+  await p.route("**/captain/login", (route) => {
+    logins += 1;
+    ended = false;
+    return route.fulfill({ status: 303, headers: { Location: "/chat/iris" } });
+  });
+  await chatOpened(p);
+  await T(p, "chat-more").click();
+  await T(p, "chat-alerts").click();
+  equal(await T(p, "chat-alerts").getAttribute("aria-checked"), "false", "alerts before the 401");
+  equal(await p.evaluate(() => localStorage.getItem("quarterdeck-chat-alerts-off")), '["iris"]', "the stored choice before the 401");
+  await p.keyboard.press("Escape");
+  ended = true;
+  await open(p, "/queue");
+  await shown(p, "Signed out");
+  equal(refusals > 0, true, "the stand-in server answered 401");
+  await p.getByRole("button", { name: "Sign in with Google" }).click();
+  await p.locator('[data-message-id="iris-m30"] [data-message-text]').getByText(CHAT_LAST, { exact: true }).waitFor();
+  equal(logins, 1, "one fresh sign-in");
+  await T(p, "chat-more").click();
+  equal(await T(p, "chat-alerts").getAttribute("aria-checked"), "true", "alerts after the 401 and Sign in");
+  equal(await p.evaluate(() => localStorage.getItem("quarterdeck-chat-alerts-off")), null, "the stored choice after the 401 and Sign in");
+}, /401 \(Unauthorized\)/);
 const bubble = (p, text) => T(p, "chat-my-message").filter({ has: p.getByText(text, { exact: true }) });
 const beforeOf = (list, item) => list.slice(Math.max(0, list.indexOf(item) - 2), list.indexOf(item) + 1);
 
@@ -5370,7 +5471,7 @@ it("Server Chat on the Mac: no + button, no Quote by hover or by selection, and 
   equal(await T(p, "selection-quote").count(), 0, "selection Quote");
 });
 
-it("Server Chat on a phone: no + button, a held message offers Copy and no Quote, and a pasted or dropped file attaches nothing", PHONE, async (p) => {
+it("Server Chat on a phone: no + button, a held message offers Copy and Select and no Quote, and a pasted or dropped file attaches nothing", PHONE, async (p) => {
   await serverBuildChat(p);
   await chatOpened(p);
   equal(await T(p, "plus-btn").count(), 0, "+ button");
@@ -5380,7 +5481,7 @@ it("Server Chat on a phone: no + button, a held message offers Copy and no Quote
   });
   const sheet = p.locator('[data-pop="message-actions"]');
   await sheet.waitFor();
-  equal(await namesOf(sheet.getByRole("button")), ["Done", "Copy"], "held message actions");
+  equal(await namesOf(sheet.getByRole("button")), ["Done", "Copy", "Select"], "held message actions");
   await sheet.getByRole("button", { name: "Done" }).tap();
   await sheet.waitFor({ state: "detached" });
   const before = p.url();
@@ -5412,7 +5513,7 @@ const holdBubble = (p, id) =>
     el.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "touch", bubbles: true, clientX: box.left + 60, clientY: box.top + 12 }));
   });
 
-for (const [name, features, rows] of [["lists quote", ["quote"], ["Reply", "Copy"]], ["lists no quote", [], ["Copy"]]])
+for (const [name, features, rows] of [["lists quote", ["quote"], ["Reply", "Copy", "Select"]], ["lists no quote", [], ["Copy", "Select"]]])
   it("Server Chat on a phone: when the thread " + name + ", a held message opens the menu with " + rows.join(" then ") + " as icon rows", PHONE, async (p) => {
     await serverBuildChat(p, { shape: (body) => ({ ...body, features }) });
     await chatOpened(p);
@@ -5423,6 +5524,51 @@ for (const [name, features, rows] of [["lists quote", ["quote"], ["Reply", "Copy
     const shown = await sheet.getByRole("button").evaluateAll((list) => list.filter((el) => el.textContent !== "Done").map((el) => [el.textContent, el.querySelector("svg") !== null, el.getBoundingClientRect().height >= 48]));
     equal(shown, rows.map((row) => [row, true, true]), "each row: its words, an icon, at least 48 px tall");
   });
+
+const selectHeld = async (p, id) => {
+  await holdBubble(p, id);
+  const sheet = p.locator('[data-pop="message-actions"]');
+  await sheet.getByRole("button", { name: "Select", exact: true }).tap();
+  await sheet.waitFor({ state: "detached" });
+  await T(p, "select-bar").waitFor();
+};
+
+it("Server Chat on a phone: when the thread lists no quote, Select's bar offers Copy then Done, and Copy gives only the selected part", PHONE, async (p) => {
+  await p.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await serverBuildChat(p);
+  await chatOpened(p);
+  await selectHeld(p, "iris-m30");
+  const bar = T(p, "select-bar");
+  equal(await namesOf(bar.getByRole("button")), ["Copy", "Done"], "the bar's buttons");
+  await p.locator('[data-message-id="iris-m30"] [data-message-text]').evaluate((root) => {
+    const node = [...root.querySelectorAll("*"), root].flatMap((el) => [...el.childNodes]).find((one) => one.nodeType === Node.TEXT_NODE && one.textContent.includes("the export sheet"));
+    const at = node.textContent.indexOf("the export sheet");
+    const range = document.createRange();
+    range.setStart(node, at);
+    range.setEnd(node, at + "the export sheet".length);
+    getSelection().removeAllRanges();
+    getSelection().addRange(range);
+  });
+  await bar.getByRole("button", { name: "Copy", exact: true }).tap();
+  await bar.getByRole("button", { name: "Copied", exact: true }).waitFor();
+  equal(await p.evaluate(() => navigator.clipboard.readText()), "the export sheet", "what Copy put on the clipboard");
+});
+
+it("Server Chat on an iPad upright: Select makes only that message's text selectable, the thread stays unselectable, and Done puts it back", IPAD_UPRIGHT, async (p) => {
+  await serverBuildChat(p);
+  await chatOpened(p);
+  const selectable = () =>
+    p.evaluate(() => [
+      [...document.querySelectorAll("[data-message-text]")].filter((el) => getComputedStyle(el).userSelect === "text").map((el) => el.closest("[data-message-id]")?.getAttribute("data-message-id")),
+      getComputedStyle(document.querySelector('[data-testid="chat-thread"]')).userSelect,
+    ]);
+  equal(await selectable(), [[], "none"], "selectable message texts and the thread's user-select before Select");
+  await selectHeld(p, "iris-m30");
+  equal(await selectable(), [["iris-m30"], "none"], "selectable message texts and the thread's user-select while selecting");
+  await T(p, "select-bar").getByRole("button", { name: "Done", exact: true }).tap();
+  await T(p, "select-bar").waitFor({ state: "detached" });
+  equal(await selectable(), [[], "none"], "selectable message texts and the thread's user-select after Done");
+});
 
 it("Server Chat on the Mac: when the thread lists quote, hovering a message offers Reply then Copy", MAC, async (p) => {
   await serverBuildChat(p, { shape: (body) => ({ ...body, features: ["quote"] }) });
@@ -5626,7 +5772,7 @@ for (const [where, size] of [["a phone", PHONE], ["the Mac", MAC]])
     const sent = p.locator('[data-message-id="iris-m31"]');
     const time = sent.locator("time");
     await time.waitFor();
-    const [line, now] = [await time.locator("xpath=..").boundingBox(), await sent.boundingBox()];
+    const [line, now] = await sent.evaluate((el) => [el.querySelector("time").parentElement, el].map((part) => part.getBoundingClientRect()).map(({ y, height }) => ({ y, height })));
     const endless = (await barMotion(sent)).filter(([, , iterations]) => iterations === "endless");
     equal(
       [await sent.getByTestId("chat-sending-bar").count(), await sent.getByText("Sending...", { exact: true }).count(), line.height, line.y - now.y, endless],
@@ -5723,7 +5869,7 @@ for (const [status, error, words, again] of [
   [400, "text", "Message is empty or too long.", false],
   [502, "mail", "Not Delivered", true],
 ])
-  it("Server Chat: a " + status + " " + error + " refusal shows Not Delivered" + (error === "mail" ? " after one quiet retry with the same clientId" : " over " + JSON.stringify(words)) + " on his row, never puts his words back in the box, and " + (again ? "Try Again resends the same clientId" : "offers no Try Again, so his next message goes out as a new send"), MAC, async (p) => {
+  it("Server Chat: a " + status + " " + error + " refusal shows Not Delivered" + (error === "mail" ? " after two quiet retries with the same clientId" : " over " + JSON.stringify(words)) + " on his row, never puts his words back in the box, and " + (again ? "Try Again resends the same clientId" : "offers no Try Again, so his next message goes out as a new send"), MAC, async (p) => {
     let refuse = true;
     const asked = await serverBuildChat(p, { post: (route, body) => (refuse ? chatReply(route, status, { error }) : chatReply(route, 200, chatSent(body, 1))) });
     await chatOpened(p);
@@ -5733,7 +5879,7 @@ for (const [status, error, words, again] of [
     const line = row.getByRole("alert").filter({ hasText: words });
     await sendSettles(line);
     const tries = asked.posts.length;
-    equal([await T(p, "chat-input").inputValue(), await line.getByText("Not Delivered", { exact: true }).count(), await row.getByRole("button", { name: "Try Again", exact: true }).count(), await row.getByText("Sending...", { exact: true }).count(), tries, new Set(asked.posts.map((body) => body.clientId)).size], ["", 1, again ? 1 : 0, 0, error === "mail" ? 2 : 1, 1], "after the refusal: the box, Not Delivered, Try Again, Sending, POSTs, clientIds");
+    equal([await T(p, "chat-input").inputValue(), await line.getByText("Not Delivered", { exact: true }).count(), await row.getByRole("button", { name: "Try Again", exact: true }).count(), await row.getByText("Sending...", { exact: true }).count(), tries, new Set(asked.posts.map((body) => body.clientId)).size], ["", 1, again ? 1 : 0, 0, error === "mail" ? 3 : 1, 1], "after the refusal: the box, Not Delivered, Try Again, Sending, POSTs, clientIds");
     refuse = false;
     if (again) {
       await row.getByRole("button", { name: "Try Again", exact: true }).click();
@@ -5771,7 +5917,7 @@ it("Server Chat: past the app's own cap Send shows the rate words on his row wit
   await chatOpened(p);
   const line = T(p, "chat-thread").getByRole("alert").filter({ hasText: "Not sent: too many sends this minute. Wait up to a minute, then Try again." });
   let refused = null;
-  for (let n = 1; n <= 12 && refused === null; n++) {
+  for (let n = 1; n <= 20 && refused === null; n++) {
     const before = asked.posts.length;
     await T(p, "chat-input").fill("Send number " + n);
     await T(p, "chat-send").click();
@@ -5785,20 +5931,40 @@ it("Server Chat: past the app's own cap Send shows the rate words on his row wit
   equal(asked.posts.length, refused.posts, "POSTs after Try again");
 });
 
-it("Server Chat: a message over 4,000 characters stays in the box with the words Not sent: the message is over 4,000 characters. and no POST or row, and trimmed to 4,000 it sends", MAC, async (p) => {
+it("Server Chat: a message of 20,000 characters sends whole, and one too long for a single send stays in the box with the words Not sent: this message is too long. Shorten it or split it in two. and no POST or row", MAC, async (p) => {
   const asked = await serverBuildChat(p);
   await chatOpened(p);
   const rows = await T(p, "chat-my-message").count();
-  await T(p, "chat-input").fill("x".repeat(4001));
+  const long = "x".repeat(114_687);
+  await T(p, "chat-input").fill(long);
   await T(p, "chat-send").click();
-  const line = p.getByRole("alert").filter({ hasText: "Not sent: the message is over 4,000 characters." });
+  const line = p.getByRole("alert").filter({ hasText: "Not sent: this message is too long. Shorten it or split it in two." });
   await line.waitFor();
-  await boxReads(p, "x".repeat(4001));
-  equal([asked.posts.length, (await T(p, "chat-input").inputValue()).length, await T(p, "chat-my-message").count()], [0, 4001, rows], "POSTs, the box keeps his text, rows");
-  await T(p, "chat-input").fill("x".repeat(4000));
+  await boxReads(p, long);
+  equal([asked.posts.length, (await T(p, "chat-input").inputValue()).length, await T(p, "chat-my-message").count()], [0, 114_687, rows], "POSTs, the box keeps his text, rows");
+  await T(p, "chat-input").fill("four ".repeat(3_999) + "fours");
   await T(p, "chat-send").click();
-  await p.locator('[data-message-id="iris-m31"]').waitFor();
-  equal([asked.posts.length, asked.posts[0].text.length, await line.count(), await T(p, "chat-input").inputValue()], [1, 4000, 0, ""], "POSTs, the text sent, the words, the box");
+  await sendSettles(p.locator('[data-message-id="iris-m31"]'));
+  equal([asked.posts.length, asked.posts[0].text.length, await line.count(), await T(p, "chat-input").inputValue()], [1, 20_000, 0, ""], "POSTs, the text sent, the words, the box");
+});
+
+it("Server Chat on a phone: a message of 20,000 characters with no space in it sends whole, its row shows within five seconds, and the word wraps inside the bubble with no sideways scroll", PHONE, async (p) => {
+  const asked = await serverBuildChat(p);
+  await chatOpened(p);
+  await T(p, "chat-input").fill("x".repeat(20_000));
+  const from = Date.now();
+  await T(p, "chat-send").tap();
+  const row = p.locator('[data-message-id="iris-m31"]');
+  await sendSettles(row);
+  const took = Date.now() - from;
+  equal([asked.posts.length, asked.posts[0]?.text.length, took < 5_000], [1, 20_000, true], "POSTs, the text sent, and the row showed in time (it took " + took + " ms)");
+  console.log("info Server Chat on a phone: the row of the 20,000 character word showed " + took + " ms after the tap");
+  const fit = await row.evaluate((el) => {
+    const pane = document.querySelector('[data-testid="chat-scroll"]');
+    const box = el.getBoundingClientRect();
+    return [box.left >= 0 && box.right <= innerWidth, pane.scrollWidth <= pane.clientWidth, document.documentElement.scrollWidth <= innerWidth];
+  });
+  equal(fit, [true, true, true], "the row is inside the window, the list has no sideways scroll, the page has none");
 });
 
 for (const [found, name] of [[true, "the re-read holds the clientId, so his row reads Sent after one POST and no failure line ever shows"], [false, "the re-read does not hold it, so five seconds later the app reads again and sends once more by itself with the same clientId, one message shows, and no failure line ever shows"]])
@@ -5829,22 +5995,22 @@ for (const [found, name] of [[true, "the re-read holds the clientId, so his row 
     );
   }, /ERR_FAILED/);
 
-it("Server Chat: when every POST's answer is lost and no read holds it, Not Delivered shows after one quiet retry with the same clientId, and when the thread holds it on his return his row reads Sent with no third POST", MAC, async (p) => {
+it("Server Chat: when every POST's answer is lost and no read holds it, Not Delivered shows after two quiet retries with the same clientId, and when the thread holds it on his return his row reads Sent with no fourth POST", MAC, async (p) => {
   const asked = await serverBuildChat(p, { post: (route) => route.abort() });
   await chatOpened(p);
   await T(p, "chat-input").fill("Please send the sheet.");
   await T(p, "chat-send").click();
   await sendSettles(bubble(p, "Please send the sheet.").getByRole("alert").filter({ hasText: "Not Delivered" }));
-  equal([asked.posts.length, new Set(asked.posts.map((body) => body.clientId)).size], [2, 1], "POSTs and clientIds when Not Delivered shows");
+  equal([asked.posts.length, new Set(asked.posts.map((body) => body.clientId)).size], [3, 1], "POSTs and clientIds when Not Delivered shows");
   asked.kept.push(Object.fromEntries(Object.entries(chatSent(asked.posts[0], 1)).filter(([key]) => ["id", "from", "text", "at", "refs", "clientId"].includes(key))));
   await p.locator('[data-testid="chat-row"][data-id="alba"]').click();
   await p.locator('[aria-label="Chat with alba"]').waitFor();
   await p.locator('[data-testid="chat-row"][data-id="iris"]').click();
   await p.locator('[data-message-id="iris-m31"]').waitFor();
-  equal([asked.posts.length, await T(p, "chat-thread").getByText("Please send the sheet.", { exact: true }).count(), await T(p, "chat-thread").getByRole("alert").count()], [2, 1, 0], "POSTs, his words shown once, failure lines");
+  equal([asked.posts.length, await T(p, "chat-thread").getByText("Please send the sheet.", { exact: true }).count(), await T(p, "chat-thread").getByRole("alert").count()], [3, 1, 0], "POSTs, his words shown once, failure lines");
 }, /ERR_FAILED/);
 
-it("Server Chat: a send whose sign-in token read fails because the phone is offline shows no failure, and when the network is back the app tries once more by itself after its pause, so his message lands with one POST", MAC, async (p) => {
+it("Server Chat: a send while the phone is offline shows no failure, and when the network is back the app tries once more by itself after its pause, so his message lands with one POST", MAC, async (p) => {
   await p.clock.install({ time: new Date("2026-11-06T06:00:00Z") });
   let offline = false;
   const asked = await serverBuildChat(p);
@@ -5857,7 +6023,7 @@ it("Server Chat: a send whose sign-in token read fails because the phone is offl
     }).observe(document.body, { childList: true, subtree: true });
   });
   offline = true;
-  const failed = p.waitForEvent("requestfailed", (request) => new URL(request.url()).pathname === "/captain/cards");
+  const failed = p.waitForEvent("requestfailed", (request) => request.method() === "POST" && new URL(request.url()).pathname === "/captain/api/chat");
   await T(p, "chat-input").fill("Sent while offline.");
   await T(p, "chat-send").click();
   await failed;
@@ -5879,7 +6045,7 @@ for (const [name, size] of [["a phone", PHONE], ["the Mac", MAC]])
     await T(p, "chat-input").fill("An unsent message.");
     await T(p, "chat-send").click();
     const failed = T(p, "chat-thread").getByText("Not Delivered", { exact: true });
-    for (let step = 0; step < 20 && !(await failed.count()); step += 1) await p.clock.runFor(1_000);
+    for (let step = 0; step < 30 && !(await failed.count()); step += 1) await p.clock.runFor(1_000);
     await failed.waitFor();
     if (size === PHONE) {
       await holdBubble(p, "iris-m30");
@@ -6061,6 +6227,46 @@ it("Server Chat on a phone: Talk to on a fresh load needs no chat list read, put
 
 const quoting = (extra = {}) => ({ shape: (body) => ({ ...body, features: ["quote"] }), ...extra });
 
+const serverMail = async (p) => {
+  const payload = (name) => JSON.parse(readFileSync(new URL("./src/data/server-payloads/mail/" + name, import.meta.url), "utf8").replaceAll("bot-b", "iris"));
+  const list = payload("list-5-threads.json");
+  const thread = payload("thread-sent-and-received.json");
+  await p.route("**/captain/mail", (route) => route.fulfill({ status: 200, headers: { "Content-Type": list.headers["Content-Type"], ETag: list.headers.ETag }, body: JSON.stringify(list.body) }));
+  await p.route("**/captain/mail/MT-3", (route) => route.fulfill({ status: 200, headers: { "Content-Type": thread.headers["Content-Type"] }, body: JSON.stringify(thread.body) }));
+};
+
+it("Server Mail on a phone: with Mail as the first screen he opens, the chat list is read without the menu, and Ask offers the bots", PHONE, async (p) => {
+  await serverBuildChat(p);
+  await serverMail(p);
+  const listed = p.waitForResponse((response) => new URL(response.url()).pathname === "/captain/api/chats", { timeout: 10_000 }).then(() => true, () => false);
+  await open(p, "/mail/MT-3");
+  await T(p, "ask-MT-3.1").waitFor();
+  equal(await listed, true, "the chat list was read with only Mail open");
+  await T(p, "ask-MT-3.1").tap();
+  await T(p, "ask-another").tap();
+  equal((await T(p, "ask-bot").count()) > 0, true, "Another bot offers the bots");
+});
+
+it("Server Mail on the Mac: with quote listed, Ask then Send posts one line about the mail and his words as plain text with no quote", MAC, async (p) => {
+  const asked = await serverBuildChat(p, quoting());
+  await serverMail(p);
+  await open(p, "/mail/MT-3");
+  await T(p, "chat-row").first().waitFor();
+  await T(p, "ask-MT-3.1").click();
+  await T(p, "ask-another").click();
+  await T(p, "ask-bot").first().click();
+  const box = T(p, "chat-input");
+  await box.waitFor();
+  const line = await box.inputValue();
+  equal([/^About Mail MT-3\.1: ".+"\n$/.test(line), await T(p, "chat-quote").count()], [true, 0], "the box holds one line about the mail and there is no quote box: " + JSON.stringify(line));
+  await box.focus();
+  await box.evaluate((el) => el.setSelectionRange(el.value.length, el.value.length));
+  await p.keyboard.type("Is this still right?");
+  await T(p, "chat-send").click();
+  await sendSettles(p.locator('[data-message-id="iris-m31"]'));
+  equal(asked.posts.map((body) => [Object.keys(body).sort(), body.text]), [[["bot", "clientId", "csrf", "text"], line + "Is this still right?"]], "POSTs");
+});
+
 it("Server Chat on a phone: with quote listed, Reply in the held menu puts the message above the box, Send posts its id and words with his text, and the sent row shows the quote", PHONE, async (p) => {
   const asked = await serverBuildChat(p, quoting());
   await chatOpened(p);
@@ -6203,6 +6409,7 @@ it("Server Chat: Talk to while a send is on its way puts the card line in the bo
   await open(p, "/queue/alba-1");
   await talkTo(p, MAC);
   await p.waitForURL("**/chat/alba");
+  equal(await draftReads(p, ALBA_1_LINE + "\n"), ALBA_1_LINE + "\n", "the box after the first Talk to");
   await T(p, "chat-input").fill("Please send the sheet.");
   await T(p, "chat-send").click();
   await bubble(p, "Please send the sheet.").getByText("Sending...", { exact: true }).waitFor();
@@ -6228,6 +6435,7 @@ for (const [status, error, words] of [
     await open(p, "/queue/alba-1");
     await talkTo(p, MAC);
     await p.waitForURL("**/chat/alba");
+    equal(await draftReads(p, ALBA_1_LINE + "\n"), ALBA_1_LINE + "\n", "the box after the first Talk to");
     await T(p, "chat-input").fill("First try.");
     await T(p, "chat-send").click();
     const row = bubble(p, "First try.");
@@ -6242,12 +6450,28 @@ for (const [status, error, words] of [
     refuse = false;
     await row.getByRole("button", { name: "Try Again", exact: true }).click();
     await p.locator('[data-message-id="iris-m31"]').waitFor();
-    equal([asked.posts.length, new Set(asked.posts.map((body) => body.clientId)).size, await T(p, "chat-input").inputValue()], [error === "mail" ? 3 : 2, 1, ALBA_1_LINE + "\nNext thought."], "POSTs, one clientId, the box left as it was");
+    equal([asked.posts.length, new Set(asked.posts.map((body) => body.clientId)).size, await T(p, "chat-input").inputValue()], [error === "mail" ? 4 : 2, 1, ALBA_1_LINE + "\nNext thought."], "POSTs, one clientId, the box left as it was");
   }, new RegExp(String(status)));
+
+it("Server Chat on the Mac: with files listed and no quote listed, Talk to puts the card line in the box and the file he attached stays in the draft", MAC, async (p) => {
+  await serverBuildChat(p, { list: "list-added.json", rows: { chats: chatPayload("rows.json"), fileLimits: { fileBytes: 10485760, messageBytes: 26214400, count: 5 } }, shape: (thread) => ({ ...thread, features: ["files"] }) });
+  await serverCardReads(p);
+  await open(p, "/queue/alba-1");
+  await talkTo(p, MAC);
+  await p.waitForURL("**/chat/alba");
+  equal(await draftReads(p, ALBA_1_LINE + "\n"), ALBA_1_LINE + "\n", "the box after the first Talk to");
+  await T(p, "chat-input").fill("Next thought.");
+  await T(p, "pick-files").setInputFiles([{ name: "notes.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n") }]);
+  await T(p, "draft-file").waitFor();
+  await p.goBack();
+  await talkTo(p, MAC);
+  await p.waitForURL("**/chat/alba");
+  equal([await draftReads(p, ALBA_1_LINE + "\nNext thought."), await T(p, "draft-file").count()], [ALBA_1_LINE + "\nNext thought.", 1], "the box once the quote has turned into the card line, and the files in the draft");
+});
 
 it("Server Chat: a failed send among good ones keeps its row, words and Try Again where it was, the next send turns Sent in its own row below it, and Try Again later lands as its own row", MAC, async (p) => {
   await p.clock.install({ time: new Date("2026-11-06T06:00:00Z") });
-  const asked = await serverBuildChat(p, { post: (route, body, n) => (n <= 2 ? chatReply(route, 502, { error: "mail" }) : chatReply(route, 200, chatSent(body, n - 2))) });
+  const asked = await serverBuildChat(p, { post: (route, body, n) => (n <= 3 ? chatReply(route, 502, { error: "mail" }) : chatReply(route, 200, chatSent(body, n - 3))) });
   await chatOpened(p);
   const whole = await chatTimeline(p);
   const at = whole.lastIndexOf("iris-m30") + 1;
@@ -6262,12 +6486,77 @@ it("Server Chat: a failed send among good ones keeps its row, words and Try Agai
   await p.locator('[data-message-id="iris-m31"]').waitFor();
   equal(
     [await kept.evaluate((el) => el.isConnected), await failed.getByRole("button", { name: "Try Again", exact: true }).count(), await bubble(p, "Send B").getAttribute("data-message-id"), await chatTimeline(p), asked.posts.length],
-    [true, 1, "iris-m31", withRows("other", "iris-m31"), 3],
-    "A stays a failed row with its Try Again above B, B is the sent message, the whole list in order with its day labels, three POSTs (A and its quiet retry, then B)",
+    [true, 1, "iris-m31", withRows("other", "iris-m31"), 4],
+    "A stays a failed row with its Try Again above B, B is the sent message, the whole list in order with its day labels, four POSTs (A and its two quiet retries, then B)",
   );
   await failed.getByRole("button", { name: "Try Again", exact: true }).click();
   await p.locator('[data-message-id="iris-m32"]').waitFor();
-  equal([await failed.getAttribute("data-message-id"), asked.posts[1].clientId === asked.posts[0].clientId, asked.posts[3].clientId === asked.posts[0].clientId, asked.posts[2].clientId !== asked.posts[0].clientId, await T(p, "chat-thread").getByText("Send A", { exact: true }).count(), await chatTimeline(p)], ["iris-m32", true, true, true, 1, withRows("iris-m31", "iris-m32")], "A lands as its own row below B with its own clientId, once, and the whole list is in order");
+  equal([await failed.getAttribute("data-message-id"), asked.posts.map((body) => body.clientId === asked.posts[0].clientId), await T(p, "chat-thread").getByText("Send A", { exact: true }).count(), await chatTimeline(p)], ["iris-m32", [true, true, true, false, true], 1, withRows("iris-m31", "iris-m32")], "A lands as its own row below B with its own clientId, once, and the whole list is in order");
+}, /502/);
+
+const busyLine = (seconds) => "Mail is busy. Sending again in " + seconds + (seconds === 1 ? " second" : " seconds");
+const busyAnswer = (route, seconds) => chatReply(route, 502, { error: "mail", retryAfter: seconds });
+const sendWhileBusy = async (p, tap) => {
+  await chatOpened(p);
+  await p.clock.pauseAt(await p.evaluate(() => Date.now() + 1_000));
+  await T(p, "chat-input").fill("Please send the sheet.");
+  if (tap) await T(p, "chat-send").tap();
+  else await T(p, "chat-send").click();
+  return bubble(p, "Please send the sheet.");
+};
+
+it("Server Chat on the Mac: a busy answer with a retry time of 5 seconds shows Mail is busy. Sending again in 5 seconds on his row with no Try Again, counts down once a second, keeps its count when he leaves the chat and comes back, and at the end sends once more with the same clientId and the words first sent, leaving his new draft in the box", MAC, async (p) => {
+  await p.clock.install({ time: new Date("2026-11-06T06:00:00Z") });
+  const asked = await serverBuildChat(p, { post: (route, body, n) => (n === 1 ? busyAnswer(route, 5) : chatReply(route, 200, chatSent(body, 1))) });
+  const row = await sendWhileBusy(p, false);
+  const line = row.getByTestId("chat-busy");
+  await line.getByText(busyLine(5), { exact: true }).waitFor();
+  equal([await row.getByRole("button", { name: "Try Again", exact: true }).count(), await row.getByRole("alert").count(), asked.posts.length], [0, 0, 1], "Try Again, failure lines and POSTs while it counts");
+  await T(p, "chat-input").fill("A new draft.");
+  for (const left of [4, 3]) {
+    await p.clock.runFor(1_000);
+    await line.getByText(busyLine(left), { exact: true }).waitFor();
+  }
+  await p.locator('[data-testid="chat-row"][data-id="alba"]').click();
+  await p.locator('[aria-label="Chat with alba"]').waitFor();
+  await p.clock.runFor(1_000);
+  await p.locator('[data-testid="chat-row"][data-id="iris"]').click();
+  await line.getByText(busyLine(2), { exact: true }).waitFor();
+  await p.clock.runFor(1_000);
+  await line.getByText(busyLine(1), { exact: true }).waitFor();
+  equal(asked.posts.length, 1, "POSTs one second before the count ends");
+  await p.clock.runFor(1_000);
+  await sendSettles(p.locator('[data-message-id="iris-m31"]'));
+  equal(
+    [asked.posts.length, asked.posts[1]?.clientId === asked.posts[0].clientId, asked.posts[1]?.text, await T(p, "chat-input").inputValue(), await T(p, "chat-busy").count(), await T(p, "chat-thread").getByText("Please send the sheet.", { exact: true }).count()],
+    [2, true, "Please send the sheet.", "A new draft.", 0, 1],
+    "POSTs, the same clientId, the words first sent, his draft, the busy line, his words shown once",
+  );
+}, /502/);
+
+it("Server Chat on a phone: when the page is hidden as the busy count ends, nothing is sent until the page shows again, and then his message goes out once with the same clientId", PHONE, async (p) => {
+  await tabVisibility(p);
+  await p.clock.install({ time: new Date("2026-11-06T06:00:00Z") });
+  const asked = await serverBuildChat(p, { post: (route, body, n) => (n === 1 ? busyAnswer(route, 3) : chatReply(route, 200, chatSent(body, 1))) });
+  const row = await sendWhileBusy(p, true);
+  await row.getByTestId("chat-busy").getByText(busyLine(3), { exact: true }).waitFor();
+  await p.evaluate(() => window.qdVisibility("hidden"));
+  await p.clock.runFor(10_000);
+  await p.waitForTimeout(250);
+  equal(asked.posts.length, 1, "POSTs while the page is hidden, 10 seconds after the busy answer");
+  await p.evaluate(() => window.qdVisibility("visible"));
+  await sendSettles(p.locator('[data-message-id="iris-m31"]'));
+  equal([asked.posts.length, asked.posts[1]?.clientId === asked.posts[0].clientId, await T(p, "chat-busy").count()], [2, true, 0], "POSTs, the same clientId, the busy line");
+}, /502/);
+
+it("Server Chat on the Mac: when the send after a busy count is refused too, his row shows Not Delivered with Try Again after two POSTs in all, and no second count", MAC, async (p) => {
+  await p.clock.install({ time: new Date("2026-11-06T06:00:00Z") });
+  const asked = await serverBuildChat(p, { post: (route) => busyAnswer(route, 2) });
+  const row = await sendWhileBusy(p, false);
+  await row.getByTestId("chat-busy").getByText(busyLine(2), { exact: true }).waitFor();
+  await p.clock.runFor(2_000);
+  await sendSettles(row.getByRole("alert").filter({ hasText: "Not Delivered" }));
+  equal([asked.posts.length, await row.getByRole("button", { name: "Try Again", exact: true }).count(), await row.getByTestId("chat-busy").count()], [2, 1, 0], "POSTs in all, Try Again, the busy line");
 }, /502/);
 
 it("Server Chat: a reopened thread read that answers after a newer read never takes back the bot reply the newer read showed, and his next message lands after it, each row once in time order", MAC, async (p) => {
@@ -6386,6 +6675,63 @@ it("Server Chat on a phone: with cursor listed, a bot reply that arrives one sec
   const took = Date.now() - refreshed;
   assert.ok(took <= ROUND_TRIP + 400, "the reply showed " + Math.round(took) + " ms after the refresh, over one round trip and 400 ms");
 });
+
+const SEND_ROUND = 300;
+for (const [flight, words] of [[null, "nothing else in flight"], ["thread", "a thread read in flight"], ["mark", "a mark-read in flight"]])
+  it("Server Chat timing, numbers only: the time from the Send press to the POST and to the Sent mark with each answer " + SEND_ROUND + " ms away, with " + words, MAC, async (p) => {
+    const REPLY = { id: "iris-reply", from: "bot", text: "A reply while he sends.", at: "2026-11-06T00:35:00-05:00", refs: [] };
+    let arrived = false;
+    await serverBuildChat(p, {
+      rows: () => chatPayload("rows.json").map((row) => (row.bot.id === "iris" && arrived ? { ...row, last: REPLY.id, at: REPLY.at, preview: REPLY.text } : row)),
+      "iris": (messages) => (arrived ? [...messages, REPLY] : messages),
+      shape: (body) => (flight === "mark" ? { ...body, firstUnread: arrived ? REPLY.id : null, features: ["cursor", "read"] } : { ...body, features: ["cursor"] }),
+    });
+    await p.addInitScript(() => {
+      const Quiet = window.EventSource;
+      window.EventSource = class extends Quiet {
+        constructor(...args) {
+          super(...args);
+          window.qdStream = this;
+        }
+      };
+      const timing = { calls: [] };
+      window.qdTiming = timing;
+      addEventListener("click", (event) => {
+        if (event.target instanceof Element && event.target.closest('[data-testid="chat-send"]')) timing.press = performance.now();
+      }, true);
+      const plain = window.fetch;
+      window.fetch = (input, init) => {
+        const url = new URL(typeof input === "string" ? input : input.url, location.href);
+        timing.calls.push([init?.method ?? "GET", url.pathname + url.search, performance.now()]);
+        return plain(input, init);
+      };
+      new MutationObserver(() => {
+        if (timing.sent === undefined && document.querySelector('[data-message-id="iris-m31"]')) timing.sent = performance.now();
+      }).observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-message-id"] });
+    });
+    await p.route((url) => url.pathname.startsWith("/captain/"), async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, SEND_ROUND));
+      await route.fallback();
+    });
+    await chatOpened(p);
+    await T(p, "chat-input").fill("Please send the sheet.");
+    if (flight) {
+      arrived = true;
+      const out = p.waitForRequest((request) => (flight === "mark" ? request.method() === "POST" && new URL(request.url()).pathname === "/captain/api/chat/read" : request.method() === "GET" && new URL(request.url()).pathname === "/captain/api/chat"), { timeout: 15_000 });
+      await p.evaluate(() => window.qdStream.dispatchEvent(new MessageEvent("refresh", { data: '{"cards":false,"mail":false,"chats":true}' })));
+      await out;
+    }
+    await T(p, "chat-send").click();
+    await sendSettles(p.locator('[data-message-id="iris-m31"]'));
+    const timing = await p.evaluate(() => window.qdTiming);
+    const shown = timing.calls.filter(([, , at]) => at >= timing.press - SEND_ROUND);
+    const post = shown.find(([method, path, at]) => at >= timing.press && method === "POST" && path === "/captain/api/chat");
+    equal([typeof timing.press, typeof timing.sent, post !== undefined], ["number", "number", true], "the press, the Sent mark and the POST were all timed");
+    console.log(
+      "info Server Chat timing, each answer " + SEND_ROUND + " ms away, " + words + ": the POST started " + Math.round(post[2] - timing.press) + " ms after the Send press and the Sent mark showed " + Math.round(timing.sent - timing.press) + " ms after it; requests from " + SEND_ROUND + " ms before the press: " +
+        shown.map(([method, path, at]) => method + " " + path + " at " + Math.round(at - timing.press)).join(", "),
+    );
+  });
 
 it("Server Chat: leaving the chat while a send is out and coming back shows the same Sending row, and it turns Sent once when the answer lands", MAC, async (p) => {
   const { promise: held, resolve: release } = Promise.withResolvers();
@@ -7044,8 +7390,12 @@ it("Motion on a server build with chat on: his message rises from the box at onc
       await sent.waitFor();
       equal(await rising.evaluate((el) => [el.isConnected, el.getAttribute("data-message-id")]), [true, "iris-m31"], "the row that was Sending is the row that reads Sent");
       await m.during("his confirmed message", '[data-message-id="iris-m31"]', async () => {
-        equal(shapesOf(await animationsOf(sent)), [STANDARD + " opacity", STANDARD + " translate"], "it is still rising, at the standard speed");
-        equal(await animationsOf(T(page, "chat-thread").locator(':scope > li:not([data-message-id="iris-m31"])')), [], "nothing already there moves");
+        equal(shapesOf(await animationsOf(sent.locator('[data-testid="chat-delivered"]'))), [STANDARD + " height+marginTop", STANDARD + " opacity"], "the Delivered line under it grows in and fades in, at the standard speed");
+        equal(shapesOf(await animationsOf(sent)), [STANDARD + " height+marginTop", STANDARD + " opacity", STANDARD + " translate"], "it is still rising, at the standard speed, and nothing else in it moves");
+        const rest = T(page, "chat-thread").locator(':scope > li:not([data-message-id="iris-m31"])');
+        const old = await animationsOf(rest.locator('[data-row="out"]'));
+        equal([old.length, old.every((one) => one.duration === STANDARD && one.properties.includes("height") && one.properties.includes("opacity"))], [1, true], "the line under his older message, which left at the Send press, folds away at the standard speed");
+        equal((await animationsOf(rest)).length, old.length, "nothing else already there moves");
       });
       await resume();
       await settle(page);

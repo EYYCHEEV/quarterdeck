@@ -5,7 +5,7 @@ import { card, task } from "./fixture.mjs";
 
 const { workingStatus, QUIET_AFTER_MS, readableText, messageQuote, cardQuote, cardQuoteAt, cardQuoteLabel, resolveQuote, isVersionRef, isThreadQuote, mailQuote, threadQuote, SEND_RATE_TEXT, SEND_FAILED_TEXT, SEND_RETRY_TEXT, DELIVERED_TEXT, readText, cardLine, withCardLine } = await loadTs("src/domain/chat.ts");
 const { failedText } = await loadTs("src/domain/card-words.ts");
-const { withinLimit, MESSAGE_LIMIT, SEND_LONG_TEXT, QUOTE_LIMIT, quoteInside, cutQuote, wireQuote } = await loadTs("src/domain/chat.ts");
+const { fitsSend, SEND_CEILING, SEND_LONG_TEXT, QUOTE_LIMIT, quoteInside, cutQuote, wireQuote } = await loadTs("src/domain/chat.ts");
 
 const at = (hhmm, seconds = 0) => Date.parse("2026-11-02T" + hhmm + ":" + String(seconds).padStart(2, "0") + "-05:00");
 const WORKING = { since: "2026-11-02T09:57:00-05:00", updatedAt: "2026-11-02T09:57:00-05:00" };
@@ -26,6 +26,11 @@ test("a failed chat send says Not Delivered and offers Try Again, as iMessage do
   assert.equal(SEND_RATE_TEXT, failedText({ limited: true }));
 });
 
+test("the busy line counts whole seconds down in plain words, and says second for one", async () => {
+  const { busyText } = await loadTs("src/domain/chat.ts");
+  assert.deepEqual([busyText(12), busyText(2), busyText(1)], ["Mail is busy. Sending again in 12 seconds", "Mail is busy. Sending again in 2 seconds", "Mail is busy. Sending again in 1 second"]);
+});
+
 test("his latest message says Delivered, then Read with the time on the same day, Read Yesterday the day before, and the day heading further back, as iMessage words it", () => {
   const now = Date.parse("2026-11-07T02:30:00-05:00");
   assert.equal(DELIVERED_TEXT, "Delivered");
@@ -35,10 +40,18 @@ test("his latest message says Delivered, then Read with the time on the same day
   );
 });
 
-test("a message is within the limit up to 4,000 characters counted as code points, and the refusal says so", () => {
-  assert.equal(MESSAGE_LIMIT, 4000);
-  assert.deepEqual([withinLimit("x".repeat(4000)), withinLimit("x".repeat(4001)), withinLimit("\u{1F600}".repeat(4000)), withinLimit("\u{1F600}".repeat(4001))], [true, false, true, false]);
-  assert.equal(SEND_LONG_TEXT, "Not sent: the message is over 4,000 characters.");
+test("a chat message has no character limit: 4,001 and 20,000 characters fit, also as four-byte characters", () => {
+  assert.deepEqual([fitsSend("x".repeat(4000)), fitsSend("x".repeat(4001)), fitsSend("x".repeat(20_000)), fitsSend("\u{1F600}".repeat(4001)), fitsSend("\u{1F600}".repeat(20_000))], [true, true, true, true, true]);
+});
+
+test("only the size of the request refuses a message: its text as JSON must fit in 128 KiB less the 16 KiB kept for the other fields, counted in bytes", () => {
+  assert.equal(SEND_CEILING, 131_072);
+  const room = 131_072 - 16_384 - 2;
+  assert.deepEqual([fitsSend("x".repeat(room)), fitsSend("x".repeat(room + 1))], [true, false]);
+  assert.deepEqual([fitsSend("\n".repeat(room / 2)), fitsSend("\n".repeat(room / 2 + 1))], [true, false], "a line break is two bytes in the request");
+  assert.deepEqual([fitsSend("\u{1F600}".repeat(Math.floor(room / 4))), fitsSend("\u{1F600}".repeat(Math.floor(room / 4) + 1))], [true, false], "four bytes each");
+  assert.deepEqual([fitsSend("\u00e9".repeat(room / 2)), fitsSend("\u00e9".repeat(room / 2 + 1))], [true, false], "two bytes each");
+  assert.equal(SEND_LONG_TEXT, "Not sent: this message is too long. Shorten it or split it in two.");
 });
 
 const ALBA_1 = { cardId: "alba-1", version: 3, label: "Task Card", title: "How many results should each Search group show?", priority: "", recap: [] };
@@ -76,6 +89,52 @@ test("a card line he has edited is his own words, so the new card line goes abov
   assert.equal(withCardLine(edited, ALBA_1), ALBA_1_LINE + "\n" + edited);
   const retitled = 'About Task Card alba-1, version 3: "the rows question"\nWhy five?';
   assert.equal(withCardLine(retitled, ALBA_1), retitled);
+});
+
+const { mailLine, withMailLine, isMailQuote, quoteAsText } = await loadTs("src/domain/chat.ts");
+const MAIL_103_2 = mailQuote({ ref: "MT-103.2", from: "Shelvorn", to: ["Alba", "Iris"], text: "Email and Log out only." });
+const MAIL_103_2_LINE = 'About Mail MT-103.2: "Shelvorn to Alba, Iris"';
+const THREAD_101 = threadQuote({ ref: "MT-101", subject: "Search group limit", mails: [{}, {}, {}, {}] }, ["Alba", "Dr. Kivo", "Iris"]);
+const THREAD_101_LINE = 'About Mail MT-101: "Search group limit"';
+const SAID = messageQuote({ id: "m1", who: "Alba", at: "2026-11-02T09:00:00-05:00", text: "Five rows.", selected: null });
+
+test("a mail line names the mail's reference and who wrote to whom, in the card line's shape, and a thread's line names its subject", () => {
+  assert.equal(mailLine(MAIL_103_2), MAIL_103_2_LINE);
+  assert.equal(mailLine(THREAD_101), THREAD_101_LINE);
+  assert.equal(mailLine({ ...THREAD_101, title: "  Search\ngroup\t limit " }), THREAD_101_LINE);
+});
+
+test("the mail line goes above his unsent words and keeps them as they are, and the same mail again adds no second line", () => {
+  assert.equal(withMailLine("", MAIL_103_2), MAIL_103_2_LINE + "\n");
+  const once = withMailLine("Half a thought\nand more ", MAIL_103_2);
+  assert.equal(once, MAIL_103_2_LINE + "\nHalf a thought\nand more ");
+  assert.equal(withMailLine(once, MAIL_103_2), once);
+  assert.equal(withMailLine(MAIL_103_2_LINE, MAIL_103_2), MAIL_103_2_LINE + "\n");
+});
+
+test("another mail replaces the first mail line and keeps his words, and a mail line and a card line stand one above the other", () => {
+  const once = withMailLine("Half a thought", MAIL_103_2);
+  assert.equal(withMailLine(once, THREAD_101), THREAD_101_LINE + "\nHalf a thought");
+  const carded = withCardLine("Why five?", ALBA_1);
+  assert.equal(withMailLine(carded, MAIL_103_2), MAIL_103_2_LINE + "\n" + carded);
+  assert.equal(withCardLine(once, ALBA_1), ALBA_1_LINE + "\n" + once);
+});
+
+test("only a quote that links to Mail and names no chat message is a Mail quote", () => {
+  assert.equal(isMailQuote(MAIL_103_2), true);
+  assert.equal(isMailQuote(THREAD_101), true);
+  assert.equal(isMailQuote(ALBA_1), false);
+  assert.equal(isMailQuote(SAID), false);
+  assert.equal(isMailQuote({ label: "Quoted by Alba; not found in this chat", title: null, text: "Five rows.", to: null }), false);
+});
+
+test("a Mail quote always leaves the draft as a line of text, because the server takes no Mail quote, while a card or message quote stays when the thread takes quotes", () => {
+  assert.equal(quoteAsText("Why?", MAIL_103_2, true), MAIL_103_2_LINE + "\nWhy?");
+  assert.equal(quoteAsText("Why?", MAIL_103_2, false), MAIL_103_2_LINE + "\nWhy?");
+  assert.equal(quoteAsText("Why?", ALBA_1, true), null);
+  assert.equal(quoteAsText("Why?", ALBA_1, false), ALBA_1_LINE + "\nWhy?");
+  assert.equal(quoteAsText("Why?", SAID, true), null);
+  assert.equal(quoteAsText("Why?", SAID, false), "Why?");
 });
 
 test("no word is reported once the bot has not updated for 10 minutes, not before", () => {

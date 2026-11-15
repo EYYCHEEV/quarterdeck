@@ -1,5 +1,5 @@
 import { useCallback, useSyncExternalStore } from "react";
-import type { InspectedFile, PrepareFiles } from "../domain/file-inspection";
+import type { InspectedFile, PrepareFiles, Refusal } from "../domain/file-inspection";
 import { EMPTY_MAIL_QUERY, type MailQuery } from "../domain/mail-query";
 import type { PageQuery } from "../domain/pages";
 import { EMPTY_QUERY, type QueueQuery } from "../domain/query";
@@ -49,10 +49,10 @@ const EMPTY_DRAFT: ChatDraft = { text: "", quote: null, files: [] };
 
 export const useChatDraft = (botId: string) => useSession<ChatDraft>("chat.draft." + botId, EMPTY_DRAFT);
 
-const attachmentBatches = new Map<string, Promise<string[]>>();
+const attachmentBatches = new Map<string, Promise<Refusal[]>>();
 let generation = 0;
 
-export function attachChatFiles(botId: string, files: File[], prepare: PrepareFiles): Promise<string[]> {
+export function attachChatFiles(botId: string, files: File[], prepare: PrepareFiles): Promise<Refusal[]> {
   const key = "chat.draft." + botId;
   const at = generation;
   const add = async () => {
@@ -74,7 +74,7 @@ export function attachChatFiles(botId: string, files: File[], prepare: PrepareFi
   return queued;
 }
 
-export type PendingSend = { clientId: string; text: string; quote: Quote | null; files: InspectedFile[]; previews: Attachment[]; failed: boolean; at: string; after: string | null; reason?: string | null; retry?: boolean; phase?: SendPhase };
+export type PendingSend = { clientId: string; text: string; quote: Quote | null; files: InspectedFile[]; previews: Attachment[]; failed: boolean; at: string; after: string | null; reason?: string | null; retry?: boolean; phase?: SendPhase; busyUntil?: number };
 
 const NO_PENDING: PendingSend[] = [];
 
@@ -88,6 +88,16 @@ export function updatePendingSends(botId: string, change: (list: PendingSend[]) 
 export function quoteInChat(botId: string, quote: Quote) {
   const key = "chat.draft." + botId;
   writeSession<ChatDraft>(key, { ...readSession(key, EMPTY_DRAFT), quote });
+}
+
+export function handToAnswer(cardId: string) {
+  writeSession("card.hand", cardId);
+}
+
+export function takeHand(cardId: string): boolean {
+  if (readSession<string | null>("card.hand", null) !== cardId) return false;
+  writeSession("card.hand", null);
+  return true;
 }
 
 export const useMailQuery = () => useSession<MailQuery>("mail.query", EMPTY_MAIL_QUERY);

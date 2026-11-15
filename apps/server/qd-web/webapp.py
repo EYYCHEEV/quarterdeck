@@ -30,6 +30,8 @@ class MailRoutes(Protocol):
 class ChatRoutes(Protocol):
     def handle(self, request: approval_app.Request, path: str) -> approval_app.Response: ...
 
+    def large_body_refusal(self, request: approval_app.Request) -> approval_app.Response | None: ...
+
 
 class QdWeb:
     def __init__(
@@ -83,6 +85,11 @@ class QdWeb:
         if path != "/captain/mail" and MAIL_SEGMENT.fullmatch(path.removeprefix(MAIL_PREFIX)) is None:
             raise cards.CardRefused("mail reference is invalid")
         return self._mail.handle(request, path)
+
+    def large_body_refusal(self, request: approval_app.Request) -> approval_app.Response | None:
+        if self._chat is None:
+            return application.CardApplication._failure(application.NotFound("request path is unknown"))
+        return self._chat.large_body_refusal(request)
 
     def handle(self, request: approval_app.Request) -> approval_app.Response:
         try:

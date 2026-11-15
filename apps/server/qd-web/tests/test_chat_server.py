@@ -1,4 +1,5 @@
 import ast
+import base64
 import contextlib
 import hashlib
 import importlib
@@ -354,6 +355,66 @@ class ChatThreadTests(unittest.TestCase):
         body = self.thread(env, "bot=bot-b&before=c%40qd.invalid")
         self.assertEqual([m["id"] for m in body["messages"]], ["a+b@qd.invalid"])
 
+    def long_fill(self, env, count, text, bot="bot-b"):
+        ids = []
+        for number in range(count):
+            identifier = f"long{number:03d}@qd.invalid"
+            env.mail.bot_says(bot, text, number, identifier=identifier)
+            ids.append(identifier)
+        env.refresh()
+        return ids
+
+    def page(self, env, query):
+        response = env.get("/captain/api/chat?" + query)
+        self.assertEqual(response.status, 200)
+        self.assertLess(len(response.body), 1048576, "the app reads at most 1 MiB")
+        return json.loads(response.body)
+
+    def test_a_page_of_long_messages_ends_early_under_the_byte_budget_with_older_true(self):
+        env = Env(self)
+        ids = self.long_fill(env, 15, "\U0001F600" * 20000)
+        body = self.page(env, "bot=bot-b")
+        self.assertEqual([m["id"] for m in body["messages"]], ids[6:])
+        self.assertIs(body["older"], True)
+        self.assertEqual(cards.CHAT_PAGE_BYTES, 786432)
+
+    def test_paging_back_through_long_messages_reaches_every_message_once(self):
+        env = Env(self)
+        ids = self.long_fill(env, 25, "\U0001F600" * 20000)
+        seen = []
+        query = "bot=bot-b"
+        for _ in range(25):
+            body = self.page(env, query)
+            shown = [m["id"] for m in body["messages"]]
+            self.assertTrue(shown)
+            seen[:0] = shown
+            if not body["older"]:
+                break
+            query = "bot=bot-b&before=" + shown[0]
+        self.assertEqual(seen, ids)
+
+    def test_a_read_after_an_id_that_would_pass_the_budget_answers_409_cursor(self):
+        env = Env(self)
+        ids = self.long_fill(env, 12, "\U0001F600" * 20000)
+        self.assertEqual(answer(env.get("/captain/api/chat?bot=bot-b&after=" + ids[1])), (409, {"error": "cursor"}))
+        body = self.page(env, "bot=bot-b&after=" + ids[2])
+        self.assertEqual([m["id"] for m in body["messages"]], ids[3:])
+
+    def test_the_largest_message_fits_in_one_page_under_the_apps_read_limit(self):
+        cases = (
+            ("the largest send", "\U0001F600" * 32768, 5),
+            ("a bot mail as large as the mail limit", "x" * 262144, 2),
+            ("a message larger than the budget", "x" * 800000, 1),
+        )
+        for label, text, expected in cases:
+            with self.subTest(message=label):
+                env = Env(self)
+                ids = self.long_fill(env, 5, text)
+                body = self.page(env, "bot=bot-b")
+                self.assertEqual([m["id"] for m in body["messages"]], ids[5 - expected:])
+                self.assertEqual(body["messages"][-1]["text"], text)
+                self.assertIs(body["older"], expected < 5)
+
     def test_a_thread_has_exactly_these_fields(self):
         env = Env(self)
         self.fill(env, 3)
@@ -494,12 +555,34 @@ class ChatSendTests(unittest.TestCase):
         with contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(answer(env.send(STEWARD, "Hi"))[0], 200)
 
-    def test_text_of_exactly_4000_characters_is_sent_and_one_more_is_refused(self):
+    def test_text_of_20000_characters_is_sent_whole_also_as_four_byte_characters(self):
         env = Env(self)
         env.refresh()
-        self.assertEqual(answer(env.send("bot-b", "x" * 4000))[0], 200)
-        self.assertEqual(answer(env.send("bot-b", "x" * 4001)), (400, {"error": "text"}))
-        self.assertEqual(env.mail.submissions(), 1)
+        for number, text in enumerate(("x" * 4001, "x" * 20000, "\U0001F600" * 20000)):
+            with self.subTest(characters=len(text), first=text[0]):
+                payload = {"bot": "bot-b", "text": text, "clientId": f"long-{number}", "csrf": "csrf-now"}
+                body = json.dumps(payload, ensure_ascii=False).encode()
+                self.assertEqual(answer(env.post(None, body=body, headers={"Content-Type": "application/json"}))[0], 200)
+                self.assertEqual(json.loads(env.mail.send_calls[-1][2])["text"], text)
+        self.assertEqual(env.mail.submissions(), 3)
+
+    def test_the_largest_accepted_send_builds_a_mail_under_the_mail_servers_limit(self):
+        env = Env(self)
+        env.refresh()
+        frame = {"bot": "bot-b", "text": "", "clientId": "c" * 80, "csrf": "csrf-now"}
+        room = 131072 - len(json.dumps(frame, ensure_ascii=False).encode())
+        texts = (("one-byte", "x" * room), ("four-byte", "\U0001F600" * (room // 4)), ("escaped", '"' * (room // 2)))
+        for label, text in texts:
+            with self.subTest(text=label):
+                payload = {**frame, "text": text, "clientId": label + "c" * (80 - len(label))}
+                body = json.dumps(payload, ensure_ascii=False).encode()
+                self.assertLessEqual(len(body), 131072)
+                self.assertGreater(len(body), 131072 - 4)
+                self.assertEqual(answer(env.post(None, body=body, headers={"Content-Type": "application/json"}))[0], 200)
+                mailed = env.mail.send_calls[-1][2].encode()
+                lines = base64.encodebytes(mailed)
+                size = 8192 + len(lines) + lines.count(b"\n")
+                self.assertLess(size, 262144, "base64 with CRLF line ends plus 8 KiB kept for headers")
 
     def test_text_that_is_empty_or_not_a_string_is_400_text_and_sends_nothing(self):
         env = Env(self)
@@ -545,17 +628,25 @@ class ChatSendTests(unittest.TestCase):
         env.refresh()
         self.assertEqual(answer(env.send("bot-b", "Hi", client_id="A_b-9" * 16))[0], 200)
 
-    def test_a_body_over_16_kib_is_refused_and_exactly_16_kib_is_read(self):
+    def test_a_chat_send_body_over_128_kib_is_refused_and_exactly_128_kib_is_read(self):
         env = Env(self)
         env.refresh()
         payload = {"bot": "bot-b", "text": "Hi", "clientId": "c1", "csrf": "t"}
         data = json.dumps(payload).encode()
-        limit = application.MAX_BODY_BYTES
-        self.assertEqual(limit, 16384)
+        limit = 131072
         exact = data + b" " * (limit - len(data))
         over = data + b" " * (limit + 1 - len(data))
         self.assertEqual(answer(env.post(None, body=over, headers={"Content-Type": "application/json"})), (400, {"error": "request refused"}))
         self.assertEqual(answer(env.post(None, body=exact, headers={"Content-Type": "application/json"}))[0], 200)
+        self.assertEqual((application.CHAT_SEND_BODY_BYTES, application.MAX_BODY_BYTES), (limit, 16384))
+
+    def test_the_mark_read_body_keeps_its_own_small_limit(self):
+        env = Env(self)
+        env.refresh()
+        data = json.dumps({"bot": "bot-b", "upTo": "m1", "csrf": "t"}).encode()
+        over = data + b" " * (4097 - len(data))
+        response = env.web.handle(request("POST", "/captain/api/chat/read", None, body=over, headers={"Content-Type": "application/json"}))
+        self.assertEqual(answer(response), (400, {"error": "request refused"}))
 
     def test_a_mail_server_refusal_is_502_mail(self):
         env = Env(self)

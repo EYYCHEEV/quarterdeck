@@ -128,6 +128,23 @@ class SocketApprovalGate:
             "peer": request.peer,
         }
 
+    @staticmethod
+    def _origin(request: approval_app.Request) -> None:
+        headers = approval_app.ApprovalApplication._headers(request)
+        host = headers.get("x-forwarded-host")
+        if not host or headers.get("origin") != "https://" + host:
+            raise approval_security.ApprovalRefused("approval origin is invalid")
+
+    def admit_post(self, request: approval_app.Request) -> None:
+        self._origin(request)
+        self.transport(
+            {
+                "operation": "authenticate",
+                "session": self._cookie(request),
+                "request": {**self._request_facts(request), "method": "GET"},
+            }
+        )
+
     def authenticate(self, request: approval_app.Request) -> SessionGrant:
         answer = self.transport(
             {

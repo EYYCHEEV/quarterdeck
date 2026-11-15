@@ -1,50 +1,45 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useChatRows } from "../../data/chat-hooks";
+import { alertsOn, setAlerts } from "../../data/settings";
 import { href } from "../../domain/routes";
 import type { Bot } from "../../domain/types";
 import { canPush } from "../../platform/push";
-import { readJson, writeJson } from "../../platform/storage";
 import { Avatar } from "../../ui/avatar";
 import { IconButton } from "../../ui/button";
 import { Icon } from "../../ui/icon";
 import { Link } from "../../ui/link";
+import { MENU_ROW } from "../../ui/more-sheet";
 
-const SOUND_KEY = "quarterdeck-chat-sound";
-
-export function useSound(): [boolean, () => void] {
-  const [sound, setSound] = useState(() => readJson(SOUND_KEY) === true);
-  useEffect(() => {
-    const enable = (event: PointerEvent) => {
-      if (readJson(SOUND_KEY) !== null || (event.target instanceof Element && event.target.closest("[data-sound]"))) return;
-      writeJson(SOUND_KEY, true);
-      setSound(true);
-    };
-    window.addEventListener("pointerdown", enable);
-    return () => window.removeEventListener("pointerdown", enable);
-  }, []);
+export function AlertSwitch({ botId }: { botId: string }) {
+  const [on, setOn] = useState(() => alertsOn(botId));
   const toggle = () => {
-    writeJson(SOUND_KEY, !sound);
-    setSound(!sound);
+    setAlerts(botId, !on);
+    setOn(!on);
   };
-  return [sound, toggle];
+  return (
+    <button type="button" role="switch" aria-checked={on} className={MENU_ROW} onClick={toggle} data-testid="chat-alerts">
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span>Alerts for this chat</span>
+        <small className="text-label font-regular text-ink-3" aria-hidden="true">
+          {on ? "On" : "Off"}
+        </small>
+      </span>
+      <span className="chat-switch" data-on={on}>
+        <span />
+      </span>
+    </button>
+  );
 }
 
-export function AlertChoices({ sound, onSound }: { sound: boolean; onSound: () => void }) {
+export function NotificationChoice() {
   const [note, setNote] = useState(false);
+  if (!canPush()) return null;
   return (
     <div className="chat-alert-preferences">
-      <button type="button" role="switch" aria-checked={sound} className="chat-sound" onClick={onSound} data-sound="" data-testid="chat-sound">
-        <span className="chat-switch" data-on={sound}>
-          <span />
-        </span>
-        Sound {sound ? "on" : "off"}
+      <button type="button" className="chat-notifications" onClick={() => setNote(true)} data-testid="chat-notifications">
+        Turn on notifications
+        <Icon name="chevR" size="sm" />
       </button>
-      {canPush() && (
-        <button type="button" className="chat-notifications" onClick={() => setNote(true)} data-testid="chat-notifications">
-          Turn on notifications
-          <Icon name="chevR" size="sm" />
-        </button>
-      )}
       {note && (
         <p className="w-full text-meta text-ink-2" role="status">
           Notifications will be available when connected to Quarterdeck.

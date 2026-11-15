@@ -1,23 +1,23 @@
-import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type RefObject } from "react";
 import { useThread } from "../../data/chat-hooks";
 import type { Attachment, ChatMessage, SendPhase } from "../../data/chat-types";
 import { useQd, useWorld } from "../../data/hooks";
 import { useSecrets } from "../../data/secret-hooks";
 import { attachChatFiles, updatePendingSends, useChatDraft, usePendingSends, type PendingSend } from "../../data/session";
 import { RateLimited, Refused } from "../../data/source";
-import { isCardQuote, messageQuote, SEND_FAILED_TEXT, SEND_LONG_TEXT, SEND_RATE_TEXT, withCardLine, withinLimit } from "../../domain/chat";
-import { admit, pictureCaption } from "../../domain/chat-files";
+import { fitsSend, messageQuote, quoteAsText, SEND_FAILED_TEXT, SEND_LONG_TEXT, SEND_RATE_TEXT } from "../../domain/chat";
+import { admit, pictureCaption, type Refusal } from "../../domain/chat-files";
 import { EXPIRED_TEXT, FILES_OFF_TEXT, serverAdmit } from "../../domain/files-r1";
 import { dayKey, dayLabel } from "../../domain/time";
 import { Button } from "../../ui/button";
 import { useShown } from "../../ui/motion";
 import { Empty, ErrorLine, LoadingBars } from "../../ui/states";
 import { Viewer } from "../../ui/viewer";
-import { AlertChoices, Arrival, useArrival, useSound } from "./alerts";
+import { AlertSwitch, Arrival, NotificationChoice, useArrival } from "./alerts";
 import { FileViewer, isPicture, PhotoTurn, usePhotoTurn } from "./attachments";
 import { Composer } from "./composer";
 import { ChatHeader } from "./header";
-import { SelectionQuote } from "./message-actions";
+import { SelectBar, Selecting, SelectionQuote } from "./message-actions";
 import { BotMessage, MyMessage, NewLine, WorkingLine } from "./messages";
 import { QuoteBlock } from "./quote";
 import { SecretCard, SecretLine } from "./secret-box";
@@ -64,7 +64,7 @@ function OlderRow({ botId, oldest, pane }: { botId: string; oldest: string | und
   );
 }
 
-export function ChatScreen({ botId }: { botId: string }) {
+export function ChatScreen({ botId, wide }: { botId: string; wide: boolean }) {
   const qd = useQd();
   const { world } = useWorld();
   const thread = useThread(botId);
@@ -87,16 +87,26 @@ export function ChatScreen({ botId }: { botId: string }) {
   const [gallery, setGallery] = useState<number | null>(null);
   const opener = useRef<HTMLElement | null>(null);
   const [focusNext, setFocusNext] = useState<{ target: () => HTMLElement | null } | null>(null);
-  const [refused, setRefused] = useState<string[]>([]);
+  const [refused, setRefused] = useState<Refusal[]>([]);
   const [dragging, setDragging] = useState(false);
   const secrets = useSecrets(botId);
   const secretsReady = !secrets.loading && !secrets.failed;
   const [boxOpen, setBoxOpen] = useState(false);
+  const [selecting, setSelecting] = useState<{ botId: string; id: string } | null>(null);
   const bot = world?.bots.find((b) => b.id === botId) ?? (__QD_SOURCE__ === "server" && __QD_CHAT__ === "on" ? (thread.value?.bot ?? null) : null);
-  const [sound, toggleSound] = useSound();
   const [arrival, dismissArrival] = useArrival(bot);
-  const choices = <AlertChoices sound={sound} onSound={toggleSound} />;
+  const choices = (
+    <>
+      <AlertSwitch botId={botId} />
+      <div className="px-s3">
+        <NotificationChoice />
+      </div>
+    </>
+  );
   const messages = thread.value?.messages ?? [];
+  const selectingId = selecting?.botId === botId ? selecting.id : null;
+  const selectingMessage = selectingId === null ? undefined : messages.find((message) => message.id === selectingId);
+  const selectingValue = useMemo(() => ({ id: selectingId, set: (id: string | null) => setSelecting(id === null ? null : { botId, id }) }), [selectingId, botId]);
   if (thread.value && firstNew.current?.botId !== botId) firstNew.current = { botId, id: thread.value.firstUnread };
   const newId = firstNew.current?.botId === botId ? firstNew.current.id : null;
   const sentIds = new Set(messages.map((m) => m.clientId).filter(Boolean));
@@ -183,9 +193,9 @@ export function ChatScreen({ botId }: { botId: string }) {
 
   if (__QD_SOURCE__ === "server" && __QD_CHAT__ === "on")
     useEffect(() => {
-      if (!draft.quote || !thread.value || canReply) return;
-      const text = isCardQuote(draft.quote) ? withCardLine(draft.text, draft.quote) : draft.text;
-      setDraft({ text, quote: null, files: [] });
+      if (!draft.quote || !thread.value) return;
+      const text = quoteAsText(draft.text, draft.quote, canReply);
+      if (text !== null) setDraft({ ...draft, text, quote: null });
     }, [draft.quote, !thread.value, canReply]);
 
   useEffect(() => {
@@ -197,8 +207,9 @@ export function ChatScreen({ botId }: { botId: string }) {
 
   const deliver = (item: PendingSend) => {
     const phase = __QD_SOURCE__ === "server" && __QD_CHAT__ === "on" && item.files.length ? "uploading" : undefined;
-    setPending((list) => (list.some((p) => p.clientId === item.clientId) ? list.map((p) => (p.clientId === item.clientId ? { ...item, failed: false, phase } : p)) : [...list, { ...item, failed: false, phase }]));
-    const onPhase = (next: SendPhase) => setPending((list) => list.map((p) => (p.clientId === item.clientId ? { ...p, phase: next } : p)));
+    setPending((list) => (list.some((p) => p.clientId === item.clientId) ? list.map((p) => (p.clientId === item.clientId ? { ...item, failed: false, phase, busyUntil: undefined } : p)) : [...list, { ...item, failed: false, phase, busyUntil: undefined }]));
+    const onPhase = (next: SendPhase, seconds?: number) =>
+      setPending((list) => list.map((p) => (p.clientId === item.clientId ? { ...p, phase: next, busyUntil: next === "busy" && seconds !== undefined ? qd.now() + seconds * 1_000 : undefined } : p)));
     thread.send({ text: item.text, clientId: item.clientId, quote: item.quote ?? undefined, files: item.files }, onPhase).catch((error: unknown) => {
       const refused = __QD_SOURCE__ === "server" && __QD_CHAT__ === "on" ? refusal(error) : {};
       setPending((list) => list.map((p) => (p.clientId === item.clientId ? { ...p, failed: true, ...refused } : p)));
@@ -210,8 +221,8 @@ export function ChatScreen({ botId }: { botId: string }) {
     if (!text && !draft.files.length) return false;
     if (__QD_SOURCE__ === "server" && __QD_CHAT__ === "on") {
       if (!thread.value) return false;
-      if (!withinLimit(text)) {
-        setRefused([SEND_LONG_TEXT]);
+      if (!fitsSend(text)) {
+        setRefused([{ name: null, why: SEND_LONG_TEXT }]);
         return false;
       }
     }
@@ -236,11 +247,11 @@ export function ChatScreen({ botId }: { botId: string }) {
   };
 
   const attach = (list: File[]) => {
-    if (__QD_SOURCE__ === "server" && __QD_CHAT__ === "on" && !limits) return setRefused([FILES_OFF_TEXT]);
+    if (__QD_SOURCE__ === "server" && __QD_CHAT__ === "on" && !limits) return setRefused([{ name: null, why: FILES_OFF_TEXT }]);
     const owner = botId;
     void attachChatFiles(owner, list, limits ? serverAdmit(limits) : admit).then(
       (reasons) => { if (activeBot.current === owner) setRefused(reasons); },
-      () => { if (activeBot.current === owner) setRefused(["Could not read these files."]); },
+      () => { if (activeBot.current === owner) setRefused([{ name: null, why: "Could not read these files." }]); },
     );
   };
 
@@ -261,7 +272,7 @@ export function ChatScreen({ botId }: { botId: string }) {
   const head = (
     <>
       <link rel="stylesheet" href="/chat.css" precedence="chat" />
-      <ChatHeader botId={botId} bot={bot} choices={choices} />
+      <ChatHeader botId={botId} bot={bot} wide={wide} choices={choices} />
     </>
   );
 
@@ -290,7 +301,7 @@ export function ChatScreen({ botId }: { botId: string }) {
   const waitingRows = (items: PendingSend[]) =>
     items.flatMap((item) => [
       ...dayRow(item.at),
-      <MyMessage key={"send-" + item.clientId} text={item.text} quote={item.quote} attachments={item.previews} at={item.at} note={item.failed ? "failed" : item.phase === "uploading" ? "uploading" : "sending"} reason={item.reason} onRetry={item.retry === false ? undefined : () => deliver(item)} onOpen={open} world={world} rise />,
+      <MyMessage key={"send-" + item.clientId} text={item.text} quote={item.quote} attachments={item.previews} at={item.at} note={item.failed ? "failed" : item.phase === "uploading" ? "uploading" : item.phase === "busy" && item.busyUntil !== undefined ? "busy" : "sending"} busyUntil={item.busyUntil} reason={item.reason} onRetry={item.retry === false ? undefined : () => deliver(item)} onOpen={open} world={world} rise />,
     ]);
   const known = new Map(messages.flatMap((message, n): [string, number][] => (message.clientId ? [[message.id, n], [message.clientId, n]] : [[message.id, n]])));
   const out = new Map(waiting.map((item) => [item.clientId, item]));
@@ -397,10 +408,14 @@ export function ChatScreen({ botId }: { botId: string }) {
                       <Empty>No messages yet.</Empty>
                     </li>
                   )}
-                  <PhotoTurn.Provider value={turn}>{rows}</PhotoTurn.Provider>
+                  <Selecting.Provider value={selectingValue}>
+                    <PhotoTurn.Provider value={turn}>{rows}</PhotoTurn.Provider>
+                  </Selecting.Provider>
                 </>
               ) : (
-                <PhotoTurn.Provider value={turn}>{rows}</PhotoTurn.Provider>
+                <Selecting.Provider value={selectingValue}>
+                  <PhotoTurn.Provider value={turn}>{rows}</PhotoTurn.Provider>
+                </Selecting.Provider>
               )}
               {working && <WorkingLine botName={bot.name} working={working} />}
               {secrets.loading && (
@@ -440,16 +455,17 @@ export function ChatScreen({ botId }: { botId: string }) {
         inputRef={input}
         onAttach={attach}
         onUnattach={unattach}
-        notice={refused.length ? refused.join("\n") : null}
-        filesOn={limits !== null}
-        onDismissNotice={() => setRefused([])}
+        notes={refused}
+        limits={limits}
+        dropping={dragging}
+        onDismissNote={(at) => setRefused((list) => list.filter((_, n) => n !== at))}
         onSecret={() => setBoxOpen(true)}
         onUseSecretBox={() => setBoxOpen(true)}
         cards={
           <div ref={cards} className="chat-dock-cards">
             {arrival && (
               <Arrival from={arrival} onDismiss={dismissArrival}>
-                {choices}
+                <NotificationChoice />
               </Arrival>
             )}
             {canReply && draft.quote && (
@@ -461,6 +477,7 @@ export function ChatScreen({ botId }: { botId: string }) {
                 }}
               />
             )}
+            {selectingMessage && <SelectBar key={selectingMessage.id} id={selectingMessage.id} onQuote={canReply ? (text) => quoteMessage(selectingMessage, text) : undefined} onEnd={() => setSelecting(null)} />}
           </div>
         }
       />
@@ -474,13 +491,6 @@ export function ChatScreen({ botId }: { botId: string }) {
       )}
       {viewing && <FileViewer file={viewing} returnTo={opener} onClose={() => setViewing(null)} />}
       {gallery !== null && <Viewer items={pictures} start={gallery} label="Pictures in this chat" returnTo={opener} onClose={() => setGallery(null)} caption={(item) => item.caption} />}
-      {dragging && (
-        <div className="pointer-events-none fixed inset-0 z-30 grid place-items-center bg-scrim" data-testid="drop-hint">
-          <p role="status" className="rounded-panel border border-line-3 bg-panel px-s4 py-s3 text-body">
-            Drop to attach to {bot.name}
-          </p>
-        </div>
-      )}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type ReactNode, type RefObject } from "react";
 import type { ChatDraft } from "../../data/session";
-import { FILE_ACCEPT, PHOTO_ACCEPT } from "../../domain/files-r1";
+import type { Refusal } from "../../domain/file-inspection";
+import { dropText, FILE_ACCEPT, PHOTO_ACCEPT, type FileLimits } from "../../domain/files-r1";
 import { looksLikeSecret, SECRET_TEXT } from "../../domain/secrets";
 import type { World } from "../../domain/types";
 import { enterSends, pageKey, watchKeyboard, type KeyboardWatch } from "../../platform/keyboard";
@@ -110,9 +111,10 @@ export function Composer({
   inputRef,
   onAttach,
   onUnattach,
-  notice,
-  filesOn,
-  onDismissNotice,
+  notes,
+  limits,
+  dropping,
+  onDismissNote,
   onSecret,
   onUseSecretBox,
 }: {
@@ -126,16 +128,17 @@ export function Composer({
   inputRef: RefObject<HTMLTextAreaElement | null>;
   onAttach: (files: File[]) => void;
   onUnattach: (id: string) => void;
-  notice: string | null;
-  filesOn: boolean;
-  onDismissNotice: () => void;
+  notes: Refusal[];
+  limits: FileLimits | null;
+  dropping: boolean;
+  onDismissNote: (at: number) => void;
   onSecret: () => void;
   onUseSecretBox?: () => void;
 }) {
   const cite = useRef<HTMLButtonElement>(null);
   const caret = useRef<number | null>(null);
   const picker = useFilePicker(onAttach, __QD_SOURCE__ === "server" && __QD_CHAT__ === "on" ? { photos: PHOTO_ACCEPT, files: FILE_ACCEPT } : undefined);
-  const plus = !(__QD_SOURCE__ === "server" && __QD_CHAT__ === "on") || filesOn;
+  const plus = !(__QD_SOURCE__ === "server" && __QD_CHAT__ === "on") || limits !== null;
   const plusLabel = __QD_SOURCE__ === "server" && __QD_CHAT__ === "on" ? "Add photos or files" : "Add photos, files or a secret";
   const [citing, setCiting] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -166,14 +169,9 @@ export function Composer({
   }, []);
 
   useEffect(() => {
-    const cancel = (event: KeyboardEvent) => {
-      if (event.key === "Escape") clearPaste();
-    };
-    window.addEventListener("keydown", cancel);
     window.addEventListener("popstate", clearPaste);
     window.addEventListener("hashchange", clearPaste);
     return () => {
-      window.removeEventListener("keydown", cancel);
       window.removeEventListener("popstate", clearPaste);
       window.removeEventListener("hashchange", clearPaste);
     };
@@ -227,7 +225,7 @@ export function Composer({
       return;
     }
     if (text) return;
-    if (__QD_SOURCE__ === "server" && __QD_CHAT__ === "on" && !filesOn) return;
+    if (__QD_SOURCE__ === "server" && __QD_CHAT__ === "on" && limits === null) return;
     const list = [...event.clipboardData.files];
     if (list.length) {
       event.preventDefault();
@@ -240,11 +238,6 @@ export function Composer({
   return (
     <div className="chat-composer-dock">
       <div className="chat-composer-inner">
-        {notice && (
-          <ErrorLine onRetry={onDismissNotice} retryLabel="Dismiss" className="whitespace-pre-line">
-            {notice}
-          </ErrorLine>
-        )}
         {pasteBlocked && (
           <div data-testid="secret-paste-warning">
             <ErrorLine onRetry={() => { clearPaste(); inputRef.current?.focus(); }} retryLabel="Cancel">
@@ -290,13 +283,20 @@ export function Composer({
         )}
         {cards}
         <form
-          className="chat-composer-form relative min-w-0"
+          className={cx("chat-composer-form relative min-w-0", dropping && "is-drop")}
           onSubmit={(event) => {
             event.preventDefault();
             submit();
           }}
         >
-          {draft.files.length > 0 && <DraftStrip files={draft.files} onRemove={onUnattach} />}
+          {dropping && (
+            <p role="status" className="chat-drop-note" data-testid="drop-hint">
+              {dropText(limits)}
+            </p>
+          )}
+          {(draft.files.length > 0 || notes.length > 0) && (
+            <DraftStrip files={draft.files} limit={limits ? limits.messageBytes : null} notes={notes} onRemove={onUnattach} onDismiss={onDismissNote} />
+          )}
           <div className="chat-composer-row">
             {plus && (
               <button

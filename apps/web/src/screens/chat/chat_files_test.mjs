@@ -138,14 +138,19 @@ const opened = async (p) => {
   await p.locator('[data-message-id="iris-m30"] [data-message-text]').getByText(CHAT_LAST, { exact: true }).waitFor();
 };
 
-const drop = async (p, list) => {
-  const transfer = await p.evaluateHandle((files) => {
+const carried = (p, list) =>
+  p.evaluateHandle((files) => {
     const data = new DataTransfer();
     for (const one of files) data.items.add(new File([one.words], one.name, { type: one.type }));
     return data;
   }, list);
-  await T(p, "chat").dispatchEvent("drop", { dataTransfer: transfer });
-};
+const drop = async (p, list) => T(p, "chat").dispatchEvent("drop", { dataTransfer: await carried(p, list) });
+const sized = (file, bytes) => ({ ...file, buffer: Buffer.concat([file.buffer, Buffer.alloc(bytes - file.buffer.length)]) });
+const squashed = (locator) => locator.innerText().then((words) => words.replace(/\s+/g, " ").trim());
+const EXE = { name: "setup.exe", mimeType: "application/x-msdownload", buffer: Buffer.from("MZ") };
+const HEIC = { name: "IMG_0001.HEIC", mimeType: "image/heic", buffer: Buffer.from("0000ftypheic") };
+const HEIC_LINE = "This picture is in Apple's format. Choose it from Photos, or save it as a JPEG first.";
+const kindNote = (name) => "Not added: " + name + ". Quarterdeck cannot send this kind of file.";
 
 const cases = [];
 const it = (name, size, run, allow = null) => cases.push({ name: "[" + ENGINE + "] " + name, size, run, allow });
@@ -223,40 +228,133 @@ it("at 390 a blocked row shows This file was blocked: and the whole name, setup.
   assert.deepEqual(shown, [["This file was blocked: setup.exe", false, true], ["This file was blocked: " + long, false, true]]);
 });
 
-it("each refusal before an upload shows its line under the composer, and nothing uploads", PHONE, async (p) => {
+it("each refusal before an upload shows as a note inside the composer, in the design's Not added words with the server's numbers, and nothing uploads", PHONE, async (p) => {
   const asked = await serve(p);
   const tries = [
-    [[photo("big.png", LIMITS.fileBytes)], "This file is too big: big.png"],
-    [[1, 2, 3, 4, 5, 6].map((n) => photo("p" + n + ".png")), "A message can carry up to 5 files."],
-    [[photo("a.png", 9 * 1048576), photo("b.png", 9 * 1048576), photo("c.png", 9 * 1048576)], "These files are too big together. A message can carry up to 25 MB."],
-    [[{ name: "run.exe", mimeType: "application/x-msdownload", buffer: Buffer.from("MZ") }], "This file's type is not allowed: run.exe"],
-    [[{ name: "page.txt", mimeType: "text/plain", buffer: Buffer.from("<html>") }], "This file's type is not allowed: page.txt"],
-    [[{ name: "IMG_0001.HEIC", mimeType: "image/heic", buffer: Buffer.from("0000ftypheic") }], "This picture is in Apple's format. Choose it from Photos, or save it as a JPEG first."],
+    [[photo("big.png", LIMITS.fileBytes)], "Not added: big.png. It is 10.1 MB, and one file can be 10 MB at most."],
+    [[1, 2, 3, 4, 5, 6].map((n) => photo("p" + n + ".png")), "Not added: p6.png. A message holds 5 files at most. Send these, then attach the rest."],
+    [[photo("a.png", 9 * 1048576), photo("b.png", 9 * 1048576), photo("c.png", 9 * 1048576)], "Not added: c.png. With it this message would be 27.1 MB, and a message can be 25 MB at most."],
+    [[{ ...EXE, name: "run.exe" }], kindNote("run.exe")],
+    [[{ name: "page.txt", mimeType: "text/plain", buffer: Buffer.from("<html>") }], kindNote("page.txt")],
+    [[HEIC], HEIC_LINE],
   ];
   for (const [files, line] of tries) {
     await opened(p);
     await T(p, "pick-files").setInputFiles(files);
-    await p.getByText(line, { exact: true }).waitFor();
+    await T(p, "draft-strip").locator('[data-testid="draft-note"]').getByText(line, { exact: true }).waitFor();
   }
   assert.equal(asked.uploads.length, 0);
 });
 
-it("at 390 three refusals in one pick show as three lines under the composer, in order, each whole on its own line, and nothing uploads", PHONE, async (p) => {
+it("at 390 three refusals in one pick show as three notes in the composer, in order and whole, each with its own Dismiss; Dismiss takes only its own note, his words stay, and the next file added takes the rest", PHONE, async (p) => {
   const asked = await serve(p);
   await opened(p);
-  await T(p, "pick-files").setInputFiles([
-    photo("big-screenshot.png", LIMITS.fileBytes),
-    { name: "setup.exe", mimeType: "application/x-msdownload", buffer: Buffer.from("MZ") },
-    { name: "IMG_0001.HEIC", mimeType: "image/heic", buffer: Buffer.from("0000ftypheic") },
-  ]);
-  const notice = p.getByRole("alert").filter({ hasText: "setup.exe" });
-  await notice.waitFor();
-  assert.deepEqual((await notice.locator("p").innerText()).split("\n"), [
-    "This file is too big: big-screenshot.png",
-    "This file's type is not allowed: setup.exe",
-    "This picture is in Apple's format. Choose it from Photos, or save it as a JPEG first.",
-  ]);
+  await T(p, "chat-input").fill("Keep these words");
+  await T(p, "pick-files").setInputFiles([photo("big-screenshot.png", LIMITS.fileBytes), EXE, HEIC]);
+  const notes = T(p, "draft-note");
+  await notes.nth(2).waitFor();
+  const lines = ["Not added: big-screenshot.png. It is 10.1 MB, and one file can be 10 MB at most.", kindNote("setup.exe"), HEIC_LINE];
+  assert.deepEqual(await Promise.all([0, 1, 2].map((n) => squashed(notes.nth(n).locator("p")))), lines);
+  assert.deepEqual(await notes.locator("p b").allInnerTexts(), ["Not added: big-screenshot.png.", "Not added: setup.exe."], "the strong first words");
+  assert.equal(await notes.getByRole("button", { name: "Dismiss this note" }).count(), 3);
+  assert.equal(await notes.evaluateAll((all) => all.every((note) => note.scrollWidth <= note.clientWidth && note.getBoundingClientRect().right <= innerWidth)), true, "each note whole inside the screen");
+  await notes.nth(1).getByRole("button", { name: "Dismiss this note" }).tap();
+  await notes.nth(2).waitFor({ state: "detached" });
+  assert.deepEqual(await Promise.all([0, 1].map((n) => squashed(notes.nth(n).locator("p")))), [lines[0], lines[2]]);
+  assert.equal(await T(p, "chat-input").inputValue(), "Keep these words");
+  await T(p, "pick-files").setInputFiles([pdf("notes.pdf")]);
+  await T(p, "draft-file").waitFor();
+  await notes.first().waitFor({ state: "detached" });
+  assert.deepEqual([await notes.count(), await T(p, "chat-input").inputValue(), asked.uploads.length], [0, "Keep these words", 0]);
+});
+
+it("picked files are chips in the composer: a photo with a small picture and a file with its kind, each with its name, its size and ready, and its own Remove; the line above counts them against the server's limit", PHONE, async (p) => {
+  const asked = await serve(p);
+  await opened(p);
+  await T(p, "pick-files").setInputFiles([sized(photo("shot.png"), Math.round(2.4 * 1048576)), sized(pdf("notes.pdf"), 320 * 1024)]);
+  const chips = T(p, "draft-file");
+  await chips.nth(1).waitFor();
+  assert.deepEqual([await squashed(chips.nth(0)), await squashed(chips.nth(1))], ["shot.png 2.4 MB, ready", "PDF notes.pdf 320 KB, ready"]);
+  assert.equal(await squashed(T(p, "draft-total")), "2 files, 2.7 MB of 25 MB");
+  const picture = await chips.nth(0).locator("img").evaluate((img) => [img.src.startsWith("blob:"), img.getBoundingClientRect().width, img.getBoundingClientRect().height]);
+  assert.deepEqual([picture[0], picture[1] === picture[2], picture[1] <= 32], [true, true, true], "the small picture: " + picture.join(" "));
+  const keys = await chips.getByRole("button", { name: /^Remove / }).evaluateAll((all) => all.map((key) => [key.getAttribute("aria-label"), Math.round(key.getBoundingClientRect().width) >= 44, Math.round(key.getBoundingClientRect().height) >= 44]));
+  assert.deepEqual(keys, [["Remove shot.png", true, true], ["Remove notes.pdf", true, true]], "each Remove key and its touch size");
+  await p.getByRole("button", { name: "Remove shot.png" }).tap();
+  await chips.nth(1).waitFor({ state: "detached" });
+  assert.equal(await squashed(T(p, "draft-total")), "1 file, 320 KB of 25 MB");
+  await p.getByRole("button", { name: "Remove notes.pdf" }).tap();
+  await T(p, "draft-strip").waitFor({ state: "detached" });
   assert.equal(asked.uploads.length, 0);
+});
+
+it("a long file name is cut in the middle on its chip so the ending shows, the chip stays inside the composer at 390, and its Remove key says the whole name", PHONE, async (p) => {
+  await serve(p);
+  await opened(p);
+  const long = "Screenshot 2026-11-02 at 9.41.12 AM.png";
+  await T(p, "pick-files").setInputFiles([photo(long)]);
+  const chip = T(p, "draft-file");
+  await chip.getByText("Screenshot 2026\u202641.12 AM.png", { exact: true }).waitFor();
+  await chip.getByRole("button", { name: "Remove " + long }).waitFor();
+  const inside = await chip.evaluate((el) => {
+    const form = el.closest("form").getBoundingClientRect();
+    const box = el.getBoundingClientRect();
+    return box.left >= form.left && box.right <= form.right;
+  });
+  assert.equal(inside, true);
+});
+
+it("at 390 five chips take more than two rows, the strip then scrolls inside itself at two rows high, and the message box and Send stay on screen", PHONE, async (p) => {
+  await serve(p);
+  await opened(p);
+  await T(p, "pick-files").setInputFiles([1, 2, 3, 4, 5].map((n) => photo("screenshot-number-" + n + ".png")));
+  await T(p, "draft-file").nth(4).waitFor();
+  const strip = await T(p, "draft-list").evaluate((list) => {
+    const chips = [...list.querySelectorAll('[data-testid="draft-file"]')];
+    return { rows: new Set(chips.map((one) => Math.round(one.getBoundingClientRect().top + list.scrollTop))).size, scrolls: list.scrollHeight > list.clientHeight, high: list.clientHeight, two: chips[0].getBoundingClientRect().height * 2 + parseFloat(getComputedStyle(list).rowGap) };
+  });
+  assert.ok(strip.rows > 2 && strip.scrolls && strip.high <= strip.two + 1, JSON.stringify(strip));
+  for (const id of ["chat-input", "chat-send"]) {
+    const box = await T(p, id).boundingBox();
+    assert.ok(box.y >= 0 && box.y + box.height <= 844, id + " on screen: " + JSON.stringify(box));
+  }
+});
+
+for (const [label, size] of [["390 by 844", PHONE], ["390 by 500, the room a keyboard leaves", { viewport: { width: 390, height: 500 }, hasTouch: true, isMobile: true }]])
+  it("at " + label + ": twelve photos against a limit of five leave five chips and seven notes; the notes scroll inside two rows of their own with the first one in view, and the message box and Send stay on screen", size, async (p) => {
+    const asked = await serve(p);
+    await opened(p);
+    await T(p, "pick-files").setInputFiles(Array.from({ length: 12 }, (_, n) => photo("screenshot-number-" + (n + 1) + ".png")));
+    const notes = T(p, "draft-note");
+    await notes.nth(6).waitFor({ state: "attached" });
+    assert.deepEqual([await T(p, "draft-file").count(), await notes.count()], [5, 7], "chips and notes");
+    assert.equal(await squashed(notes.first().locator("p")), "Not added: screenshot-number-6.png. A message holds 5 files at most. Send these, then attach the rest.");
+    const held = await T(p, "draft-notes").evaluate((box) => {
+      const chip = document.querySelector('[data-testid="draft-file"]').getBoundingClientRect().height;
+      const gap = parseFloat(getComputedStyle(document.querySelector('[data-testid="draft-list"]')).rowGap);
+      const first = box.querySelector('[data-testid="draft-note"]').getBoundingClientRect();
+      const frame = box.getBoundingClientRect();
+      return { scrolls: box.scrollHeight > box.clientHeight, high: box.clientHeight, two: chip * 2 + gap, firstInView: first.top >= frame.top - 1 && first.top < frame.bottom };
+    });
+    assert.ok(held.scrolls && held.high <= held.two + 1 && held.firstInView, "the notes' own scroll: " + JSON.stringify(held));
+    for (const id of ["chat-input", "chat-send"]) {
+      const box = await T(p, id).boundingBox();
+      assert.ok(box.y >= 0 && box.y + box.height <= size.viewport.height, id + " on screen: " + JSON.stringify(box));
+    }
+    assert.equal(asked.uploads.length, 0);
+  });
+
+it("on the Mac, files dragged over the chat turn the composer's edge to a dashed line and show the server's limits in the composer, and the dropped file becomes a chip", MAC, async (p) => {
+  const asked = await serve(p);
+  await opened(p);
+  const edge = () => p.locator(".chat-composer-form").evaluate((form) => getComputedStyle(form).borderTopStyle);
+  const dataTransfer = await carried(p, [{ name: "notes.txt", type: "text/plain", words: "notes" }]);
+  await T(p, "chat").dispatchEvent("dragenter", { dataTransfer });
+  await T(p, "drop-hint").getByText("Drop to attach. Up to 5 files, 10 MB each, 25 MB in one message.", { exact: true }).waitFor();
+  assert.deepEqual([await edge(), await T(p, "drop-hint").evaluate((hint) => hint.closest(".chat-composer-form") !== null)], ["dashed", true], "the edge, and the note inside the composer");
+  await T(p, "chat").dispatchEvent("drop", { dataTransfer });
+  await T(p, "drop-hint").waitFor({ state: "detached" });
+  assert.deepEqual([await squashed(T(p, "draft-file")), await edge(), asked.uploads.length], ["TXT notes.txt 0.1 KB, ready", "solid", 0]);
 });
 
 it("a send answered 422 files keeps the row's words and files with Your files expired. Tap Try Again to upload them again., and Try Again uploads them again and sends", PHONE, async (p) => {

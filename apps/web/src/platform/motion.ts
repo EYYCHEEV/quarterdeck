@@ -70,18 +70,34 @@ export function stillScreen(): void {
   active?.skipTransition();
 }
 
-function foldFrom(row: HTMLElement | null): void {
-  if (!row) return;
-  row.style.setProperty("--fold-h", row.offsetHeight + "px");
+function sized(row: HTMLElement, height: number): void {
+  row.style.setProperty("--fold-h", height + "px");
   const gap = row.parentElement ? getComputedStyle(row.parentElement).rowGap : "";
   if (gap.endsWith("px")) row.style.setProperty("--fold-gap", "-" + gap);
 }
 
-export type RowMotion = { "data-row": "in" | "out"; ref?: (row: HTMLElement | null) => void; inert?: boolean; "aria-hidden"?: boolean; onAnimationEnd?: (event: { target: EventTarget; currentTarget: EventTarget }) => void };
+function foldFrom(row: HTMLElement | null): void {
+  if (row) sized(row, row.offsetHeight);
+}
 
-export function rowMotion({ id, fresh, leaving }: { id: string; fresh: boolean; leaving: boolean }, drop: (id: string) => void): RowMotion | undefined {
-  if (leaving) return { "data-row": "out", ref: foldFrom, inert: true, "aria-hidden": true, onAnimationEnd: (event) => event.target === event.currentTarget && drop(id) };
+function unfoldTo(row: HTMLElement | null): void {
+  if (row) sized(row, row.scrollHeight);
+}
+
+export type RowMotion = { "data-row": "in" | "out"; "data-line"?: ""; ref?: (row: HTMLElement | null) => void; inert?: boolean; "aria-hidden"?: boolean; onAnimationEnd?: (event: { target: EventTarget; currentTarget: EventTarget }) => void };
+
+type Entry = Omit<Shown<unknown>, "item">;
+
+const folding = (id: string, drop: (id: string) => void): RowMotion => ({ "data-row": "out", ref: foldFrom, inert: true, "aria-hidden": true, onAnimationEnd: (event) => event.target === event.currentTarget && drop(id) });
+
+export function rowMotion({ id, fresh, leaving }: Entry, drop: (id: string) => void): RowMotion | undefined {
+  if (leaving) return folding(id, drop);
   return fresh ? { "data-row": "in" } : undefined;
+}
+
+export function lineMotion({ id, fresh, leaving }: Entry, drop: (id: string) => void): RowMotion | undefined {
+  if (leaving) return { ...folding(id, drop), "data-line": "" };
+  return fresh ? { "data-row": "in", "data-line": "", ref: unfoldTo } : undefined;
 }
 
 export type Last<T> = { reset: string; shown: Shown<T>[] } | null;

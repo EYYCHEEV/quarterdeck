@@ -17,7 +17,7 @@ const { createFeed } = await import("data:text/javascript;base64," + Buffer.from
 const { toTracker } = await loadTs("src/data/trackers.ts");
 const { trackerView } = await loadTs("src/domain/tracker.ts");
 const signOutBuilt = await esbuild.build({
-  stdin: { contents: 'export { attachChatFiles, readSession, subscribe, writeSession } from "./data/session"; export { signOutExample } from "./data/example-sign-out";', resolveDir: "src", loader: "ts" },
+  stdin: { contents: 'export { attachChatFiles, readSession, subscribe, writeSession } from "./data/session"; export { signOutExample } from "./data/example-sign-out"; export { forgetLocal, forgetSession } from "./data/forget-local"; export { setAlerts } from "./data/settings";', resolveDir: "src", loader: "ts" },
   bundle: true,
   write: false,
   format: "esm",
@@ -78,6 +78,42 @@ test("Sign out: a screen listening on a key that held no value is told", async (
   await signOut();
   stop();
   assert.equal(heard, 1);
+});
+
+test("Sign out: which chats have alerts off is forgotten, and a key the app does not own stays", async () => {
+  const held = { "quarterdeck-chat-alerts-off": '["iris","alba"]', "not-the-apps": "kept" };
+  const store = { getItem: (key) => held[key] ?? null, setItem: (key, text) => void (held[key] = String(text)), removeItem: (key) => void delete held[key] };
+  const before = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  Object.defineProperty(globalThis, "localStorage", { value: store, configurable: true, writable: true });
+  try {
+    await signOut();
+  } finally {
+    if (before) Object.defineProperty(globalThis, "localStorage", before);
+    else delete globalThis.localStorage;
+  }
+  assert.deepEqual(held, { "not-the-apps": "kept" });
+});
+
+test("session cleanup forgets alerts but keeps appearance, and explicit local cleanup still forgets both", (t) => {
+  const held = { "qd.settings": '{"appearance":"dark"}', "not-the-apps": "kept" };
+  const store = { getItem: (key) => held[key] ?? null, setItem: (key, text) => void (held[key] = String(text)), removeItem: (key) => void delete held[key] };
+  const before = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  Object.defineProperty(globalThis, "localStorage", { value: store, configurable: true, writable: true });
+  t.after(() => {
+    if (before) Object.defineProperty(globalThis, "localStorage", before);
+    else delete globalThis.localStorage;
+  });
+  s.setAlerts("iris", false);
+  s.forgetLocal();
+  assert.equal(store.getItem("quarterdeck-chat-alerts-off"), null);
+  assert.equal(store.getItem("qd.settings"), null);
+  store.setItem("qd.settings", '{"appearance":"dark"}');
+  s.setAlerts("iris", false);
+  assert.equal(store.getItem("quarterdeck-chat-alerts-off"), '["iris"]');
+  s.forgetSession();
+  assert.equal(store.getItem("qd.settings"), '{"appearance":"dark"}');
+  assert.equal(store.getItem("not-the-apps"), "kept");
+  assert.equal(store.getItem("quarterdeck-chat-alerts-off"), null, "session cleanup alone forgets the alerts choice");
 });
 
 test("Sign out: an attachment batch that finishes after Sign out writes nothing to the draft and makes no blob link", async () => {

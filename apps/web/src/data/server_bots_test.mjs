@@ -28,10 +28,11 @@ function host(...steps) {
   let now = NOW;
   const held = [];
   const call = async (meta, path, init) => {
-    calls.push({ meta, path, method: init.method, body: init.body === undefined ? undefined : JSON.parse(init.body), redirect: init.redirect });
+    calls.push({ meta, path, method: init.method, body: init.body === undefined ? undefined : JSON.parse(init.body), redirect: init.redirect, signal: init.signal });
     const step = steps.shift();
     if (!step) throw new Error("no answer scripted for " + init.method + " " + path);
     if (step === "hold") return new Promise((resolve) => held.push(resolve));
+    if (step === "hang") return new Promise((resolve, reject) => init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))));
     return step();
   };
   const schedule = (run, delay) => {
@@ -109,6 +110,22 @@ test("the list's answer sets the state: 404 and a page that is not JSON say Back
     assert.equal(api.current().state, "ready");
     assert.deepEqual(shape(h.calls), ["GET /captain/api/bots", "GET /captain/api/bots"]);
   }
+});
+
+test("a Bots list read that never answers is cut after twenty seconds: the screen says failed, and Try again reads it again", async () => {
+  const h = host("hang", list(2));
+  const { api } = await ready(h);
+  h.advance(19_900);
+  await ticks();
+  assert.notEqual(api.current().state, "failed", "still waiting just before twenty seconds");
+  h.advance(200);
+  await ticks();
+  assert.equal(api.current().state, "failed");
+  assert.equal(h.calls[0].signal?.aborted, true, "the request itself was aborted");
+  api.reload();
+  await ticks();
+  assert.equal(api.current().state, "ready");
+  assert.deepEqual(shape(h.calls), ["GET /captain/api/bots", "GET /captain/api/bots"]);
 });
 
 test("Refuse reads the list after the tap and sends the code without its space with that read's token, then reads the list again and shows that read; Cancel does the same, and no token from a list or a receipt is held", async () => {

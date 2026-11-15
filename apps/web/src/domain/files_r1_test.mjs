@@ -14,19 +14,28 @@ const WEBP = new Uint8Array([...new TextEncoder().encode("RIFF"), 1, 2, 3, 4, ..
 const PDF = new TextEncoder().encode("%PDF-1.7\n");
 const BOM = new Uint8Array([0xef, 0xbb, 0xbf]);
 const file = (name, parts, type = "") => new File(parts, name, { type });
+const sentence = ({ name, why }) => (name === null ? why : "Not added: " + name + ". " + why);
+const kind = (name) => "Not added: " + name + ". Quarterdeck cannot send this kind of file.";
 const admitted = async (admit, files, attached = 0, bytes = 0) => {
   const { accepted, refused } = await admit(files, attached, bytes);
-  return { names: accepted.map((one) => one.name), types: accepted.map((one) => one.type), refused };
+  return { names: accepted.map((one) => one.name), types: accepted.map((one) => one.type), refused: refused.map(sentence) };
 };
 
-test("the words before an upload are the plan's, and the sizes read as the server's limits", async () => {
+test("the words before an upload are the design's Not added reasons with the server's numbers, the Apple picture line is kept, and the lines for an upload the server refused are unchanged", async () => {
   const r = await load();
   assert.equal(r.HEIC_TEXT, "This picture is in Apple's format. Choose it from Photos, or save it as a JPEG first.");
+  assert.equal(r.countWhy(LIMITS.count), "A message holds 5 files at most. Send these, then attach the rest.");
+  assert.equal(r.countWhy(10), "A message holds 10 files at most. Send these, then attach the rest.");
+  assert.equal(r.bigWhy(Math.floor(48.2 * 1048576), LIMITS.fileBytes), "It is 48.2 MB, and one file can be 10 MB at most.");
+  assert.equal(r.bigWhy(LIMITS.fileBytes + 1, LIMITS.fileBytes), "It is 10.1 MB, and one file can be 10 MB at most.");
+  assert.equal(r.togetherWhy(Math.floor(27.6 * 1048576), LIMITS.messageBytes), "With it this message would be 27.6 MB, and a message can be 25 MB at most.");
+  assert.equal(r.togetherWhy(LIMITS.messageBytes + 1, LIMITS.messageBytes), "With it this message would be 25.1 MB, and a message can be 25 MB at most.");
+  assert.equal(r.KIND_WHY, "Quarterdeck cannot send this kind of file.");
+  assert.equal(r.dropText(LIMITS), "Drop to attach. Up to 5 files, 10 MB each, 25 MB in one message.");
+  assert.equal(r.dropText(null), "Drop to attach. Up to 10 files in one message.");
   assert.equal(r.typeText("run.exe"), "This file's type is not allowed: run.exe");
   assert.equal(r.bigText("big.png"), "This file is too big: big.png");
   assert.equal(r.blockedText("run.exe"), "This file was blocked: run.exe");
-  assert.equal(r.countText(LIMITS.count), "A message can carry up to 5 files.");
-  assert.equal(r.togetherText(LIMITS.messageBytes), "These files are too big together. A message can carry up to 25 MB.");
   assert.equal(r.UPLOADING_TEXT, "Uploading...");
   assert.equal(r.EXPIRED_TEXT, "Your files expired. Tap Try Again to upload them again.");
 });
@@ -36,23 +45,24 @@ test("each refusal comes before any upload: one file too many, too big, too big 
   const admit = r.serverAdmit(LIMITS);
   const png = (name, extra = 0) => file(name, [PNG, new Uint8Array(extra)], "image/png");
   assert.deepEqual(await admitted(admit, [png("a.png"), file("b.pdf", [PDF]), file("c.gif", [GIF]), file("d.webp", [WEBP]), file("e.jpg", [JPEG])]), { names: ["a.png", "b.pdf", "c.gif", "d.webp", "e.jpg"], types: ["image/png", "application/pdf", "image/gif", "image/webp", "image/jpeg"], refused: [] });
-  assert.deepEqual(await admitted(admit, [png("five.png"), png("six.png")], 4, 100), { names: ["five.png"], types: ["image/png"], refused: [r.countText(5)] });
-  assert.deepEqual((await admitted(admit, [png("one.png")], 5, 100)).refused, [r.countText(5)]);
-  assert.deepEqual(await admitted(admit, [png("edge.png", LIMITS.fileBytes - PNG.length), png("big.png", LIMITS.fileBytes - PNG.length + 1)]), { names: ["edge.png"], types: ["image/png"], refused: [r.bigText("big.png")] });
+  assert.deepEqual(await admitted(admit, [png("five.png"), png("six.png"), png("seven.png")], 4, 100), { names: ["five.png"], types: ["image/png"], refused: ["Not added: six.png. A message holds 5 files at most. Send these, then attach the rest.", "Not added: seven.png. A message holds 5 files at most. Send these, then attach the rest."] });
+  assert.deepEqual((await admitted(admit, [png("one.png")], 5, 100)).refused, ["Not added: one.png. A message holds 5 files at most. Send these, then attach the rest."]);
+  assert.deepEqual(await admitted(admit, [png("edge.png", LIMITS.fileBytes - PNG.length), png("big.png", LIMITS.fileBytes - PNG.length + 1)]), { names: ["edge.png"], types: ["image/png"], refused: ["Not added: big.png. It is 10.1 MB, and one file can be 10 MB at most."] });
   assert.deepEqual((await admitted(admit, [png("fits.png", 1000)], 2, LIMITS.messageBytes - 1008)).names, ["fits.png"]);
-  assert.deepEqual((await admitted(admit, [png("over.png", 1001)], 2, LIMITS.messageBytes - 1008)).refused, [r.togetherText(LIMITS.messageBytes)]);
+  assert.deepEqual((await admitted(admit, [png("over.png", 1001)], 2, LIMITS.messageBytes - 1008)).refused, ["Not added: over.png. With it this message would be 25.1 MB, and a message can be 25 MB at most."]);
+  assert.deepEqual((await admitted(admit, [png("nine.png", 9 * 1048576)], 2, 18 * 1048576)).refused, ["Not added: nine.png. With it this message would be 27.1 MB, and a message can be 25 MB at most."]);
   assert.deepEqual((await admitted(admit, [png("a.png", 6 * 1048576), png("b.png", 6 * 1048576)], 2, 14 * 1048576)).names, ["a.png"]);
   for (const [name, type] of [["run.exe", "application/x-msdownload"], ["draw.svg", "image/svg+xml"], ["notes.docx", ""], ["README", "text/plain"], ["page.html", "text/html"], ["app.log", "text/plain"]]) {
-    assert.deepEqual((await admitted(admit, [file(name, ["hello"], type)])).refused, [r.typeText(name)], name);
+    assert.deepEqual((await admitted(admit, [file(name, ["hello"], type)])).refused, [kind(name)], name);
   }
   for (const [name, type] of [["IMG_0001.HEIC", "image/heic"], ["IMG_0002.heif", ""], ["IMG_0003.heic", ""], ["shot.png", "image/heif"]]) {
     assert.deepEqual((await admitted(admit, [file(name, [PNG], type)])).refused, [r.HEIC_TEXT], name);
   }
   for (const [name, parts, type] of [["a.png", [JPEG], "image/png"], ["a.jpg", [PNG], "image/jpeg"], ["a.pdf", ["hello"], "application/pdf"], ["a.gif", [PNG], "image/gif"], ["a.webp", [new TextEncoder().encode("RIFF1234WEBX")], "image/webp"], ["empty.txt", [], "text/plain"]]) {
-    assert.deepEqual((await admitted(admit, [file(name, parts, type)])).refused, [r.typeText(name)], name);
+    assert.deepEqual((await admitted(admit, [file(name, parts, type)])).refused, [kind(name)], name);
   }
-  assert.deepEqual(await admitted(admit, [png("a.png"), file("run.exe", ["x"]), file("big.pdf", [PDF, new Uint8Array(LIMITS.fileBytes)])]), { names: ["a.png"], types: ["image/png"], refused: [r.typeText("run.exe"), r.bigText("big.pdf")] });
-  assert.deepEqual((await admitted(admit, [file("x.exe", ["x"]), file("x.exe", ["y"])])).refused, [r.typeText("x.exe")]);
+  assert.deepEqual(await admitted(admit, [png("a.png"), file("run.exe", ["x"]), file("big.pdf", [PDF, new Uint8Array(LIMITS.fileBytes)])]), { names: ["a.png"], types: ["image/png"], refused: [kind("run.exe"), "Not added: big.pdf. It is 10.1 MB, and one file can be 10 MB at most."] });
+  assert.deepEqual((await admitted(admit, [file("x.exe", ["x"]), file("x.exe", ["y"])])).refused, [kind("x.exe")]);
 });
 
 test("a text file passes the server's first 1024 bytes rule exactly: a BOM is skipped, a character cut at byte 1024 is fine, control characters other than tab, newline, return and form feed fail, and so does a start of < or #! after Python's whitespace", async () => {
@@ -84,9 +94,9 @@ test("a text file passes the server's first 1024 bytes rule exactly: a BOM is sk
     ["surrogate.txt", [new Uint8Array([0xed, 0xa0, 0x80])]],
     ["only-bom.txt", [BOM]],
   ];
-  for (const [name, parts] of fails) assert.deepEqual((await text(name, parts)).refused, [r.typeText(name)], name);
+  for (const [name, parts] of fails) assert.deepEqual((await text(name, parts)).refused, [kind(name)], name);
   for (const [name, body, ok] of [["a.json", " {\"a\":1}", true], ["b.json", "[1]", true], ["c.json", "\"text\"", false], ["d.json", "1", false], ["e.json", "<x>", false]]) {
-    assert.deepEqual((await admitted(admit, [file(name, [body], "application/json")])).refused, ok ? [] : [r.typeText(name)], name);
+    assert.deepEqual((await admitted(admit, [file(name, [body], "application/json")])).refused, ok ? [] : [kind(name)], name);
   }
 });
 
@@ -113,7 +123,7 @@ test("the type claim comes from the extension when the browser's type is empty o
   }
   const admit = r.serverAdmit(LIMITS);
   assert.deepEqual(await admitted(admit, [file("notes.md", ["# hi"]), file("data.csv", ["a,b"], "application/vnd.ms-excel"), file("more.md", ["- x"], "text/x-markdown")]), { names: ["notes.md", "data.csv", "more.md"], types: ["text/markdown", "text/csv", "text/markdown"], refused: [] });
-  assert.deepEqual((await admitted(admit, [file("page.txt", ["<script>"], "text/plain")])).refused, [r.typeText("page.txt")]);
+  assert.deepEqual((await admitted(admit, [file("page.txt", ["<script>"], "text/plain")])).refused, [kind("page.txt")]);
 });
 
 test("the picker lists only the round's types: photos the four picture types, files the nine extensions and their types, and never heic", async () => {

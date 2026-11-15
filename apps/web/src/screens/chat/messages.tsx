@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Attachment, ChatMessage, SentQuote, Working } from "../../data/chat-types";
 import { useQd } from "../../data/hooks";
-import { DELIVERED_TEXT, QUIET_TEXT, readableText, readText, resolveQuote, SEND_FAILED_TEXT, SEND_RETRY_TEXT, workingStatus } from "../../domain/chat";
+import { busyText, DELIVERED_TEXT, QUIET_TEXT, readableText, readText, resolveQuote, SEND_FAILED_TEXT, SEND_RETRY_TEXT, workingStatus } from "../../domain/chat";
 import { UPLOADING_TEXT } from "../../domain/files-r1";
+import { shownText } from "../../domain/hidden-chars";
 import { parseMarkdown } from "../../domain/markdown";
 import { referenceInfo } from "../../domain/references";
 import { href, linkedParts, referenceHref } from "../../domain/routes";
@@ -14,24 +15,27 @@ import { Icon } from "../../ui/icon";
 import { Link } from "../../ui/link";
 import { LinkedText } from "../../ui/linked-text";
 import { Markdown } from "../../ui/markdown";
-import { ARRIVE, RISE } from "../../ui/motion";
+import { ARRIVE, lineMotion, RISE, useShown } from "../../ui/motion";
 import { RefChip } from "../../ui/reference";
 import { ErrorLine } from "../../ui/states";
 import { AttachmentList } from "./attachments";
+import { drawMarks, MARKS } from "./marks";
 import { Actionable } from "./message-actions";
 import { QuoteBlock } from "./quote";
 
 const TICK_MS = 15_000;
+const SECOND_MS = 1_000;
 
 const RETRY_UNDER = "max-upright:grid max-upright:grid-cols-[auto_minmax(0,1fr)] max-upright:[&>button]:col-span-2 max-upright:[&>button]:justify-self-end";
 
 const STATUS_LINE = "flex h-s4 items-center";
+const noteId = () => "note";
 
 type OnQuote = (selected: string | null) => void;
 
 export function BotMessage({ message, name, color, world, fresh, onQuote, onOpen }: { message: ChatMessage; name: string; color?: string; world: World; fresh?: boolean; onQuote?: OnQuote; onOpen: (file: Attachment, from: HTMLElement) => void }) {
   const blocks = useMemo(() => parseMarkdown(message.text), [message.text]);
-  const plain = useMemo(() => readableText(message.text), [message.text]);
+  const plain = useMemo(() => shownText(readableText(message.text)), [message.text]);
   const shownQuote = message.quote ? resolveQuote(message.quote, world, name) : null;
   return (
     <Actionable id={message.id} title={name + " · " + clockTime(message.at)} copy={plain} onQuote={onQuote} align="start" className={cx("chat-bot-message", fresh && ARRIVE)} testId="chat-bot-message">
@@ -43,7 +47,7 @@ export function BotMessage({ message, name, color, world, fresh, onQuote, onOpen
       <div className="chat-bot-bubble">
         {shownQuote && <QuoteBlock quote={shownQuote} />}
         <div data-message-text="">
-          <Markdown blocks={blocks} botName={name} className="text-lead" renderText={(text, key) => <LinkedText key={key} parts={linkedParts(text, world)} />} />
+          <Markdown blocks={blocks} botName={name} className="text-lead" marks={MARKS} renderText={(text, key) => <LinkedText key={key} parts={linkedParts(text, world)} draw={drawMarks} />} />
         </div>
         {message.attachments && message.attachments.length > 0 && (
           <div className="mt-s2">
@@ -87,7 +91,23 @@ export function NewLine() {
   );
 }
 
-type Note = "delivered" | "read" | "uploading" | "sending" | "failed" | null;
+type Note = "delivered" | "read" | "uploading" | "sending" | "busy" | "failed" | null;
+
+function BusyLine({ until }: { until: number }) {
+  const qd = useQd();
+  const [now, setNow] = useState(() => qd.now());
+  useEffect(() => {
+    const left = until - now;
+    if (left <= 0) return;
+    const id = window.setTimeout(() => setNow(qd.now()), left % SECOND_MS || SECOND_MS);
+    return () => window.clearTimeout(id);
+  }, [qd, until, now]);
+  return (
+    <p className={cx(STATUS_LINE, "text-label text-ink-2")} data-testid="chat-busy">
+      <span>{busyText(Math.max(1, Math.ceil((until - now) / SECOND_MS)))}</span>
+    </p>
+  );
+}
 
 export function MyMessage({
   text,
@@ -95,6 +115,7 @@ export function MyMessage({
   attachments,
   at,
   note,
+  busyUntil,
   seenAt,
   onRetry,
   reason,
@@ -110,6 +131,7 @@ export function MyMessage({
   attachments?: Attachment[];
   at: string;
   note: Note;
+  busyUntil?: number;
   seenAt?: string | null;
   onRetry?: () => void;
   reason?: string | null;
@@ -122,13 +144,15 @@ export function MyMessage({
 }) {
   const qd = useQd();
   const shownQuote = quote ? resolveQuote(quote, world, botName) : null;
+  const line = note === "read" ? { seen: true, text: readText(seenAt, qd.now()) } : note === "delivered" ? { seen: false, text: DELIVERED_TEXT } : null;
+  const lines = useShown(line ? [line] : [], noteId, "");
   return (
-    <Actionable id={id} title={"You · " + clockTime(at)} copy={id && text ? text : undefined} onQuote={actions} align="end" className={cx("chat-my-message flex flex-col gap-s1", rise && RISE)} testId="chat-my-message">
+    <Actionable id={id} title={"You · " + clockTime(at)} copy={id && text ? shownText(text) : undefined} onQuote={actions} align="end" className={cx("chat-my-message flex flex-col gap-s1", rise && RISE)} testId="chat-my-message">
       {shownQuote && <QuoteBlock quote={shownQuote} />}
       {attachments && attachments.length > 0 && <AttachmentList items={attachments} align="end" onOpen={onOpen} />}
       {text && (
         <p data-message-text="" className="chat-my-bubble text-lead whitespace-pre-line [overflow-wrap:anywhere]">
-          <LinkedText parts={linkedParts(text, world)} />
+          <LinkedText parts={linkedParts(text, world)} draw={drawMarks} />
         </p>
       )}
       {note === "failed" ? (
@@ -136,7 +160,9 @@ export function MyMessage({
           <span className="block">{SEND_FAILED_TEXT}</span>
           {reason && <span className="block text-meta text-ink-2">{reason}</span>}
         </ErrorLine>
-      ) : note === "sending" || note === "uploading" ? (
+      ) : note === "busy" && busyUntil !== undefined ? (
+        <BusyLine until={busyUntil} />
+      ) : note === "sending" || note === "uploading" || note === "busy" ? (
         <p className={cx(STATUS_LINE, "self-stretch", note === "uploading" && "gap-s2")} data-testid="chat-sending-bar">
           <span aria-hidden="true" data-progress="" className="relative h-hair w-full overflow-hidden rounded-round bg-line">
             <span className="sending-bar absolute inset-y-0 left-0 w-2/5 rounded-round bg-hand" />
@@ -154,8 +180,11 @@ export function MyMessage({
           <time>{clockTime(at)}</time>
         </p>
       )}
-      {note === "delivered" && <p className="text-label text-ink-2" data-testid="chat-delivered">{DELIVERED_TEXT}</p>}
-      {note === "read" && <p className="text-label text-ink-2" data-testid="chat-seen">{readText(seenAt, qd.now())}</p>}
+      {lines.shown.map((entry) => (
+        <p key={entry.id} className="text-label text-ink-2" data-testid={entry.leaving ? undefined : entry.item.seen ? "chat-seen" : "chat-delivered"} {...lineMotion(entry, lines.drop)}>
+          {entry.item.text}
+        </p>
+      ))}
     </Actionable>
   );
 }

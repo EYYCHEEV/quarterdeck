@@ -182,6 +182,18 @@ const selectInFirstReply = async (vp, p) => {
   });
   await p.locator(T("selection-quote")).waitFor();
 };
+const selectLastReply = async (vp, p) => {
+  const reply = p.locator(T("chat-bot-message")).last();
+  await reply.locator("[data-message-text]").waitFor();
+  await reply.evaluate((el) => {
+    const box = el.getBoundingClientRect();
+    el.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "touch", bubbles: true, clientX: box.left + 60, clientY: box.top + 12 }));
+  });
+  const menu = p.locator('[data-pop="message-actions"]');
+  await menu.waitFor({ timeout: 3000 });
+  await press(vp, menu.locator("button").filter({ hasText: /^Select$/ }));
+  await p.locator(T("select-bar")).waitFor();
+};
 const picturesLoaded = async (vp, p) => {
   await p.locator(T("chat-picture")).first().waitFor();
   await p.waitForFunction(() => [...document.querySelectorAll('[data-testid="chat-picture"]')].every((img) => img.complete && img.naturalWidth > 0));
@@ -500,6 +512,7 @@ const STATES = [
       await tap(vp, p, T("chat-file"));
       await p.getByText("Could not open this file.", { exact: true }).waitFor();
     }, pop: () => '[data-pop="file-viewer"]', closes: dialogCloses },
+  { name: "chat-hidden-marks", route: "/chat/alba?chatfx=CF-MARKS", shot: true, open: (vp, p) => p.locator(T("hidden-mark")).first().waitFor() },
   { name: "chat-card-changes", route: "/chat/alba", shot: true, open: showCardChanges },
   { name: "chat-file-open", route: "/chat/alba", open: async (vp, p) => {
       await tap(vp, p, T("chat-file"));
@@ -514,6 +527,7 @@ const STATES = [
   { name: "chat-actions-copy", route: "/chat/iris", shot: true, open: copyFirstReply, pop: (vp) => (vp.opts.hasTouch ? '[data-pop="message-actions"]' : T("message-actions")) },
   { name: "chat-message-quote", route: "/chat/iris", shot: true, open: quoteFirstReply },
   { name: "chat-selection", route: "/chat/iris", when: (vp) => !vp.opts.hasTouch, open: selectInFirstReply },
+  { name: "chat-select", route: "/chat/iris", shot: true, when: (vp) => vp.opts.hasTouch, open: selectLastReply },
   { name: "chat-return-newline", route: "/chat/iris", shot: true, when: (vp) => vp.opts.hasTouch, open: returnNewline },
   { name: "chat-plus", route: "/chat/iris", open: (vp, p) => tap(vp, p, T("plus-btn")), pop: () => '[data-pop="plus"]', closes: ["esc", "outside"] },
   { name: "chat-strip", route: "/chat/iris", shot: true, open: attachedFiles },
@@ -524,8 +538,8 @@ const STATES = [
     } },
   { name: "chat-uploading", route: "/chat/iris?hold=upload", shot: true, open: uploadingSend },
   { name: "chat-server-refused", route: "/chat/alba?chatfx=CF-FILES", shot: true, open: serverPick(() => [paddedPicture("big-screenshot.png", 11 * 1048576), { name: "setup.exe", mimeType: "application/x-msdownload", buffer: Buffer.from("MZ") }, { name: "IMG_0001.HEIC", mimeType: "image/heic", buffer: Buffer.from("0000ftypheic") }], "This picture is in Apple's format.") },
-  { name: "chat-server-refused-count", route: "/chat/alba?chatfx=CF-FILES", shot: true, open: serverPick(() => [1, 2, 3, 4, 5, 6].map((n) => pictureFile("screenshot-" + n + ".png", "phone-search-1.png")), "A message can carry up to 5 files.") },
-  { name: "chat-server-refused-together", route: "/chat/alba?chatfx=CF-FILES", shot: true, open: serverPick(() => ["a", "b", "c"].map((n) => paddedPicture("export-" + n + ".png", 9 * 1048576)), "These files are too big together.") },
+  { name: "chat-server-refused-count", route: "/chat/alba?chatfx=CF-FILES", shot: true, open: serverPick(() => [1, 2, 3, 4, 5, 6].map((n) => pictureFile("screenshot-" + n + ".png", "phone-search-1.png")), "A message holds 5 files at most.") },
+  { name: "chat-server-refused-together", route: "/chat/alba?chatfx=CF-FILES", shot: true, open: serverPick(() => ["a", "b", "c"].map((n) => paddedPicture("export-" + n + ".png", 9 * 1048576)), "With it this message would be") },
   { name: "chat-secret-request", route: "/chat/alba", shot: true, open: (vp, p) => p.locator(T("secret-request")).scrollIntoViewIfNeeded() },
   {
     name: "chat-secret-box",

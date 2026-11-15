@@ -2,7 +2,8 @@ import { createContext, useContext, useEffect, useState, useSyncExternalStore, t
 import { readAttachedText } from "../../data/attachment-text";
 import type { Attachment } from "../../data/chat-types";
 import type { DraftFile } from "../../data/session";
-import { canRead, kindOf, sizeText } from "../../domain/chat-files";
+import { canRead, kindOf, kindTile, shortName, sizeText, sizeToTenth, totalText } from "../../domain/chat-files";
+import { notAdded, refusalText, type Refusal } from "../../domain/file-inspection";
 import { blockedText } from "../../domain/files-r1";
 import { outsideLink } from "../../platform/open-link";
 import { ButtonLink, LinkButton } from "../../ui/button";
@@ -189,27 +190,56 @@ export function FileViewer({ file, returnTo, onClose }: { file: Attachment; retu
   );
 }
 
-export function DraftStrip({ files, onRemove }: { files: DraftFile[]; onRemove: (id: string) => void }) {
+export function DraftStrip({ files, limit, notes, onRemove, onDismiss }: { files: DraftFile[]; limit: number | null; notes: Refusal[]; onRemove: (id: string) => void; onDismiss: (at: number) => void }) {
   return (
-    <ul aria-label="Files to send" className="flex flex-wrap gap-s2 px-s3 pt-s3" data-testid="draft-strip">
-      {files.map(({ id, file, url }) => (
-        <li key={id} className="relative flex-none" data-testid="draft-file">
-          {kindOf(file) === "image" ? (
-            <img src={url} alt={file.name} decoding="sync" className="size-[88px] rounded-key border border-line object-cover" />
-          ) : (
-            <div className="flex min-h-[88px] w-[176px] max-w-full flex-col justify-end gap-hair rounded-key border border-line bg-raised p-s2">
-              <Icon name="file" size="sm" className="mb-auto text-ink-3" />
-              <span className="text-meta [overflow-wrap:anywhere]">{file.name}</span>
-              <span className="text-meta text-ink-2">{sizeText(file.size)}</span>
-            </div>
-          )}
-          <button type="button" aria-label={"Remove " + file.name} onClick={() => onRemove(id)} className="absolute top-0 right-0 grid size-hit cursor-pointer place-items-center" data-remove={id}>
-            <span className="grid size-s5 place-items-center rounded-round border border-line-3 bg-page text-ink">
-              <Icon name="x" size="xs" />
-            </span>
-          </button>
-        </li>
-      ))}
-    </ul>
+    <div className="chat-files" data-testid="draft-strip">
+      {files.length > 0 && (
+        <p className="font-mono text-label text-ink" data-testid="draft-total">
+          {totalText(files.length, files.reduce((sum, { file }) => sum + file.size, 0), limit)}
+        </p>
+      )}
+      {files.length > 0 && (
+        <ul aria-label="Files to send" className="chat-file-list" data-testid="draft-list">
+          {files.map(({ id, file, url }) => (
+            <li key={id} className="chat-file" data-testid="draft-file">
+              {kindOf(file) === "image" ? (
+                <img src={url} alt="" decoding="sync" className="chat-file-thumb" />
+              ) : (
+                <span aria-hidden="true" className="chat-file-thumb chat-file-kind">
+                  {kindTile(file.name)}
+                </span>
+              )}
+              <span className="grid min-w-0">
+                <span className="truncate text-meta font-strong" title={file.name}>
+                  {shortName(file.name)}
+                </span>
+                <span className="font-mono text-label text-ink-2">{sizeToTenth(file.size)}, ready</span>
+              </span>
+              <button type="button" aria-label={"Remove " + file.name} title={"Remove " + file.name} onClick={() => onRemove(id)} className="chat-file-key" data-remove={id}>
+                <Icon name="x" size="sm" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {notes.length > 0 && (
+        <div role="alert" className="chat-file-notes" data-testid="draft-notes">
+          <ul className="grid gap-s1">
+            {notes.map((note, at) => (
+              <li key={refusalText(note)} className="chat-file-note" data-testid="draft-note">
+                <p className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+                  {note.name !== null && <b className="font-strong text-stop">{notAdded(note.name)}</b>}
+                  {note.name !== null && " "}
+                  {note.why}
+                </p>
+                <button type="button" aria-label="Dismiss this note" title="Dismiss this note" onClick={() => onDismiss(at)} className="chat-file-key">
+                  <Icon name="x" size="sm" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }

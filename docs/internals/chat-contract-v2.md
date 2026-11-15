@@ -18,7 +18,10 @@ Filled samples that follow this contract are in `apps/server/api/chat-v2/samples
 7. **`rev` keeps seen and working fresh.** Each chat row carries `rev`, a number that changes whenever that thread's seen mark, working state, unread mark or last message changes. The thread answer repeats it. The app re-reads the open thread only when `rev` differs. A missing `rev` means no extra reads. It may also change on a server restart, which costs one extra read. The list stays a bare array.
 8. **Strict and bounded.** A malformed new field makes the thread unreadable, as every field does. So **the server never emits a malformed field**: a bot-written quote that fails its checks becomes `null`, and the message still shows.
    - "Characters" means code points. A message quote's `from` is `"captain"` or `"bot"`.
-   - The app sends a quote of at most 280 code points and reads up to 4,000. The server refuses the owner's quote over 280, and passes a bot's quote up to 4,000 without cutting it.
+   - The app sends a quote of at most 280 code points. The server refuses the owner's quote over 280, and passes a bot's quote up to 4,000 without cutting it. The app has no length check of its own on a quote it reads; the 1,048,576 bytes it reads of one answer bound it.
+   - A message has no limit in characters. One send is at most 131,072 bytes as a request. The app refuses a longer message before it sends, with "Not sent: this message is too long. Shorten it or split it in two."
+   - A send whose body is over 16,384 bytes is checked before the server reads one byte of it: first the `Origin` header must be `https://` plus the forwarded host, then the session is asked for once, as a read of the same address. A refused one is answered at once, 403 `{"error": "request refused"}` for the origin and 401 `{"error": "session"}` for the session, and the body is never read; behind the proxy the browser may see a dropped connection in place of the answer. The send itself is then checked as any other send. The app keeps its own count of requests in a minute so that it stays under the sign-in service's limit: it counts such a send as three, where a shorter send is two, because the server asks the sign-in service one more question for it.
+   - A thread page holds at most 15 messages and may hold fewer. The server keeps the messages of one page under 786,432 bytes, so the answer stays under the 1,048,576 bytes the app reads. A page always holds at least one message, and `older` says whether more remain before it. A read with `after` answers 409 `{"error": "cursor"}` when the messages after that id would pass that size.
 
 ## A. Chat mail bodies
 
@@ -54,6 +57,8 @@ The server makes `name` from the id by the naming rule: split at hyphens, drop e
 | Files | new `GET /captain/api/files/<id>`, a new door route |
 | Newer only (sync) | `GET /captain/api/chat?bot=<id>&after=<message id>` answers only the messages after that id, oldest first, with the thread's other fields and `rev`. An unknown or dropped id answers 409 `{"error": "cursor"}`, and the app then reads the newest page. The thread lists `"cursor"` in `features` when this is on; the app never sends `after` before that |
 
+The `csrf` of a send or of a mark-read may come from an earlier answer in the same session (a card list 200 or a POST receipt), not only from a list read made for it. The app spends such a token only while it is under 240 seconds old (the server keeps it 300), and each token once. A 403 `{"error": "request refused"}` for such a token makes the app read the card list once and try once more with the same `clientId`; the session does not end on that 403. Card answers, comments and file sends keep their own token read.
+
 Example rows, mark-read request and answer:
 
 ```json
@@ -85,7 +90,7 @@ Example rows, mark-read request and answer:
 - **The server fills** `from` and `at` for a message quote. The owner never sends them; a send with them is refused.
 - **One refusal for every quote fault:** status 422, body exactly `{"error": "quote"}` (unknown id, message not in that thread, text not inside, too long, empty, card not the owner's, unknown version, malformed). The app shows its own words on the failed row with no Try again, for example "Not sent: that message is no longer in this chat." The server never writes words for the screen.
 - **To the bot:** the `chat/1` mail carries the same `quote` object the owner sent, as in the sample `mail-chat-1-with-quote-and-file.json`. A bot's own quote that fails these checks becomes `null` in the thread (the strict and bounded rule), and the message still shows.
-- **Until `"quote"` is listed,** the long-press menu shows Copy only, so a missing Reply is not a bug.
+- **Until `"quote"` is listed,** the long-press menu shows Copy and Select, and the Select bar shows Copy and Done, so a missing Reply is not a bug.
 
 ## D. Working signal
 

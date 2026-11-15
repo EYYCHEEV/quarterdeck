@@ -68,12 +68,6 @@ export function SecretCard({ botId, botName, request, ready, onClose }: { botId:
   return (
     <section
       aria-labelledby={titleId}
-      onKeyDown={(event) => {
-        if (event.key === "Escape" && onClose) {
-          event.preventDefault();
-          onClose();
-        }
-      }}
       className="chat-secret-card grid gap-s2 rounded-panel border border-line-3 bg-panel p-s3"
       data-testid={request ? "secret-request" : "secret-box"}
     >

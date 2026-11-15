@@ -16,6 +16,7 @@ import cards
 
 
 MAX_BODY_BYTES = 16_384
+CHAT_SEND_BODY_BYTES = 131_072
 CARD_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]{0,63}")
 CHAT_PATH = "/captain/api/chat"
 CHATS_PATH = "/captain/api/chats"
@@ -51,6 +52,19 @@ STATIC_SECURITY_HEADERS = (
 )
 
 
+def body_limit(method: str, path: str) -> int:
+    if method != "POST":
+        return MAX_BODY_BYTES
+    try:
+        parsed = urlsplit(path)
+        if parsed.scheme or parsed.netloc or parsed.fragment or parsed.path != CHAT_PATH:
+            return MAX_BODY_BYTES
+        CardApplication._chat_target(parsed.path, parsed.query)
+    except (ValueError, cards.CardRefused):
+        return MAX_BODY_BYTES
+    return CHAT_SEND_BODY_BYTES
+
+
 class AuthenticationRequired(RuntimeError):
     pass
 
@@ -67,6 +81,8 @@ class SessionGate(Protocol):
         request: approval_app.Request,
         csrf: str,
     ) -> object: ...
+
+    def admit_post(self, request: approval_app.Request) -> None: ...
 
     def issue_csrf(self, owner: object) -> str: ...
 
@@ -184,14 +200,18 @@ class CardApplication:
         return approval_app.Response(status, tuple(headers), body)
 
     @staticmethod
-    def _json(request: approval_app.Request, fields: set[str]) -> dict[str, Any]:
+    def _json(
+        request: approval_app.Request,
+        fields: set[str],
+        limit: int = MAX_BODY_BYTES,
+    ) -> dict[str, Any]:
         headers = {
             name.lower(): value
             for name, value in request.headers.items()
         }
         if (
             headers.get("content-type") != "application/json"
-            or len(request.body) > MAX_BODY_BYTES
+            or len(request.body) > limit
         ):
             raise cards.CardRefused("card request body is invalid")
         try:
@@ -386,6 +406,7 @@ class CardApplication:
             payload = self._json(
                 request,
                 {"text", "requestId", "csrf"},
+                CHAT_SEND_BODY_BYTES if chat else MAX_BODY_BYTES,
             )
         else:
             return self._response(404, {"error": "not found"})
@@ -505,17 +526,28 @@ class CardApplication:
             if request.method == "POST":
                 return self._post(request, parsed.path, chat_bot)
             return self._response(405, {"error": "method not allowed"})
-        except AuthenticationRequired:
-            return self._response(401, {"error": "sign in required"})
-        except approval_security.ApprovalRateLimited:
-            return self._response(429, {"error": "request refused"})
-        except approval_security.FreshSignInRequired:
-            return self._sign_in_redirect(approval_security.STEP_UP_PATH + "?" + urlencode({"next": CHAT_PAGE_PATH}))
-        except approval_security.ApprovalRefused:
-            return self._response(403, {"error": "request refused"})
-        except cards.CardRefused:
-            return self._response(400, {"error": "request refused"})
-        except Exception:
-            return self._response(503, {"error": "request unavailable"})
+        except Exception as error:
+            return self._failure(error)
         finally:
             approval_security.clear(request.body)
+
+    @staticmethod
+    def _failure(error: Exception) -> approval_app.Response:
+        if isinstance(error, AuthenticationRequired):
+            return CardApplication._response(401, {"error": "sign in required"})
+        if isinstance(error, approval_security.ApprovalRateLimited):
+            return CardApplication._response(429, {"error": "request refused"})
+        if isinstance(error, approval_security.FreshSignInRequired):
+            return CardApplication._sign_in_redirect(approval_security.STEP_UP_PATH + "?" + urlencode({"next": CHAT_PAGE_PATH}))
+        if isinstance(error, approval_security.ApprovalRefused):
+            return CardApplication._response(403, {"error": "request refused"})
+        if isinstance(error, cards.CardRefused):
+            return CardApplication._response(400, {"error": "request refused"})
+        return CardApplication._response(503, {"error": "request unavailable"})
+
+    def large_body_refusal(self, request: approval_app.Request) -> approval_app.Response | None:
+        try:
+            self.sessions.admit_post(request)
+        except Exception as error:
+            return self._failure(error)
+        return None

@@ -537,7 +537,7 @@ export function createServerSource(client: ApiClient, clock: () => number = Date
       const job = meta.kind === "list" ? current : null;
       if (paused && !job?.probe) throw new SignInRequired();
       if (unconfirmed && meta.kind !== "list" && meta.kind !== "token") throw new SessionUnconfirmed();
-      const cost = meta.kind === "post" ? 2 : 1;
+      const cost = meta.kind === "post" ? (meta.long ? 3 : 2) : 1;
       while (budgetAt(cost, meta.automatic) > clock()) {
         if (!meta.wait) throw new RateLimited();
         await creditsBack(cost, meta.automatic);
@@ -555,7 +555,7 @@ export function createServerSource(client: ApiClient, clock: () => number = Date
       if (meta.kind === "post") posting += 1;
       try {
         const response = await send();
-        if (response.status === 401 || response.status === 403) sessionEnded();
+        if (response.status === 401 || (response.status === 403 && !meta.tokenRefused)) sessionEnded();
         else if (mine === generation) {
           if (job) job.status = response.status;
           if (response.status === 200 || response.status === 304) confirmedAt = Math.max(confirmedAt ?? -Infinity, sent);
@@ -809,7 +809,7 @@ export function createServerSource(client: ApiClient, clock: () => number = Date
       if (chatPart) return Promise.resolve(chatPart);
       chatLoad ??= import("./server-chat").then((lib) => {
         if (!client.chat) throw new Refused(NOT_BUILT);
-        const host: ChatHost = { chat: client.chat, clock, schedule, access, read, live: () => !paused && !unconfirmed && !away && listeners.size > 0, arm, republish, token: () => takeToken(generation, privateEpoch), generation: () => generation, epoch: () => privateEpoch, credits: chatCredits };
+        const host: ChatHost = { chat: client.chat, clock, schedule, access, read, live: () => !paused && !unconfirmed && !away && listeners.size > 0, away: () => away, arm, republish, token: () => takeToken(generation, privateEpoch), generation: () => generation, epoch: () => privateEpoch, credits: chatCredits };
         chatPart = lib.createServerChat(host);
         return chatPart;
       });

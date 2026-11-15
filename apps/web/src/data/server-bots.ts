@@ -18,6 +18,7 @@ const LIST_PATH = "/captain/api/bots";
 const PATHS: Record<BotsAction, string> = { approve: LIST_PATH + "/approve", refuse: LIST_PATH + "/refuse", invite: LIST_PATH + "/invites", cancel: LIST_PATH + "/invites/cancel" };
 const STEP_UP = "/captain/step-up?next=/settings/bots";
 const POST_TIMEOUT = 20_000;
+const READ_TIMEOUT = 20_000;
 const LIST_LIMIT = 1_048_576;
 const ANSWER_LIMIT = 16_384;
 
@@ -77,10 +78,16 @@ export function createServerBots(host: BotsHost): BotsPart {
   }
 
   async function fetchList(): Promise<BotsList | null> {
-    const response = await host.call({ kind: "bots", automatic: false }, LIST_PATH, { method: "GET", headers: { Accept: "application/json" }, credentials: "same-origin", redirect: "error" });
-    const { text, cut } = await readText(response, LIST_LIMIT, true);
-    if (cut) throw new Refused(BOTS_WORDS.list);
-    return readBotsList(response.status, text);
+    const controller = new AbortController();
+    const stop = host.schedule(() => controller.abort(), READ_TIMEOUT);
+    try {
+      const response = await host.call({ kind: "bots", automatic: false }, LIST_PATH, { method: "GET", headers: { Accept: "application/json" }, credentials: "same-origin", redirect: "error", signal: controller.signal });
+      const { text, cut } = await readText(response, LIST_LIMIT, true);
+      if (cut) throw new Refused(BOTS_WORDS.list);
+      return readBotsList(response.status, text);
+    } finally {
+      stop();
+    }
   }
 
   function newest(seq: number): boolean {

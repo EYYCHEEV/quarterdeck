@@ -23,10 +23,14 @@ sys.path.insert(0, str(PKG))
 
 import application
 import approval_app
+import approval_security
+import auth_bridge
+import chat_api
 import live
 import cards
 import package_plan
 import server
+import webapp
 
 
 APPROVAL_GATE_SHA256 = "0b746d42e87645ad732ef32e417f75ca9341b1f3afaff30c06bcb4dc6e9432e3"
@@ -301,8 +305,64 @@ class Trickle:
         return len(chunk)
 
 
-def framed(headers, data=b"", step=4096):
-    return types.SimpleNamespace(headers=headers, connection=Connection(), rfile=Trickle(data, step))
+def framed(headers, data=b"", step=4096, command="POST", path="/captain/cards"):
+    return types.SimpleNamespace(headers=headers, connection=Connection(), rfile=Trickle(data, step), command=command, path=path)
+
+
+SIGNED = (
+    ("Cookie", "__Host-qd-approval=good-session"),
+    ("Origin", "https://quarterdeck.invalid"),
+    ("X-Forwarded-For", "192.0.2.10"),
+    ("X-Forwarded-Host", "quarterdeck.invalid"),
+    ("X-Forwarded-Proto", "https"),
+)
+
+
+class SignIn:
+    def __init__(self, error=None):
+        self.calls = []
+        self.error = error
+
+    def __call__(self, payload):
+        self.calls.append(payload)
+        if self.error is not None:
+            raise self.error
+        if payload["session"] != "good-session":
+            raise application.SessionRefused("Captain auth session was refused")
+        return {"ok": True, "csrf": "spare", "freshUntil": 0.0, "freshRequired": False}
+
+
+def without(name, pairs=SIGNED):
+    return tuple(pair for pair in pairs if pair[0] != name)
+
+
+def chat_send(length, pairs=SIGNED, *, sign_in=None, command="POST", path="/captain/api/chat", mounted=True):
+    sign_in = SignIn() if sign_in is None else sign_in
+    fake = framed(headers_of(("Content-Length", str(length)), *pairs), b"x" * length, command=command, path=path)
+    chat = chat_api.ChatApi(auth_bridge.SocketApprovalGate(sign_in), None, clock=lambda: 1000.0)
+    fake.client_address = ("127.0.0.1", 4000)
+    fake.application = webapp.QdWeb(None, None, chat=chat if mounted else None)
+    fake.sign_in = sign_in
+    return fake
+
+
+def read_of(fake):
+    log = io.StringIO()
+    try:
+        with contextlib.redirect_stderr(log):
+            body = server.Handler._body(fake)
+    except ValueError:
+        return "too large", fake.rfile.position
+    except Exception as error:
+        response = getattr(error, "response", None)
+        if response is None:
+            raise
+        return answer_of(response), fake.rfile.position
+    return len(body), fake.rfile.position
+
+
+def asked(fake):
+    return [(call["operation"], call["request"]["method"], call["request"]["path"]) for call in fake.sign_in.calls]
 
 
 class BodyFramingTests(unittest.TestCase):
@@ -329,6 +389,36 @@ class BodyFramingTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             server.Handler._body(fake)
         self.assertEqual((fake.rfile.calls, fake.connection.timeouts), (0, []))
+
+    def test_only_a_chat_send_is_read_up_to_128_kib(self):
+        limit = 131072
+        self.assertEqual(read_of(chat_send(limit)), (limit, limit))
+        fake = framed(headers_of(("Content-Length", str(limit + 1))), b"x" * (limit + 1), path="/captain/api/chat")
+        with self.assertRaises(ValueError):
+            server.Handler._body(fake)
+        self.assertEqual((fake.rfile.calls, fake.connection.timeouts), (0, []))
+        others = (
+            ("GET", "/captain/api/chat"),
+            ("PUT", "/captain/api/chat"),
+            ("HEAD", "/captain/api/chat"),
+            ("post", "/captain/api/chat"),
+            ("POST", "/captain/api/chat/read"),
+            ("POST", "/captain/api/chat?bot=bot-b"),
+            ("POST", "/captain/api/chat?"),
+            ("POST", "/captain/api/chat?a=1?b=2"),
+            ("POST", "/captain/api/chat/"),
+            ("POST", "/captain/api/%63hat"),
+            ("POST", "/captain/api/chats"),
+            ("POST", "/captain/cards/card-1/comments"),
+        )
+        for command, path in others:
+            with self.subTest(command=command, path=path):
+                fake = framed(headers_of(("Content-Length", "16385")), b"x" * 16385, command=command, path=path)
+                with self.assertRaises(ValueError):
+                    server.Handler._body(fake)
+                self.assertEqual(fake.rfile.calls, 0)
+                self.assertEqual(application.body_limit(command, path), 16384)
+        self.assertEqual(application.body_limit("POST", "/captain/api/chat"), limit)
 
     def test_every_other_framing_is_refused_before_any_read(self):
         cases = {
@@ -357,6 +447,131 @@ class BodyFramingTests(unittest.TestCase):
         fake = framed(headers_of(("Content-Length", "10")), b"abc")
         with self.assertRaises((ValueError, BufferError)):
             server.Handler._body(fake)
+
+
+class LongSendAdmissionTests(unittest.TestCase):
+    LONG = (16385, 131072)
+    SESSION = (401, {"error": "session"})
+    REFUSED = (403, {"error": "request refused"})
+
+    def test_a_signed_long_send_is_read_after_one_session_check_shaped_as_a_read(self):
+        for size in (16384, 16385, 131072):
+            with self.subTest(size=size):
+                fake = chat_send(size)
+                self.assertEqual(read_of(fake), (size, size))
+                self.assertEqual(asked(fake), [] if size == 16384 else [("authenticate", "GET", "/captain/api/chat")])
+                self.assertEqual({key for call in fake.sign_in.calls for key in call}, set() if size == 16384 else {"operation", "session", "request"})
+        fake = chat_send(131073)
+        self.assertEqual((read_of(fake), fake.sign_in.calls), (("too large", 0), []))
+
+    def test_no_cookie_at_all_is_refused_before_one_body_byte_is_read(self):
+        for size in self.LONG:
+            with self.subTest(size=size):
+                fake = chat_send(size, without("Cookie"))
+                self.assertEqual(read_of(fake), (self.SESSION, 0))
+                self.assertEqual((fake.rfile.calls, fake.connection.timeouts, fake.sign_in.calls), (0, [], []))
+        self.assertEqual(read_of(chat_send(16384, without("Cookie"))), (16384, 16384))
+
+    def test_a_session_the_sign_in_service_refuses_is_refused_before_the_body(self):
+        stale = (("Cookie", "__Host-qd-approval=stale-session"),) + without("Cookie")
+        for size in self.LONG:
+            with self.subTest(size=size):
+                fake = chat_send(size, stale)
+                self.assertEqual(read_of(fake), (self.SESSION, 0))
+                self.assertEqual((fake.rfile.calls, asked(fake)), (0, [("authenticate", "GET", "/captain/api/chat")]))
+        fake = chat_send(16384, stale)
+        self.assertEqual((read_of(fake), fake.sign_in.calls), ((16384, 16384), []))
+
+    def test_a_wrong_origin_is_refused_before_the_body_and_before_the_session_check(self):
+        origins = {
+            "missing": None,
+            "another host": "https://other.invalid",
+            "plain http": "http://quarterdeck.invalid",
+            "a port": "https://quarterdeck.invalid:443",
+            "a trailing slash": "https://quarterdeck.invalid/",
+            "another case": "https://Quarterdeck.invalid",
+            "the word null": "null",
+            "empty": "",
+        }
+        for name, origin in origins.items():
+            pairs = without("Origin") + (() if origin is None else (("Origin", origin),))
+            for size in self.LONG:
+                with self.subTest(name=name, size=size):
+                    fake = chat_send(size, pairs)
+                    self.assertEqual(read_of(fake), (self.REFUSED, 0))
+                    self.assertEqual((fake.rfile.calls, fake.sign_in.calls), (0, []))
+            with self.subTest(name=name, size=16384):
+                fake = chat_send(16384, pairs)
+                self.assertEqual((read_of(fake), fake.sign_in.calls), ((16384, 16384), []))
+
+    def test_no_forwarded_host_cannot_be_matched_by_a_bare_origin(self):
+        pairs = without("Origin", without("X-Forwarded-Host")) + (("Origin", "https://"),)
+        for size in self.LONG:
+            with self.subTest(size=size):
+                fake = chat_send(size, pairs)
+                self.assertEqual((read_of(fake), fake.sign_in.calls), ((self.REFUSED, 0), []))
+
+    def test_an_origin_and_a_forwarded_host_that_both_name_another_host_are_refused_by_the_sign_in_service_host_check(self):
+        service = types.SimpleNamespace(trusted_proxy="127.0.0.1", forwarded_host="quarterdeck.invalid", _headers=approval_app.ApprovalApplication._headers)
+
+        class HostCheck(SignIn):
+            def __call__(self, payload):
+                self.calls.append(payload)
+                facts = payload["request"]
+                asked_as = approval_app.Request(facts["method"], facts["path"], dict(facts["headers"]), bytearray(), facts["peer"])
+                try:
+                    approval_app.ApprovalApplication._caller(service, asked_as)
+                except approval_security.ApprovalRefused:
+                    raise application.SessionRefused("Captain auth session was refused") from None
+                return {"ok": True, "csrf": "spare", "freshUntil": 0.0, "freshRequired": False}
+
+        other = (("Origin", "https://other.invalid"), ("X-Forwarded-Host", "other.invalid")) + without("Origin", without("X-Forwarded-Host"))
+        for size in self.LONG:
+            with self.subTest(size=size):
+                fake = chat_send(size, other, sign_in=HostCheck())
+                self.assertEqual(read_of(fake), (self.SESSION, 0))
+                self.assertEqual((fake.rfile.calls, asked(fake)), (0, [("authenticate", "GET", "/captain/api/chat")]))
+        fake = chat_send(16385, sign_in=HostCheck())
+        self.assertEqual((read_of(fake), asked(fake)), ((16385, 16385), [("authenticate", "GET", "/captain/api/chat")]))
+
+    def test_a_gate_that_says_too_many_or_fails_is_answered_before_the_body(self):
+        cases = (
+            (approval_security.ApprovalRateLimited("too many"), (429, {"error": "rate"})),
+            (approval_security.ApprovalRefused("Captain auth service is unavailable"), self.REFUSED),
+            (RuntimeError("stand-in failure"), (503, {"error": "request unavailable"})),
+        )
+        for error, expected in cases:
+            with self.subTest(error=type(error).__name__):
+                fake = chat_send(16385, sign_in=SignIn(error))
+                self.assertEqual(read_of(fake), (expected, 0))
+                self.assertEqual(fake.rfile.calls, 0)
+
+    def test_a_chat_that_is_not_mounted_reads_no_long_body(self):
+        for size in self.LONG:
+            with self.subTest(size=size):
+                fake = chat_send(size, mounted=False)
+                self.assertEqual((read_of(fake), fake.sign_in.calls), (((404, {"error": "not found"}), 0), []))
+
+    def test_a_refusal_before_the_body_is_one_log_line_for_the_send_route(self):
+        fake = chat_send(16385, without("Cookie"))
+        log = io.StringIO()
+        with contextlib.redirect_stderr(log):
+            with self.assertRaises(Exception) as caught:
+                server.Handler._body(fake)
+        self.assertEqual(answer_of(caught.exception.response), self.SESSION)
+        self.assertRegex(log.getvalue(), r"\AQD_CHAT_REPLY route=send status=401 error=session cause=SessionRefused ms=[0-9]+\n\Z")
+
+    def test_the_handler_sends_the_refusal_itself_and_never_calls_the_route(self):
+        fake = chat_send(16385, without("Cookie"))
+        sent = []
+        fake._body = lambda: server.Handler._body(fake)
+        fake._request = lambda body: server.Handler._request(fake, body)
+        fake._send = sent.append
+        fake.application.handle = lambda request: self.fail("the route was called")
+        with contextlib.redirect_stderr(io.StringIO()):
+            server.Handler._handle(fake)
+        self.assertEqual([answer_of(response) for response in sent], [self.SESSION])
+        self.assertEqual(fake.rfile.position, 0)
 
 
 class Wire:

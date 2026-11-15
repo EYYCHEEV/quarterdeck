@@ -4,8 +4,8 @@ import type { Bot } from "../domain/types";
 import type { Schedule } from "../platform/timer";
 import { Unavailable, type ChatChain, type ChatClient, type TokenList } from "./api-client";
 import { appendSent, botsOf, CHAT_WORDS, checkWords, CursorGone, keepSent, mergeAfter, mergeNewest, mergeOlder, rowsOf, threadOf, threadStale, type ChatListed, type ChatRead, type ChatReceipt, type UploadReceipt } from "./chat-client";
-import type { ChatMessage, ChatRow, ChatThread, Outgoing, Quote, SendPhase, SentChatMessage, SentQuote, ServerChatApi, ServerUploadVerdict, WireOutgoing } from "./chat-types";
-import { NotConfirmed, Refused, SignInRequired } from "./source";
+import type { ChatMessage, ChatRow, ChatThread, OnSendPhase, Outgoing, Quote, SentChatMessage, SentQuote, ServerChatApi, ServerUploadVerdict, WireOutgoing } from "./chat-types";
+import { MailBusy, NotConfirmed, Refused, SignInRequired } from "./source";
 
 export type ChatHost = {
   chat: ChatClient;
@@ -14,6 +14,7 @@ export type ChatHost = {
   access: () => void;
   read: <T>(request: () => Promise<T>) => Promise<T>;
   live: () => boolean;
+  away: () => boolean;
   arm: () => void;
   republish: () => void;
   token: () => TokenList;
@@ -39,7 +40,7 @@ const OPEN_SPACING = 5_000;
 const SEND_CAP = 55_000;
 const ATTEMPT_CAP = 25_000;
 const REREAD_CAP = 5_000;
-const RETRY_AFTER = 5_000;
+const RETRY_PAUSES: readonly number[] = [5_000, 15_000];
 const KEEP_UPLOAD = 55 * 60_000;
 
 const passing = (error: unknown): boolean => error instanceof NotConfirmed || error instanceof Unavailable || (error instanceof Refused && error.message === CHAT_WORDS.mail);
@@ -85,7 +86,6 @@ export function createServerChat(host: ChatHost): ChatPart {
   let busy = false;
   const marked = new Map<string, string>();
   const poked = new Set<string>();
-  let reading: Promise<void> | null = null;
   let sending = 0;
   const unshown = new Map<string, Map<string, ChatMessage>>();
   const readsStarted = new Map<string, number>();
@@ -111,6 +111,18 @@ export function createServerChat(host: ChatHost): ChatPart {
     new Promise((done) => {
       host.schedule(done, delay);
     });
+
+  const returns = new Set<() => void>();
+
+  const shown = (): Promise<void> =>
+    new Promise((done) => {
+      returns.add(done);
+    });
+
+  function release(): void {
+    for (const done of [...returns]) done();
+    returns.clear();
+  }
 
   function remember(bot: string, message: ChatMessage): void {
     if (message.clientId === undefined) return;
@@ -273,9 +285,8 @@ export function createServerChat(host: ChatHost): ChatPart {
     return threads.get(bot)?.messages.find((one) => one.clientId === clientId && one.from === "captain") ?? null;
   }
 
-  async function send(bot: string, outgoing: Outgoing, onPhase?: (phase: SendPhase) => void): Promise<SentChatMessage<ServerUploadVerdict>> {
+  async function send(bot: string, outgoing: Outgoing, onPhase?: OnSendPhase): Promise<SentChatMessage<ServerUploadVerdict>> {
     host.access();
-    if (reading) await reading;
     sending += 1;
     try {
       return await deliver(bot, outgoing, onPhase);
@@ -293,7 +304,7 @@ export function createServerChat(host: ChatHost): ChatPart {
     return wire;
   }
 
-  async function uploadOne(file: File, given: string | null, current: () => void): Promise<UploadReceipt> {
+  async function uploadOne(file: File, given: string | null, current: () => void, waitOut: (seconds: number) => Promise<void>): Promise<UploadReceipt> {
     let token = given;
     for (let tries = 1; ; tries += 1) {
       try {
@@ -304,14 +315,17 @@ export function createServerChat(host: ChatHost): ChatPart {
         return receipt;
       } catch (error) {
         current();
-        if (!lost(error)) throw error;
-        if (tries === 2) throw new Refused(CHAT_WORDS.mail);
+        if (error instanceof MailBusy) await waitOut(error.seconds);
+        else {
+          if (!lost(error)) throw error;
+          if (tries >= 2) throw new Refused(CHAT_WORDS.mail);
+        }
         token = null;
       }
     }
   }
 
-  async function uploaded(files: File[], current: () => void): Promise<{ ids: string[]; csrf: string }> {
+  async function uploaded(files: File[], current: () => void, waitOut: (seconds: number) => Promise<void>): Promise<{ ids: string[]; csrf: string }> {
     const ids: string[] = [];
     let token: string | null = null;
     for (const file of files) {
@@ -320,7 +334,7 @@ export function createServerChat(host: ChatHost): ChatPart {
         ids.push(held.id);
         continue;
       }
-      const receipt = await uploadOne(file, token, current);
+      const receipt = await uploadOne(file, token, current, waitOut);
       kept.set(file, { id: receipt.id, at: host.clock() });
       ids.push(receipt.id);
       token = receipt.csrf;
@@ -330,7 +344,7 @@ export function createServerChat(host: ChatHost): ChatPart {
     return { ids, csrf: token };
   }
 
-  async function deliver(bot: string, outgoing: Outgoing, onPhase?: (phase: SendPhase) => void): Promise<SentChatMessage<ServerUploadVerdict>> {
+  async function deliver(bot: string, outgoing: Outgoing, onPhase?: OnSendPhase): Promise<SentChatMessage<ServerUploadVerdict>> {
     host.access();
     const { quote, files, ...rest } = outgoing;
     const wire = quote === undefined ? undefined : wired(bot, quote);
@@ -342,18 +356,32 @@ export function createServerChat(host: ChatHost): ChatPart {
     const words = wire === undefined ? rest : { ...rest, quote: wire };
     let body: WireOutgoing = words;
     let chain: ChatChain | undefined;
+    let waited = false;
+    const busyWait = async (seconds: number): Promise<void> => {
+      if (waited) throw new Refused(CHAT_WORDS.mail);
+      waited = true;
+      onPhase?.("busy", seconds);
+      await pause(seconds * 1_000);
+      current();
+      if (host.away()) await shown();
+      current();
+    };
     if (files && files.length > 0) {
       if (!threads.get(bot)?.features.includes("files") || limits === null) throw new Refused(CHAT_WORDS.files);
       checkWords(bot, words, true);
       onPhase?.("uploading");
-      const sent = await uploaded(files, current);
+      const sent = await uploaded(files, current, async (seconds) => {
+        await busyWait(seconds);
+        onPhase?.("uploading");
+      });
       body = { ...words, files: sent.ids };
       chain = { csrf: sent.csrf };
       await host.credits(2);
       current();
       onPhase?.("sending");
     }
-    const ends = host.clock() + SEND_CAP;
+    let ends = host.clock() + SEND_CAP;
+    let resent = false;
     const left = (): number => ends - host.clock();
     for (let tries = 1; ; tries += 1) {
       let receipt: ChatReceipt;
@@ -362,17 +390,25 @@ export function createServerChat(host: ChatHost): ChatPart {
       } catch (error) {
         current();
         if (error instanceof Refused && error.message === CHAT_WORDS.expired) for (const file of files ?? []) kept.delete(file);
-        if (!passing(error)) throw error;
-        const found = error instanceof NotConfirmed && left() > 0 ? await foundSent(bot, outgoing.clientId, left()) : null;
-        current();
-        if (found) return sentOf(found);
-        if (tries === 2 || left() <= RETRY_AFTER) throw error;
-        await pause(RETRY_AFTER);
-        current();
-        const later = await foundSent(bot, outgoing.clientId, left());
-        current();
-        if (later) return sentOf(later);
-        if (left() <= 0) throw error;
+        if (error instanceof MailBusy) {
+          await busyWait(error.seconds);
+          resent = true;
+          onPhase?.("sending");
+          ends = host.clock() + SEND_CAP;
+        } else {
+          if (!passing(error)) throw error;
+          const found = error instanceof NotConfirmed && left() > 0 ? await foundSent(bot, outgoing.clientId, left()) : null;
+          current();
+          if (found) return sentOf(found);
+          const wait: number | undefined = resent ? undefined : RETRY_PAUSES[tries - 1];
+          if (wait === undefined || left() <= wait) throw error;
+          await pause(wait);
+          current();
+          const later = await foundSent(bot, outgoing.clientId, left());
+          current();
+          if (later) return sentOf(later);
+          if (left() <= 0) throw error;
+        }
         if (chain) {
           chain = { csrf: null };
           await host.credits(3);
@@ -449,15 +485,8 @@ export function createServerChat(host: ChatHost): ChatPart {
     busy = true;
     try {
       if (job.kind === "list") await readList(true);
-      else if (job.kind === "read") {
-        const flight = markRead(job.bot, job.upTo);
-        reading = flight;
-        try {
-          await flight;
-        } finally {
-          if (reading === flight) reading = null;
-        }
-      } else {
+      else if (job.kind === "read") await markRead(job.bot, job.upTo);
+      else {
         poked.delete(job.bot);
         const row = listed?.find((one) => one.bot.id === job.bot);
         if (row) tried.set(job.bot, stamp(row));
@@ -482,6 +511,7 @@ export function createServerChat(host: ChatHost): ChatPart {
 
   function back(): void {
     if (onScreen()) wanted = true;
+    release();
   }
 
   function clear(): void {
@@ -498,6 +528,7 @@ export function createServerChat(host: ChatHost): ChatPart {
     poked.clear();
     staleAt = null;
     limits = null;
+    release();
   }
 
   const api: ServerChatApi = {

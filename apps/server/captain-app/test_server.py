@@ -2,16 +2,24 @@ import contextlib
 import gzip
 import io
 import json
+import socket
 import tempfile
+import threading
 import time
+import types
 import unittest
+from email.message import Message
 from pathlib import Path
 from unittest import mock
 
 import application
 import approval_app
+import approval_security
+import auth_bridge
+import captain_auth_socket
 import chat_bot_list
 import server
+import test_signin_support
 
 
 ROOT = Path(__file__).resolve().parent
@@ -465,6 +473,360 @@ class ServerConfigTests(unittest.TestCase):
         self.assertTrue(owned_server.closed)
         self.assertTrue(updates.stopped)
         self.assertTrue(mailbox.closed)
+
+
+SIGNED = (
+    ("Cookie", "__Host-qd-approval=good-session"),
+    ("Origin", "https://quarterdeck.invalid"),
+    ("X-Forwarded-For", "192.0.2.10"),
+    ("X-Forwarded-Host", "quarterdeck.invalid"),
+    ("X-Forwarded-Proto", "https"),
+)
+CHAT_SEND = "/captain/api/chat?with=bot-a"
+REFUSED = (403, {"error": "request refused"})
+
+
+class SignIn:
+    def __init__(self, error=None):
+        self.calls = []
+        self.error = error
+
+    def __call__(self, payload):
+        self.calls.append(payload)
+        if self.error is not None:
+            raise self.error
+        if payload["session"] != "good-session":
+            raise application.SessionRefused("Captain auth session was refused")
+        return {"ok": True, "csrf": "spare", "freshUntil": 0.0, "freshRequired": False}
+
+
+def without(name, pairs=SIGNED):
+    return tuple(pair for pair in pairs if pair[0] != name)
+
+
+class BodyLimitTests(unittest.TestCase):
+    LONG = (16385, 131072)
+
+    @staticmethod
+    def framed(length, command="POST", path=CHAT_SEND, pairs=SIGNED, sign_in=None):
+        sign_in = SignIn() if sign_in is None else sign_in
+        headers = Message()
+        headers["Content-Length"] = str(length)
+        for name, value in pairs:
+            headers[name] = value
+        timeouts = []
+        connection = types.SimpleNamespace(settimeout=timeouts.append)
+        return types.SimpleNamespace(
+            headers=headers,
+            connection=connection,
+            rfile=io.BytesIO(b"x" * length),
+            command=command,
+            path=path,
+            timeouts=timeouts,
+            client_address=("127.0.0.1", 4000),
+            application=application.CardApplication(
+                auth_bridge.SocketApprovalGate(sign_in),
+                None,
+                None,
+                clock=lambda: 1000.0,
+            ),
+            sign_in=sign_in,
+        )
+
+    @staticmethod
+    def read_of(fake):
+        try:
+            body = server.Handler._body(fake)
+        except ValueError:
+            return "too large", fake.rfile.tell()
+        except Exception as error:
+            response = getattr(error, "response", None)
+            if response is None:
+                raise
+            return (response.status, json.loads(response.body)), fake.rfile.tell()
+        return len(body), fake.rfile.tell()
+
+    @staticmethod
+    def asked(fake):
+        return [
+            (call["operation"], call["request"]["method"], call["request"]["path"])
+            for call in fake.sign_in.calls
+        ]
+
+    def test_only_a_chat_send_is_read_up_to_128_kib(self):
+        limit = 131072
+        self.assertEqual(self.read_of(self.framed(limit)), (limit, limit))
+        over = self.framed(limit + 1)
+        self.assertEqual(
+            (self.read_of(over), over.timeouts, over.sign_in.calls),
+            (("too large", 0), [], []),
+        )
+        self.assertEqual((application.CHAT_SEND_BODY_BYTES, application.MAX_BODY_BYTES), (limit, 16384))
+
+    def test_every_other_request_is_still_read_up_to_16_kib(self):
+        others = (
+            ("GET", CHAT_SEND),
+            ("PUT", CHAT_SEND),
+            ("HEAD", CHAT_SEND),
+            ("post", CHAT_SEND),
+            ("POST", "/captain/api/chat/read?with=bot-a"),
+            ("POST", "/captain/api/chats"),
+            ("POST", "/captain/cards/card-1/comments"),
+            ("POST", "/captain/api/chat/?with=bot-a"),
+            ("POST", "/captain/api/%63hat?with=bot-a"),
+            ("POST", "//host.invalid/captain/api/chat?with=bot-a"),
+        )
+        for command, path in others:
+            with self.subTest(command=command, path=path):
+                self.assertEqual(self.read_of(self.framed(16384, command, path)), (16384, 16384))
+                over = self.framed(16385, command, path)
+                self.assertEqual((self.read_of(over), over.sign_in.calls), (("too large", 0), []))
+                self.assertEqual(application.body_limit(command, path), 16384)
+        self.assertEqual(application.body_limit("POST", CHAT_SEND), 131072)
+
+    def test_a_chat_send_with_no_valid_bot_in_its_address_stays_at_16_kib(self):
+        targets = (
+            "/captain/api/chat",
+            "/captain/api/chat?",
+            "/captain/api/chat?bot=bot-a",
+            "/captain/api/chat?with=",
+            "/captain/api/chat?with=bad_bot",
+            "/captain/api/chat?with=bot-a&with=bot-b",
+            "/captain/api/chat?with=bot-a&extra=1",
+            "/captain/api/chat?with=bot-a?with=bot-b",
+            "/captain/api/chat?with=bot-a#part",
+        )
+        for path in targets:
+            with self.subTest(path=path):
+                self.assertEqual(self.read_of(self.framed(16384, "POST", path)), (16384, 16384))
+                over = self.framed(16385, "POST", path)
+                self.assertEqual((self.read_of(over), over.sign_in.calls), (("too large", 0), []))
+                self.assertEqual(application.body_limit("POST", path), 16384)
+
+    def test_a_signed_long_send_is_read_after_one_session_check_shaped_as_a_read(self):
+        for size in (16384, 16385, 131072):
+            with self.subTest(size=size):
+                fake = self.framed(size)
+                self.assertEqual(self.read_of(fake), (size, size))
+                self.assertEqual(
+                    self.asked(fake),
+                    [] if size == 16384 else [("authenticate", "GET", CHAT_SEND)],
+                )
+
+    def test_no_cookie_at_all_is_refused_before_one_body_byte_is_read(self):
+        for size in self.LONG:
+            with self.subTest(size=size):
+                fake = self.framed(size, pairs=without("Cookie"))
+                self.assertEqual(self.read_of(fake), (REFUSED, 0))
+                self.assertEqual((fake.timeouts, fake.sign_in.calls), ([], []))
+        self.assertEqual(self.read_of(self.framed(16384, pairs=without("Cookie"))), (16384, 16384))
+
+    def test_a_session_the_sign_in_service_refuses_is_refused_before_the_body(self):
+        stale = (("Cookie", "__Host-qd-approval=stale-session"),) + without("Cookie")
+        for size in self.LONG:
+            with self.subTest(size=size):
+                fake = self.framed(size, pairs=stale)
+                self.assertEqual(self.read_of(fake), (REFUSED, 0))
+                self.assertEqual(self.asked(fake), [("authenticate", "GET", CHAT_SEND)])
+        fake = self.framed(16384, pairs=stale)
+        self.assertEqual((self.read_of(fake), fake.sign_in.calls), ((16384, 16384), []))
+
+    def test_a_wrong_origin_is_refused_before_the_body_and_before_the_session_check(self):
+        origins = {
+            "missing": None,
+            "another host": "https://other.invalid",
+            "plain http": "http://quarterdeck.invalid",
+            "a port": "https://quarterdeck.invalid:443",
+            "a trailing slash": "https://quarterdeck.invalid/",
+            "another case": "https://Quarterdeck.invalid",
+            "the word null": "null",
+            "empty": "",
+        }
+        for name, origin in origins.items():
+            pairs = without("Origin") + (() if origin is None else (("Origin", origin),))
+            for size in self.LONG:
+                with self.subTest(name=name, size=size):
+                    fake = self.framed(size, pairs=pairs)
+                    self.assertEqual(self.read_of(fake), (REFUSED, 0))
+                    self.assertEqual((fake.timeouts, fake.sign_in.calls), ([], []))
+            with self.subTest(name=name, size=16384):
+                fake = self.framed(16384, pairs=pairs)
+                self.assertEqual((self.read_of(fake), fake.sign_in.calls), ((16384, 16384), []))
+
+    def test_no_forwarded_host_cannot_be_matched_by_a_bare_origin(self):
+        pairs = without("Origin", without("X-Forwarded-Host")) + (("Origin", "https://"),)
+        for size in self.LONG:
+            with self.subTest(size=size):
+                fake = self.framed(size, pairs=pairs)
+                self.assertEqual((self.read_of(fake), fake.sign_in.calls), ((REFUSED, 0), []))
+
+    def test_a_gate_that_says_too_many_or_fails_is_answered_before_the_body(self):
+        cases = (
+            (approval_security.ApprovalRateLimited("too many"), (429, {"error": "request refused"})),
+            (approval_security.ApprovalRefused("Captain auth service is unavailable"), REFUSED),
+            (RuntimeError("stand-in failure"), (503, {"error": "request unavailable"})),
+        )
+        for error, expected in cases:
+            with self.subTest(error=type(error).__name__):
+                fake = self.framed(16385, sign_in=SignIn(error))
+                self.assertEqual(self.read_of(fake), (expected, 0))
+
+    def test_the_handler_sends_the_refusal_itself_and_never_calls_the_route(self):
+        fake = self.framed(16385, pairs=without("Cookie"))
+        sent = []
+        fake._body = lambda: server.Handler._body(fake)
+        fake._request = lambda body: server.Handler._request(fake, body)
+        fake._send = sent.append
+        fake.application.handle = lambda request: self.fail("the route was called")
+        server.Handler._handle(fake)
+        self.assertEqual([(response.status, json.loads(response.body)) for response in sent], [REFUSED])
+        self.assertEqual(fake.rfile.tell(), 0)
+
+
+class _NoGoogle:
+    def authorization_url(self, **values):
+        raise AssertionError("Google is not used by these tests")
+
+    def exchange_code(self, code, verifier, nonce):
+        raise AssertionError("Google is not used by these tests")
+
+
+class SignInServiceAdmissionTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(dir=ROOT)
+        self.addCleanup(self.temporary.cleanup)
+        root = Path(self.temporary.name)
+        root.chmod(0o700)
+        state = approval_security.ApprovalState(
+            root / "approval.sqlite",
+            b"s" * 32,
+            clock=lambda: 1000.0,
+        )
+        self.token = state.start_browser_session(
+            "account-user-subject",
+            device_hash=None,
+            kind="Other browser",
+            fresh_from=1000.0,
+        ).token
+        approval = object.__new__(approval_app.ApprovalApplication)
+        approval.state = state
+        approval.sign_in = test_signin_support.production_sign_in(state, _NoGoogle())
+        self.addCleanup(setattr, approval.sign_in, "_authority", None)
+        approval.trusted_proxy = "127.0.0.1"
+        approval.public_origin = "https://quarterdeck.invalid"
+        approval.forwarded_host = "quarterdeck.invalid"
+        service = object.__new__(captain_auth_socket.CaptainAuthSocketService)
+        service.sign_in = approval.sign_in
+        service.application = approval
+        self.asked = []
+
+        def answer(payload):
+            self.asked.append((payload["operation"], payload["request"]["method"], payload["request"]["path"]))
+            try:
+                csrf, fresh_until = service._authorize(payload)
+            except approval_security.FreshSignInRequired:
+                raise
+            except Exception:
+                raise application.SessionRefused("Captain auth session was refused") from None
+            return {"ok": True, "csrf": csrf, "freshUntil": fresh_until, "freshRequired": False}
+
+        self.answer = answer
+
+    def pairs(self, host="quarterdeck.invalid", token=None):
+        return (
+            ("Cookie", f"__Host-qd-approval={self.token if token is None else token}"),
+            ("Origin", "https://" + host),
+            ("X-Forwarded-For", "192.0.2.10"),
+            ("X-Forwarded-Host", host),
+            ("X-Forwarded-Proto", "https"),
+        )
+
+    def read(self, size, pairs):
+        fake = BodyLimitTests.framed(size, pairs=pairs, sign_in=self.answer)
+        return BodyLimitTests.read_of(fake), fake.timeouts
+
+    def test_the_sign_in_service_itself_admits_a_signed_long_send_asked_as_a_read(self):
+        for size in BodyLimitTests.LONG:
+            with self.subTest(size=size):
+                self.assertEqual(self.read(size, self.pairs()), ((size, size), [5]))
+        self.assertEqual(self.asked, [("authenticate", "GET", CHAT_SEND)] * 2)
+
+    def test_an_origin_and_a_forwarded_host_that_both_name_another_host_are_refused_by_the_sign_in_service(self):
+        for size in BodyLimitTests.LONG:
+            with self.subTest(size=size):
+                self.assertEqual(self.read(size, self.pairs("other.invalid")), ((REFUSED, 0), []))
+        self.assertEqual(self.asked, [("authenticate", "GET", CHAT_SEND)] * 2)
+
+    def test_the_sign_in_service_itself_refuses_a_session_it_does_not_know(self):
+        unknown = self.token[::-1]
+        self.assertNotEqual(unknown, self.token)
+        for size in BodyLimitTests.LONG:
+            with self.subTest(size=size):
+                self.assertEqual(self.read(size, self.pairs(token=unknown)), ((REFUSED, 0), []))
+        self.assertEqual(self.asked, [("authenticate", "GET", CHAT_SEND)] * 2)
+
+
+class EarlyAnswerOverASocketTests(unittest.TestCase):
+    FOLLOW = (
+        f"GET {CHAT_SEND} HTTP/1.1\r\n"
+        "Host: quarterdeck.invalid\r\n"
+        "Cookie: __Host-qd-approval=good-session\r\n"
+        "\r\n"
+    ).encode("ascii")
+    HEAD = (
+        f"POST {CHAT_SEND} HTTP/1.1\r\n"
+        "Host: quarterdeck.invalid\r\n"
+        "Connection: keep-alive\r\n"
+        "Content-Type: application/json\r\n"
+        "Content-Length: 16385\r\n"
+        "Origin: https://quarterdeck.invalid\r\n"
+        "X-Forwarded-For: 192.0.2.10\r\n"
+        "X-Forwarded-Host: quarterdeck.invalid\r\n"
+        "X-Forwarded-Proto: https\r\n"
+        "\r\n"
+    ).encode("ascii")
+
+    def setUp(self):
+        self.sign_in = SignIn()
+        app = application.CardApplication(
+            auth_bridge.SocketApprovalGate(self.sign_in),
+            None,
+            None,
+            clock=lambda: 1000.0,
+        )
+        self.httpd = server.PrivateServer(("127.0.0.1", 0), server.handler_for(app))
+        self.addCleanup(self.httpd.server_close)
+        threading.Thread(
+            target=self.httpd.serve_forever,
+            kwargs={"poll_interval": 0.05},
+            daemon=True,
+        ).start()
+        self.addCleanup(self.httpd.shutdown)
+
+    def exchange(self, data):
+        received = b""
+        with socket.create_connection(self.httpd.server_address, timeout=5) as connection:
+            try:
+                connection.sendall(data)
+            except OSError:
+                pass
+            try:
+                while chunk := connection.recv(4096):
+                    received += chunk
+            except OSError:
+                pass
+        return received
+
+    def test_a_refused_long_send_closes_the_connection_and_what_follows_it_is_never_a_request(self):
+        body = self.FOLLOW + b"x" * (16385 - len(self.FOLLOW))
+        received = self.exchange(self.HEAD + body + self.FOLLOW)
+        head, _, answer = received.partition(b"\r\n\r\n")
+        self.assertEqual(received.count(b"HTTP/1."), 1)
+        self.assertEqual((int(head.split(b" ", 2)[1]), json.loads(answer)), REFUSED)
+        self.assertEqual(self.sign_in.calls, [])
+        self.assertEqual(self.exchange(self.FOLLOW).count(b"HTTP/1."), 1)
+        self.assertEqual(BodyLimitTests.asked(self), [("authenticate", "GET", CHAT_SEND)])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

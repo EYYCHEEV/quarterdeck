@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
-import { useNewActivity } from "../../data/chat-hooks";
+import { useChatRows, useNewActivity } from "../../data/chat-hooks";
 import { useQd, useWorld } from "../../data/hooks";
 import { quoteInChat, readSession, useMailQuery, writeSession } from "../../data/session";
 import { botCalled } from "../../domain/bots";
@@ -442,6 +442,7 @@ export function MailScreen({ mailRef, wide }: { mailRef: string | null; wide: bo
   const { world, failed, retry } = useWorld();
   const phone = usePhone() && !wide;
   const dot = useNewActivity();
+  if (__QD_SOURCE__ === "server" && __QD_CHAT__ === "on") useChatRows();
   const [query, setQuery] = useMailQuery();
   const now = qd.now();
   const view = world ? viewMail(world, query, now) : null;

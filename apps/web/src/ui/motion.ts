@@ -11,6 +11,8 @@ export const ALERT = "alert";
 
 export const rowMotion = (entry: { id: string; fresh: boolean; leaving: boolean }, drop: (id: string) => void) => motion()?.rowMotion(entry, drop);
 
+export const lineMotion = (entry: { id: string; fresh: boolean; leaving: boolean }, drop: (id: string) => void) => motion()?.lineMotion(entry, drop);
+
 export const stillScreen = () => motion()?.stillScreen();
 
 export function useShown<T>(items: readonly T[], idOf: (item: T) => string, reset: string, tailOnly = false) {

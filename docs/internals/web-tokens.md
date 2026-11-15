@@ -10,7 +10,7 @@ These checks in `npm run lint` guard this:
 - `apps/web/tools/colour-check.mjs` fails on any colour value in the app outside `theme.css`. A test may assert only a value that `theme.css` holds. The example pages in `apps/web/src/data/pages/` are bot content and keep their own colours.
 - `apps/web/tools/lint/no-glass.mjs` fails on any glass styling: a backdrop filter, a blur, or the old frost names.
 - `apps/web/tools/lint/raw-values.mjs` fails on a raw length, time or colour outside the theme, on a class from a switched-off scale, and on a see-through colour step such as `bg-panel/50`.
-- `apps/web/tools/lint/theme-vars.mjs` fails when code reads a theme variable that the built stylesheet does not define in both looks.
+- `apps/web/tools/lint/theme-vars.mjs` fails when code reads a theme variable that the built stylesheet does not define in both looks. It also fails when code reads a name that starts like the theme's names (for example `--color-` or `--spacing-`) and that nothing defines, such as a misspelt theme name.
 - `apps/web/tools/lint/motion.mjs` fails on a motion time or easing written in code.
 
 ## Old layout measures

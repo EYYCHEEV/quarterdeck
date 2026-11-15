@@ -24,10 +24,10 @@ test("a new version of the card keeps his choice by letter and his note, and dro
   assert.deepEqual([gone.choice, gone.note], [null, "After Friday."]);
 });
 
-test("the bot's pick is chosen when the card opens, so Send names it", () => {
+test("the bot's pick is chosen when the card opens, so the key reads Answer and names it", () => {
   const state = startAnswer(twoWay);
   assert.deepEqual(state.choice, { kind: "option", letter: "A" });
-  assert.deepEqual(sendButton(twoWay, state), { text: "Send A", disabled: false });
+  assert.deepEqual(sendButton(twoWay, state), { text: "Answer A", disabled: false });
 });
 
 test("while it sends, the button names the choice with the flow's words", () => {
@@ -37,18 +37,18 @@ test("while it sends, the button names the choice with the flow's words", () => 
   assert.equal(sendingText(run(approval, [{ type: "send", at: 0, choice: { kind: "approve" } }])), "Sending ...");
 });
 
-test("a card without a pick starts with nothing chosen and a disabled Send", () => {
+test("a card without a pick starts with nothing chosen and a disabled Answer key", () => {
   const state = startAnswer(noPick);
   assert.equal(state.choice, null);
-  assert.deepEqual(sendButton(noPick, state), { text: "Send", disabled: true });
-  assert.deepEqual(sendButton(noPick, run(noPick, [{ type: "choose", choice: { kind: "option", letter: "B" } }])), { text: "Send B", disabled: false });
+  assert.deepEqual(sendButton(noPick, state), { text: "Answer", disabled: true });
+  assert.deepEqual(sendButton(noPick, run(noPick, [{ type: "choose", choice: { kind: "option", letter: "B" } }])), { text: "Answer B", disabled: false });
 });
 
-test("None of these changes the note's placeholder and Send's label, and never asks to confirm", () => {
+test("None of these changes the note's placeholder and the key's label, and never asks to confirm", () => {
   const state = run(twoWay, [{ type: "choose", choice: { kind: "none" } }]);
   assert.equal(notePlaceholder(state), "Your own answer, or what would work instead");
   assert.equal(notePlaceholder(startAnswer(twoWay)), "Add a note (optional)");
-  assert.deepEqual(sendButton(twoWay, state), { text: "Send: None of these", disabled: false });
+  assert.deepEqual(sendButton(twoWay, state), { text: "Answer: None of these", disabled: false });
   assert.equal(run(twoWay, [{ type: "send", at: 0 }], state).phase, "sending");
 });
 
