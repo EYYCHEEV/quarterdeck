@@ -89,7 +89,7 @@ Example rows, mark-read request and answer:
 - **The server fills** `from` and `at` for a message quote. The owner never sends them; a send with them is refused.
 - **One refusal for every quote fault:** status 422, body exactly `{"error": "quote"}` (unknown id, message not in that thread, text not inside, too long, empty, card not the owner's, unknown version, malformed). The app shows its own words on the failed row with no Try again, for example "Not sent: that message is no longer in this chat." The server never writes words for the screen.
 - **To the bot:** the `chat/1` mail carries the same `quote` object the owner sent, as in the sample `mail-chat-1-with-quote-and-file.json`. A bot's own quote that fails these checks becomes `null` in the thread (the strict and bounded rule), and the message still shows.
-- **Until `"quote"` is listed,** the long-press menu shows Copy only, so a missing Reply is not a bug.
+- **Until `"quote"` is listed,** the long-press menu shows Copy and Select, and the Select bar shows Copy and Done, so a missing Reply is not a bug.
 
 ## D. Working signal
 
