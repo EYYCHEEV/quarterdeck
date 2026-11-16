@@ -5,9 +5,13 @@ import { defineProject, type TestProjectInlineConfiguration } from "vite-plus/te
 import { defineConfig } from "vite-plus";
 
 const pinnedChrome = process.env.QD_CHROME ?? "";
+const browserArgs = ["--enable-precise-memory-info"];
 
 const browserProject = {
   extends: true,
+  optimizeDeps: {
+    include: ["zustand", "zustand/vanilla", "vite-plus/test/browser"],
+  },
   test: {
     name: "browser",
     include: ["src/**/*.browser.test.tsx"],
@@ -16,9 +20,13 @@ const browserProject = {
     browser: {
       enabled: true,
       headless: true,
-      provider: playwright(
-        pinnedChrome === "" ? {} : { launchOptions: { executablePath: pinnedChrome } },
-      ),
+      provider: playwright({
+        launchOptions:
+          pinnedChrome === ""
+            ? { args: browserArgs }
+            : { args: browserArgs, executablePath: pinnedChrome },
+        contextOptions: { permissions: ["clipboard-write"] },
+      }),
       instances: [{ browser: "chromium" }],
       screenshotFailures: false,
     },
