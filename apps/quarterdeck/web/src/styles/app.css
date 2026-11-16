@@ -1754,7 +1754,6 @@ kbd {
   .shell {
     grid-template-columns: var(--side-w) var(--list-w) minmax(0, 1fr);
   }
-  /* Chat screens: the chat in the middle, "On this channel" on the right (Captain, Nov 14). */
   .shell.list-slim {
     --list-w: var(--list-w-slim);
     grid-template-columns: var(--side-w) minmax(0, 1fr) var(--list-w);

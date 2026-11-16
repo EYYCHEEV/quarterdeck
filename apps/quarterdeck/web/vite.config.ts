@@ -4,6 +4,8 @@ import { playwright } from "vite-plus/test/browser-playwright";
 import { defineProject, type TestProjectInlineConfiguration } from "vite-plus/test/config";
 import { defineConfig } from "vite-plus";
 
+const pinnedChrome = process.env.QD_CHROME ?? "";
+
 const browserProject = {
   extends: true,
   test: {
@@ -14,7 +16,9 @@ const browserProject = {
     browser: {
       enabled: true,
       headless: true,
-      provider: playwright(),
+      provider: playwright(
+        pinnedChrome === "" ? {} : { launchOptions: { executablePath: pinnedChrome } },
+      ),
       instances: [{ browser: "chromium" }],
       screenshotFailures: false,
     },

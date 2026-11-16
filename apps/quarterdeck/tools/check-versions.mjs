@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 
+import { countList } from "./list-counts.mjs";
 import { checkLock, makeList, readList } from "./versions.mjs";
 
 const [mode, ...rest] = process.argv.slice(2);
@@ -24,7 +25,10 @@ if (mode === "check" && rest.length === 2) {
   const [pnpmLockPath, commit, listPath] = rest;
   const text = makeList(readFileSync(pnpmLockPath), commit);
   writeFileSync(listPath, text);
-  console.log(`wrote ${listPath}: ${text.split("\n").length - 2} name and version pairs, each with its sha512`);
+  const counts = countList(text);
+  console.log(
+    `wrote ${listPath}: ${counts.pairs} name and version pairs, ${counts.sha512} with a sha512, ${counts.none} with none`,
+  );
 } else {
   console.error("usage: check-versions.mjs check <package-lock.json> <list file>");
   console.error("       check-versions.mjs list <T3 Code pnpm-lock.yaml> <T3 Code commit> <list file>");
