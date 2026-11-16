@@ -21,6 +21,7 @@ jobs:
       contents: read
     outputs:
       web: ${{ steps.web.outputs.web }}
+      app: ${{ steps.app.outputs.app }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -34,6 +35,15 @@ jobs:
             echo "web=true" >> "$GITHUB_OUTPUT"
           else
             echo "web=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Look for the new app
+        id: app
+        run: |
+          if [ -f apps/quarterdeck/package.json ]; then
+            echo "app=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "app=false" >> "$GITHUB_OUTPUT"
           fi
 
   python:
@@ -421,6 +431,136 @@ jobs:
             exit 1
           fi
 
+  app-static:
+    name: New app static checks
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Fetch the pinned Node
+        run: python3 tools/ci/fetch-pinned node
+
+      - name: Put the pinned Node first on the path
+        run: echo "$RUNNER_TEMP/pinned/node-v22.21.0-linux-x64/bin" >> "$GITHUB_PATH"
+
+      - name: Install from the lock file
+        working-directory: apps/quarterdeck
+        run: npm ci --ignore-scripts
+
+      - name: Verify registry signatures
+        working-directory: apps/quarterdeck
+        run: npm audit signatures
+
+      - name: Version list check
+        working-directory: apps/quarterdeck
+        run: npm run check:versions
+
+      - name: Typecheck
+        working-directory: apps/quarterdeck
+        run: npm run typecheck
+
+      - name: Lint
+        working-directory: apps/quarterdeck
+        run: npm run lint
+
+      - name: Unit tests
+        working-directory: apps/quarterdeck
+        run: npm run test:unit
+
+  app-build:
+    name: New app build twice
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Fetch the pinned Node
+        run: python3 tools/ci/fetch-pinned node
+
+      - name: Put the pinned Node first on the path
+        run: echo "$RUNNER_TEMP/pinned/node-v22.21.0-linux-x64/bin" >> "$GITHUB_PATH"
+
+      - name: Install from the lock file
+        working-directory: apps/quarterdeck
+        run: npm ci --ignore-scripts
+
+      - name: Verify registry signatures
+        working-directory: apps/quarterdeck
+        run: npm audit signatures
+
+      - name: Build twice and compare
+        working-directory: apps/quarterdeck
+        run: |
+          npm run build:a
+          npm run build:b
+          npm run check:builds
+
+      - name: Bundle check
+        working-directory: apps/quarterdeck
+        run: npm run check:bundle
+
+      - name: Print the hash of the first build
+        working-directory: apps/quarterdeck
+        run: |
+          out="$RUNNER_TEMP/app-bundle"
+          mkdir -p "$out"
+          tar --sort=name --mtime='1970-01-01 00:00:00 UTC' --owner=0 --group=0 --numeric-owner --mode='u=rwX,go=rX' -cf "$out/app.tar" -C dist-a .
+          sum=$(sha256sum "$out/app.tar" | cut -d' ' -f1)
+          printf 'new app bundle for %s: sha256 %s\n' "$GITHUB_SHA" "$sum" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  app-browser:
+    name: New app browser tests
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Fetch the pinned Node and browser
+        run: python3 tools/ci/fetch-pinned node chrome-headless-shell
+
+      - name: Point QD_CHROME at the pinned browser
+        run: echo "QD_CHROME=$RUNNER_TEMP/pinned/chrome-headless-shell-linux64/chrome-headless-shell" >> "$GITHUB_ENV"
+
+      - name: Put the pinned Node first on the path
+        run: echo "$RUNNER_TEMP/pinned/node-v22.21.0-linux-x64/bin" >> "$GITHUB_PATH"
+
+      - name: Install from the lock file
+        working-directory: apps/quarterdeck
+        run: npm ci --ignore-scripts
+
+      - name: Verify registry signatures
+        working-directory: apps/quarterdeck
+        run: npm audit signatures
+
+      - name: Refuse to run without the pinned browser
+        run: test -x "$QD_CHROME"
+
+      - name: Browser tests
+        working-directory: apps/quarterdeck
+        run: npm run test:browser
+
   pr-title:
     name: pr-title
     if: github.event_name == 'pull_request'
@@ -449,12 +589,16 @@ jobs:
       - web-browser
       - web-design
       - web-design-selftest
+      - app-static
+      - app-build
+      - app-browser
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     permissions: {}
     env:
       CHANGES_RESULT: ${{ needs.changes.result }}
       WEB: ${{ needs.changes.outputs.web }}
+      APP: ${{ needs.changes.outputs.app }}
       PYTHON_RESULT: ${{ needs.python.result }}
       SERVER_RESULT: ${{ needs.server.result }}
       EXTENSION_RESULT: ${{ needs.extension.result }}
@@ -465,6 +609,9 @@ jobs:
       WEB_BROWSER_RESULT: ${{ needs.web-browser.result }}
       WEB_DESIGN_RESULT: ${{ needs.web-design.result }}
       WEB_DESIGN_SELFTEST_RESULT: ${{ needs.web-design-selftest.result }}
+      APP_STATIC_RESULT: ${{ needs.app-static.result }}
+      APP_BUILD_RESULT: ${{ needs.app-build.result }}
+      APP_BROWSER_RESULT: ${{ needs.app-browser.result }}
     steps:
       - name: Require every lane to pass
         run: |
@@ -477,5 +624,13 @@ jobs:
             expected=skipped
           fi
           for result in "$WEB_STATIC_RESULT" "$WEB_BUILD_RESULT" "$WEB_BROWSER_RESULT" "$WEB_DESIGN_RESULT" "$WEB_DESIGN_SELFTEST_RESULT"; do
+            test "$result" = "$expected" || exit 1
+          done
+          if [ "$APP" = "true" ]; then
+            expected=success
+          else
+            expected=skipped
+          fi
+          for result in "$APP_STATIC_RESULT" "$APP_BUILD_RESULT" "$APP_BROWSER_RESULT"; do
             test "$result" = "$expected" || exit 1
           done

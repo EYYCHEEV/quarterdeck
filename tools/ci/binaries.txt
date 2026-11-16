@@ -1,3 +1,7 @@
+08949f728dc52d528e69b1667d15c89a5686a4ee9a296ff90983985f99c380f7  apps/quarterdeck/web/fonts/ibm-plex-mono/ibm-plex-mono-latin-400-normal.woff2
+0d1f0b8d0722224e32e9f28261bdc86c79115be73444ae5eceb73976a1bcdf83  apps/quarterdeck/web/fonts/ibm-plex-mono/ibm-plex-mono-latin-600-normal.woff2
+3b646991d30055a93a4ecc499713d4347953a74a947ecab435ab72070cbdab0e  apps/quarterdeck/web/fonts/ibm-plex-sans/ibm-plex-sans-latin-400-normal.woff2
+8960851d691c054ed38e259bdcf1a6190d157b4203ed5bb32c632a863fb8ec2f  apps/quarterdeck/web/fonts/ibm-plex-sans/ibm-plex-sans-latin-600-normal.woff2
 33d751d4b976dbda8e0f4c4c2e9d81d763f3254b891f2bf6c033f7ebc48adcf6  apps/web/fixtures/evidence/media/fixture-picture-1.png
 a63f2d020079147af0cdee03615cd814220140146e80fcadd9f9dcc653e20b0f  apps/web/fixtures/evidence/media/fixture-picture-2.png
 e2aea47bf528fee9d8db49b76d68c4b59d9ceeca0aff00c5512ad3c158f521e0  apps/web/fixtures/evidence/media/fixture-picture-3.png

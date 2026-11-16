@@ -1,0 +1,273 @@
+@font-face {
+  font-family: "Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../../fonts/ibm-plex-mono/ibm-plex-mono-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Plex Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("../../fonts/ibm-plex-mono/ibm-plex-mono-latin-600-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Plex Sans";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../../fonts/ibm-plex-sans/ibm-plex-sans-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Plex Sans";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("../../fonts/ibm-plex-sans/ibm-plex-sans-latin-600-normal.woff2") format("woff2");
+}
+
+:root,
+[data-look="dark"] {
+  color-scheme: dark;
+
+  --bg: #05090d;
+  --bg-sunk: #0a1118;
+  --surface: #101a24;
+  --surface-key: #172431;
+  --line: #1f303f;
+  --line-strong: #4d7196;
+
+  --ink: #e3edf3;
+  --ink-2: #9db0bf;
+  --ink-3: #6f8596;
+
+  --hand: #5cc8ff;
+  --hand-edge: #397c9e;
+  --on-hand: #021520;
+  --wait: #ffb224;
+  --wait-fill: #ffb224;
+  --wait-tint: #2d2411;
+  --on-wait: #1a1000;
+  --stop: #ff6b5e;
+  --moving: #7ddc7a;
+  --new: #b39cff;
+
+  --scrim: rgb(0 0 0 / 0.62);
+  --glow: 0 0 10px rgb(92 200 255 / 0.45);
+  --glow-text: 0 0 8px rgb(92 200 255 / 0.5);
+  --glow-box: 0 0 0 1px rgb(92 200 255 / 0.25), 0 0 28px rgb(92 200 255 / 0.14);
+  --scan: repeating-linear-gradient(to bottom, transparent 0 2px, rgb(227 237 243 / 0.025) 2px 3px);
+  --lift: 0 10px 30px rgb(0 0 0 / 0.55);
+}
+
+[data-look="light"] {
+  color-scheme: light;
+
+  --bg: #edf1f3;
+  --bg-sunk: #e3e9ed;
+  --surface: #ffffff;
+  --surface-key: #d7e0e6;
+  --line: #c3cfd8;
+  --line-strong: #6b8090;
+
+  --ink: #0c1820;
+  --ink-2: #3d5060;
+  --ink-3: #566979;
+
+  --hand: #0a6399;
+  --hand-edge: #0b4c75;
+  --on-hand: #ffffff;
+  --wait: #8f5200;
+  --wait-fill: #ffb224;
+  --wait-tint: #f0e7d2;
+  --on-wait: #1a1000;
+  --stop: #b3261e;
+  --moving: #1a6e2e;
+  --new: #5b3fc4;
+
+  --scrim: rgb(12 24 32 / 0.46);
+  --glow: none;
+  --glow-text: none;
+  --glow-box: 0 0 0 1px rgb(10 99 153 / 0.3);
+  --scan: repeating-linear-gradient(to bottom, transparent 0 2px, rgb(12 24 32 / 0.03) 2px 3px);
+  --lift: 0 10px 30px rgb(12 24 32 / 0.18);
+}
+
+:root,
+[data-look] {
+  --focus-ring: var(--focus-w) solid var(--hand);
+  --thumb-fill: linear-gradient(160deg, var(--line-strong) 0 56%, var(--ink-3) 56% 100%);
+  --float-fade: linear-gradient(var(--bg) 62%, transparent);
+}
+
+:root {
+  --font-mono: "Plex Mono", "DejaVu Sans Mono", ui-monospace, Menlo, monospace;
+  --font-sans: "Plex Sans", "DejaVu Sans", system-ui, sans-serif;
+
+  --text-label: 12px;
+  --text-meta: 13px;
+  --text-body: 15px;
+  --text-lead: 17px;
+  --text-title: 20px;
+  --text-display: 26px;
+  --text-cover: 40px;
+  --text-ref: 0.87em;
+
+  --weight-regular: 400;
+  --weight-strong: 600;
+
+  --leading-none: 1;
+  --leading-cover: 1.1;
+  --leading-tight: 1.2;
+  --leading-snug: 1.35;
+  --leading-input: 1.45;
+  --leading-body: 1.5;
+  --leading-term: 1.75;
+  --leading-kind: 1.9;
+
+  --track-key: 0.06em;
+  --track-label: 0.08em;
+  --track-brand: 0.14em;
+
+  --measure: 76ch;
+  --measure-msg: 72ch;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-hair: 2px;
+  --nudge: 1px;
+  --gap-mark: 6px;
+  --pad-kbd-y: 3px;
+  --pad-kbd-x: 5px;
+  --pad-tile-y: 5px;
+  --pad-tile-x: 6px;
+  --pad-line: 6px;
+  --pad-row: 7px;
+  --pad-row-tight: 5px;
+
+  --radius-tag: 2px;
+  --radius-key: 4px;
+  --radius-panel: 6px;
+  --radius-sheet: 14px;
+  --radius-round: 999px;
+  --radius-circle: 50%;
+
+  --line-w: 1px;
+  --line-w-rail: 2px;
+  --line-w-key: 3px;
+  --rail-w: 3px;
+  --line-w-icon: 1.75;
+  --line-w-mark: 2;
+  --focus-w: 2px;
+  --focus-offset: 2px;
+
+  --dur-press: 80ms;
+  --dur-panel: 160ms;
+  --dur-blink: 1060ms;
+  --dur-tick: 1200ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --press-shift: 1px;
+  --fade-low: 0.35;
+  --turn-diamond: rotate(45deg) scale(0.7);
+
+  --hit: 44px;
+  --row: 36px;
+  --key-h: 34px;
+  --file-h: 40px;
+  --float: 48px;
+  --float-pad: 76px;
+  --side-w: 272px;
+  --list-w: 432px;
+  --list-w-slim: 352px;
+  --list-w-nav: 232px;
+  --channel-w: 384px;
+  --gutter: 84px;
+  --split-bots: 1.35fr;
+  --z-float: 5;
+  --z-layer: 20;
+
+  --icon: 20px;
+  --brand-mark: 28px;
+  --glyph: 10px;
+  --glyph-diamond: 12px;
+  --glyph-half: 6px;
+  --mark-new: 7px;
+  --dot: 11px;
+  --thumb: 28px;
+  --cursor-w: 0.55em;
+  --cursor-h: 1.1em;
+  --input-min: 60px;
+  --progress-h: 3px;
+  --switch-w: 52px;
+  --switch-h: 28px;
+  --switch-knob: 20px;
+
+  --col-glyph: 14px;
+  --col-pri: 30px;
+  --col-kind: 76px;
+  --col-hint: 200px;
+
+  --basis-pick: 140px;
+  --basis-plain: 160px;
+  --basis-search: 190px;
+  --basis-note: 200px;
+  --basis-caption: 240px;
+  --basis-station: 260px;
+  --basis-title: 280px;
+
+  --files-max: 10;
+  --files-rows: 2;
+  --files-strip-max: calc(var(--file-h) * var(--files-rows) + var(--space-2));
+  --menu-w: 288px;
+  --menu-top: 56px;
+  --modal-w: 440px;
+  --sheet-w: 520px;
+  --handle-w: 40px;
+  --handle-h: 4px;
+  --stage-h: 420px;
+
+  --cover-max: 1120px;
+  --tile-swatch: 150px;
+  --tile-link: 200px;
+  --tile-pair: 210px;
+  --tile-signal: 230px;
+  --tile-look: 300px;
+  --tile-spec: 260px;
+  --swatch-h: 40px;
+  --bar-h: 16px;
+  --bar-w: 56px;
+
+  --bp-cover-cols: 760px;
+  --bp-wide: 1100px;
+  --bp-mac: 1400px;
+  --bp-card-cols: 720px;
+  --bp-bots-cols: 760px;
+}
+
+@media (max-width: 1399px), (pointer: coarse) {
+  :root {
+    --row: 44px;
+    --key-h: 44px;
+    --file-h: 46px;
+    --side-w: 224px;
+    --list-w: 416px;
+    --list-w-slim: 296px;
+    --list-w-nav: 200px;
+    --gutter: 72px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-press: 0ms;
+    --dur-panel: 0ms;
+    --dur-blink: 0ms;
+    --dur-tick: 0ms;
+  }
+}
