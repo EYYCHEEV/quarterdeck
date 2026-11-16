@@ -919,7 +919,7 @@ class WorkflowContextsTest(unittest.TestCase):
                 self.assertEqual((result.returncode, result.stdout), (0, ""))
 
     def test_the_original_ci_has_exactly_the_three_reported_findings(self):
-        original = without_ignore_refusal(without_scan_config(without_server_lane(WORKFLOW.read_text(encoding="utf-8"))))
+        original = without_ignore_refusal(without_scan_config(without_server_lane(without_app_lanes(WORKFLOW.read_text(encoding="utf-8")))))
         original = original.replace(
             "      - name: Fetch main for the design comparison\n"
             "        run: git -c credential.helper= fetch --no-tags --depth=1 origin main:refs/remotes/origin/main\n\n",
@@ -1019,6 +1019,56 @@ def without_server_lane(text):
     return text
 
 
+APP_LANE_PIECES = (
+    "      app: ${{ steps.app.outputs.app }}\n",
+    "\n"
+    "      - name: Look for the new app\n"
+    "        id: app\n"
+    "        run: |\n"
+    "          if [ -f apps/quarterdeck/package.json ]; then\n"
+    '            echo "app=true" >> "$GITHUB_OUTPUT"\n'
+    "          else\n"
+    '            echo "app=false" >> "$GITHUB_OUTPUT"\n'
+    "          fi\n",
+    "      - app-static\n      - app-build\n      - app-browser\n",
+    "      APP: ${{ needs.changes.outputs.app }}\n",
+    "      APP_STATIC_RESULT: ${{ needs.app-static.result }}\n",
+    "      APP_BUILD_RESULT: ${{ needs.app-build.result }}\n",
+    "      APP_BROWSER_RESULT: ${{ needs.app-browser.result }}\n",
+    '          if [ "$APP" = "true" ]; then\n'
+    "            expected=success\n"
+    "          else\n"
+    "            expected=skipped\n"
+    "          fi\n"
+    '          for result in "$APP_STATIC_RESULT" "$APP_BUILD_RESULT" "$APP_BROWSER_RESULT"; do\n'
+    '            test "$result" = "$expected" || exit 1\n'
+    "          done\n",
+)
+
+
+def without_app_lanes(text):
+    start = text.find("  app-static:\n")
+    if start < 0:
+        return text
+    text = text[:start] + text[text.index("  pr-title:\n", start):]
+    for piece in APP_LANE_PIECES:
+        if text.count(piece) != 1:
+            raise ValueError("unexpected new app lanes: not found exactly once: " + piece.strip().splitlines()[0])
+        text = text.replace(piece, "")
+    return text
+
+
+class AppLanesReconstructionTest(unittest.TestCase):
+    def test_a_changed_piece_is_refused_and_never_silently_kept(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        for piece in APP_LANE_PIECES:
+            with self.subTest(piece=piece.strip().splitlines()[0]):
+                self.assertEqual(text.count(piece), 1)
+                changed = text.replace(piece, piece[:-1] + " \n", 1)
+                with self.assertRaisesRegex(ValueError, "unexpected new app lanes"):
+                    without_app_lanes(changed)
+
+
 class WorkflowNullValuesTest(unittest.TestCase):
     check = WorkflowContextsTest.check
     workflow = WorkflowContextsTest.workflow
@@ -1038,7 +1088,7 @@ class WorkflowNullValuesTest(unittest.TestCase):
         self.assertEqual((result.returncode, result.stdout, result.stderr), (0, "", ""))
 
     def test_the_r1_workflow_has_exactly_one_null_finding(self):
-        original = ci_with_selftest_env(without_ignore_refusal(without_scan_config(without_server_lane(WORKFLOW.read_text(encoding="utf-8")))))
+        original = ci_with_selftest_env(without_ignore_refusal(without_scan_config(without_server_lane(without_app_lanes(WORKFLOW.read_text(encoding="utf-8"))))))
         original = original.replace(
             "      - name: Fetch main for the design comparison\n"
             "        run: git -c credential.helper= fetch --no-tags --depth=1 origin main:refs/remotes/origin/main\n\n",
