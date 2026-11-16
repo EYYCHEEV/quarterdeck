@@ -1,0 +1,16 @@
+{
+  "name": "@quarterdeck/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@effect/atom-react": "4.1.2",
+    "@quarterdeck/client-runtime": "0.0.0",
+    "@quarterdeck/contracts": "0.0.0",
+    "@tanstack/react-router": "1.170.10",
+    "effect": "4.1.3",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zustand": "5.0.14"
+  }
+}
