@@ -17,6 +17,11 @@ const unitProject = {
 
 export default defineConfig({
   root: import.meta.dirname,
+  lint: {
+    options: {
+      denyWarnings: true,
+    },
+  },
   test: {
     projects: [defineProject(unitProject)],
   },
