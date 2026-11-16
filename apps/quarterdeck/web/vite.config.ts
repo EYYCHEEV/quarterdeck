@@ -4,10 +4,19 @@ import { playwright } from "vite-plus/test/browser-playwright";
 import { defineProject, type TestProjectInlineConfiguration } from "vite-plus/test/config";
 import { defineConfig } from "vite-plus";
 
-const pinnedChrome = process.env.QD_CHROME ?? "";
 const browserArgs = ["--enable-precise-memory-info"];
 
-const browserProject = {
+function pinnedChrome(): string {
+  const path = process.env.QD_CHROME;
+  if (path === undefined || path === "") {
+    throw new Error(
+      "QD_CHROME is not set: point it at the pinned Chrome for Testing headless shell (see docs/operations/CI.md)",
+    );
+  }
+  return path;
+}
+
+const browserProject = () => ({
   extends: true,
   optimizeDeps: {
     include: ["zustand", "zustand/vanilla", "vite-plus/test/browser"],
@@ -21,19 +30,16 @@ const browserProject = {
       enabled: true,
       headless: true,
       provider: playwright({
-        launchOptions:
-          pinnedChrome === ""
-            ? { args: browserArgs }
-            : { args: browserArgs, executablePath: pinnedChrome },
+        launchOptions: { args: browserArgs, executablePath: pinnedChrome() },
         contextOptions: { permissions: ["clipboard-write"] },
       }),
       instances: [{ browser: "chromium" }],
       screenshotFailures: false,
     },
   },
-} satisfies TestProjectInlineConfiguration;
+}) satisfies TestProjectInlineConfiguration;
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   root: import.meta.dirname,
   plugins: [react({ compiler: true }), tailwindcss()],
   build: {
@@ -44,6 +50,6 @@ export default defineConfig({
     assetsInlineLimit: 0,
   },
   test: {
-    projects: [defineProject(browserProject)],
+    projects: mode === "test" ? [defineProject(browserProject())] : [],
   },
-});
+}));
