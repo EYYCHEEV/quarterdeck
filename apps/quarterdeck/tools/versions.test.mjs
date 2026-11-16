@@ -60,7 +60,7 @@ const fromRegistry = (name, version, integrity) => ({
 const lockWith = (packages) => ({
   lockfileVersion: 3,
   packages: {
-    "": { name: "made-up" },
+    "": { name: "made-up", workspaces: ["packages/inner"] },
     "packages/inner": { name: "@made-up/inner", version: "0.0.0" },
     "node_modules/@made-up/inner": { resolved: "packages/inner", link: true },
     "node_modules/@scope/alpha": {
@@ -73,6 +73,10 @@ const lockWith = (packages) => ({
 });
 
 const breachesOf = (packages) => checkLock(lockWith(packages), readList(LIST)).breaches;
+
+const carrier = { ...fromRegistry("zeta", "2.0.0", "sha512-zeta"), bundleDependencies: ["inside"] };
+
+const inside = { version: "0.0.1", inBundle: true };
 
 it("reads only the packages part of a pnpm lockfile, sorted, once each, with each sha512", () => {
   expect(pinsFromPnpmLock(PNPM_LOCK)).toEqual(PINS);
@@ -97,13 +101,13 @@ it("reads the list back with its commit, its hash, its pins and its names", () =
   expect([...list.names]).toEqual(["@scope/alpha", "tarred", "zeta"]);
 });
 
-it("passes a lockfile whose every registry package is a pinned name, version and sha512", () => {
+it("passes pinned registry packages, a declared workspace's link and a bundled part its parent lists", () => {
   const result = checkLock(
     lockWith({
-      "node_modules/zeta": fromRegistry("zeta", "2.0.0", "sha512-zeta"),
+      "node_modules/zeta": carrier,
       "node_modules/@scope/alpha/node_modules/zeta": fromRegistry("zeta", "1.9.0", "sha512-old"),
       "node_modules/other-name": { name: "zeta", ...fromRegistry("zeta", "2.0.0", "sha512-zeta") },
-      "node_modules/zeta/node_modules/inside": { version: "0.0.1", inBundle: true },
+      "node_modules/zeta/node_modules/inside": inside,
     }),
     readList(LIST),
   );
@@ -157,6 +161,97 @@ it("stops on a package from another source, without a sha512, or with a loose ve
 it("stops on a link that leaves the folder", () => {
   expect(breachesOf({ "node_modules/far": { resolved: "file:../far", link: true } })).toEqual([
     "link to an outside source: node_modules/far -> file:../far",
+  ]);
+});
+
+it("stops on a link that climbs out of the folder, or starts at the root", () => {
+  for (const resolved of ["../far", "packages/inner/../../../far", "/far"]) {
+    expect(breachesOf({ "node_modules/far": { resolved, link: true } })).toEqual([
+      `link to an outside source: node_modules/far -> ${resolved}`,
+    ]);
+  }
+});
+
+it("stops on a link to a folder that is not a declared workspace", () => {
+  expect(
+    breachesOf({
+      "packages/other": { name: "@made-up/other", version: "0.0.0" },
+      "node_modules/@made-up/other": { resolved: "packages/other", link: true },
+    }),
+  ).toEqual([
+    "link to a folder that is not a declared workspace: node_modules/@made-up/other -> packages/other",
+    "folder that is not a declared workspace: packages/other",
+  ]);
+});
+
+it("stops on a link under another name than its workspace's own", () => {
+  expect(breachesOf({ "node_modules/zeta": { resolved: "packages/inner", link: true } })).toEqual([
+    "link under another name than its workspace's own: node_modules/zeta -> packages/inner",
+  ]);
+});
+
+it("stops on a bundled part that its parent does not list", () => {
+  expect(
+    breachesOf({
+      "node_modules/zeta": fromRegistry("zeta", "2.0.0", "sha512-zeta"),
+      "node_modules/zeta/node_modules/inside": inside,
+    }),
+  ).toEqual(["bundled part that its parent does not list: inside@0.0.1 (node_modules/zeta/node_modules/inside)"]);
+  expect(
+    breachesOf({
+      "node_modules/zeta": carrier,
+      "node_modules/zeta/node_modules/other": inside,
+    }),
+  ).toEqual(["bundled part that its parent does not list: other@0.0.1 (node_modules/zeta/node_modules/other)"]);
+});
+
+it("stops on a bundled part under a parent that is not a pinned registry package", () => {
+  const fault = "bundled part under a parent that is not a pinned registry package";
+  expect(
+    breachesOf({
+      "node_modules/omega": { ...fromRegistry("omega", "1.0.0", "sha512-omega"), bundleDependencies: ["inside"] },
+      "node_modules/omega/node_modules/inside": inside,
+    }),
+  ).toEqual([
+    "name not in T3 Code's list: omega@1.0.0 (node_modules/omega)",
+    `${fault}: inside@0.0.1 (node_modules/omega/node_modules/inside)`,
+  ]);
+  expect(
+    breachesOf({
+      "node_modules/zeta": { ...carrier, integrity: "sha512-swapped" },
+      "node_modules/zeta/node_modules/inside": inside,
+    }),
+  ).toEqual([
+    "integrity differs from T3 Code's: zeta@2.0.0 (node_modules/zeta)",
+    `${fault}: inside@0.0.1 (node_modules/zeta/node_modules/inside)`,
+  ]);
+  expect(breachesOf({ "node_modules/inside": inside })).toEqual([
+    `${fault}: inside@0.0.1 (node_modules/inside)`,
+  ]);
+  expect(
+    breachesOf({
+      "node_modules/zeta": carrier,
+      "node_modules/zeta/node_modules/inside": inside,
+      "node_modules/zeta/node_modules/inside/node_modules/deeper": inside,
+    }),
+  ).toEqual([`${fault}: deeper@0.0.1 (node_modules/zeta/node_modules/inside/node_modules/deeper)`]);
+});
+
+it("stops on a bundled part or a workspace folder that names a source of its own", () => {
+  expect(
+    breachesOf({
+      "node_modules/zeta": carrier,
+      "node_modules/zeta/node_modules/inside": { ...inside, resolved: "https://example.com/inside.tgz" },
+    }),
+  ).toEqual(["bundled part with a source of its own: inside@0.0.1 (node_modules/zeta/node_modules/inside)"]);
+  expect(
+    breachesOf({ "packages/inner": { name: "@made-up/inner", resolved: "https://example.com/inner.tgz" } }),
+  ).toEqual(["folder with a source of its own: packages/inner"]);
+});
+
+it("stops on a folder outside node_modules that is not a declared workspace", () => {
+  expect(breachesOf({ "vendor/thing": { resolved: "https://example.com/thing.tgz" } })).toEqual([
+    "folder that is not a declared workspace: vendor/thing",
   ]);
 });
 

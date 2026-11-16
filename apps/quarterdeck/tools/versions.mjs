@@ -9,7 +9,6 @@ const PNPM_KEY = /^ {2}'?((?:@[^/@\s']+\/)?[^@\s'(]+)@([^(:'\s]+)/;
 const PNPM_INTEGRITY = /^ {4}resolution: \{integrity: (sha512-[A-Za-z0-9+/=]+)/;
 const PIN = /^(\S+@[^@\s]+) (sha512-[A-Za-z0-9+/=]+|none)$/;
 const EXACT = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
-const OUTSIDE = /^(?:https?:|git|file:)/;
 
 export function pinsFromPnpmLock(text) {
   const pins = new Map();
@@ -66,27 +65,91 @@ export function readList(text) {
   return { commit: header?.[1] ?? "", lockSha256: header?.[2] ?? "", pins, names, faults };
 }
 
+const isInside = (path) =>
+  !path.includes("\\") &&
+  !path.includes(":") &&
+  path.split("/").every((part) => part !== "" && part !== "." && part !== "..");
+
+function isWorkspace(packages, path) {
+  const declared = packages[""]?.workspaces;
+  return isInside(path) && Array.isArray(declared) && declared.includes(path);
+}
+
+function isPinned(pins, key, entry) {
+  const name = entry.name ?? key.slice(key.lastIndexOf(MODULES) + MODULES.length);
+  const integrity = entry.integrity ?? "";
+  return (
+    entry.link !== true &&
+    entry.inBundle !== true &&
+    (entry.resolved ?? "").startsWith(REGISTRY) &&
+    integrity.startsWith("sha512-") &&
+    pins.get(`${name}@${entry.version ?? ""}`) === integrity
+  );
+}
+
+function folderFault(packages, key, entry) {
+  if (key !== "" && !isWorkspace(packages, key)) return "folder that is not a declared workspace";
+  if (entry.resolved !== undefined || entry.integrity !== undefined) {
+    return "folder with a source of its own";
+  }
+  return "";
+}
+
+function linkFault(packages, key, resolved) {
+  if (!isInside(resolved)) return "link to an outside source";
+  if (!isWorkspace(packages, resolved)) return "link to a folder that is not a declared workspace";
+  if (key !== `${MODULES}${packages[resolved]?.name ?? ""}`) {
+    return "link under another name than its workspace's own";
+  }
+  return "";
+}
+
+function bundledFault(packages, pins, key, entry) {
+  const cut = key.lastIndexOf(`/${MODULES}`);
+  const parentKey = key.slice(0, Math.max(cut, 0));
+  const parent = packages[parentKey];
+  if (entry.resolved !== undefined || entry.integrity !== undefined) {
+    return "bundled part with a source of its own";
+  }
+  if (parent === undefined || !parentKey.includes(MODULES) || !isPinned(pins, parentKey, parent)) {
+    return "bundled part under a parent that is not a pinned registry package";
+  }
+  const carried = parent.bundleDependencies;
+  if (!Array.isArray(carried) || !carried.includes(key.slice(cut + 1 + MODULES.length))) {
+    return "bundled part that its parent does not list";
+  }
+  return "";
+}
+
 export function checkLock(lock, list) {
   const breaches = [...list.faults];
   const links = [];
   const bundled = [];
   let registry = 0;
-  const entries = Object.entries(lock.packages ?? {}).sort(([left], [right]) =>
+  const packages = lock.packages ?? {};
+  const entries = Object.entries(packages).sort(([left], [right]) =>
     left < right ? -1 : left > right ? 1 : 0,
   );
   for (const [key, entry] of entries) {
     const cut = key.lastIndexOf(MODULES);
-    if (cut === -1) continue;
+    if (cut === -1) {
+      const fault = folderFault(packages, key, entry);
+      if (fault !== "") breaches.push(`${fault}: ${key}`);
+      continue;
+    }
     const name = entry.name ?? key.slice(cut + MODULES.length);
     const version = entry.version ?? "";
     const resolved = entry.resolved ?? "";
     if (entry.link === true) {
       links.push(`${key} -> ${resolved}`);
-      if (OUTSIDE.test(resolved)) breaches.push(`link to an outside source: ${key} -> ${resolved}`);
+      const fault = linkFault(packages, key, resolved);
+      if (fault !== "") breaches.push(`${fault}: ${key} -> ${resolved}`);
       continue;
     }
     if (entry.inBundle === true) {
       bundled.push(`${name}@${version} (${key})`);
+      const fault = bundledFault(packages, list.pins, key, entry);
+      if (fault !== "") breaches.push(`${fault}: ${name}@${version} (${key})`);
       continue;
     }
     registry += 1;
