@@ -101,6 +101,27 @@ class NoCommentsTest(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("tool:2 comment", result.stdout)
 
+    def test_module_and_commonjs_typescript_comments_fail(self):
+        with TempRepo() as repo:
+            repo.add("a.mts", "const a = 1;\n// note\n")
+            repo.add("b.cts", "const b = 1;\n/* note */\n")
+            result = self.run_check(repo)
+            self.assertEqual(result.returncode, 1, result.stdout)
+            self.assertIn("a.mts:2 comment", result.stdout)
+            self.assertIn("b.cts:2 comment", result.stdout)
+
+    def test_the_workflow_runs_the_comment_check_on_every_pull_request_and_never_behind_a_gate(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("\non:\n  pull_request:\n  push:\n", text)
+        job = re.search(r"^  no-comments:\n(.*?)^  [A-Za-z0-9_-]+:\n", text, re.DOTALL | re.MULTILINE)
+        self.assertIsNotNone(job)
+        lines = job.group(1).splitlines()
+        self.assertEqual([line for line in lines if line.lstrip().startswith(("if:", "- if:", "needs:", "continue-on-error:"))], [])
+        self.assertIn("        run: python3 tools/ci/no-comments", lines)
+        self.assertIn("      - no-comments\n", text)
+        self.assertIn("      COMMENTS_RESULT: ${{ needs.no-comments.result }}\n", text)
+        self.assertRegex(text, r'\n          for result in [^\n]*"\$COMMENTS_RESULT"[^\n]*; do\n            test "\$result" = success \|\| exit 1\n')
+
 
 class FileKindsTest(unittest.TestCase):
     def run_check(self, repo):
@@ -919,7 +940,7 @@ class WorkflowContextsTest(unittest.TestCase):
                 self.assertEqual((result.returncode, result.stdout), (0, ""))
 
     def test_the_original_ci_has_exactly_the_three_reported_findings(self):
-        original = without_ignore_refusal(without_scan_config(without_server_lane(without_app_lanes(WORKFLOW.read_text(encoding="utf-8")))))
+        original = without_ignore_refusal(without_scan_config(without_server_lane(without_app_lanes(without_path_map(WORKFLOW.read_text(encoding="utf-8"))))))
         original = original.replace(
             "      - name: Fetch main for the design comparison\n"
             "        run: git -c credential.helper= fetch --no-tags --depth=1 origin main:refs/remotes/origin/main\n\n",
@@ -1060,13 +1081,125 @@ def without_app_lanes(text):
 
 class AppLanesReconstructionTest(unittest.TestCase):
     def test_a_changed_piece_is_refused_and_never_silently_kept(self):
-        text = WORKFLOW.read_text(encoding="utf-8")
+        text = without_path_map(WORKFLOW.read_text(encoding="utf-8"))
         for piece in APP_LANE_PIECES:
             with self.subTest(piece=piece.strip().splitlines()[0]):
                 self.assertEqual(text.count(piece), 1)
                 changed = text.replace(piece, piece[:-1] + " \n", 1)
                 with self.assertRaisesRegex(ValueError, "unexpected new app lanes"):
                     without_app_lanes(changed)
+
+
+PATH_MAP_WEB_JOBS = ("web-static", "web-build", "web-browser", "web-design", "web-design-selftest")
+PATH_MAP_APP_JOBS = ("app-static", "app-build", "app-browser")
+PATH_MAP_JOBS = PATH_MAP_WEB_JOBS + PATH_MAP_APP_JOBS
+PATH_MAP_TRACES = ("ci-changes", "steps.gates", "_GATE")
+PATH_MAP_PIECES = (
+    (
+        "".join("      " + job + ": ${{ steps.gates.outputs." + job + " }}\n" for job in PATH_MAP_JOBS),
+        "      web: ${{ steps.web.outputs.web }}\n"
+        "      app: ${{ steps.app.outputs.app }}\n",
+    ),
+    (
+        "          fetch-depth: 2\n"
+        "          persist-credentials: false\n"
+        "\n"
+        "      - name: Choose the jobs this change needs\n"
+        "        id: gates\n"
+        "        env:\n"
+        "          EVENT: ${{ github.event_name }}\n"
+        "        run: python3 tools/ci/ci-changes\n",
+        "          persist-credentials: false\n"
+        "\n"
+        "      - name: Look for the web app\n"
+        "        id: web\n"
+        "        run: |\n"
+        "          if [ -f apps/web/package.json ]; then\n"
+        '            echo "web=true" >> "$GITHUB_OUTPUT"\n'
+        "          else\n"
+        '            echo "web=false" >> "$GITHUB_OUTPUT"\n'
+        "          fi\n"
+        "\n"
+        "      - name: Look for the new app\n"
+        "        id: app\n"
+        "        run: |\n"
+        "          if [ -f apps/quarterdeck/package.json ]; then\n"
+        '            echo "app=true" >> "$GITHUB_OUTPUT"\n'
+        "          else\n"
+        '            echo "app=false" >> "$GITHUB_OUTPUT"\n'
+        "          fi\n",
+    ),
+    *(
+        (
+            "    if: needs.changes.outputs." + job + " == 'true'\n",
+            "    if: needs.changes.outputs." + lane + " == 'true'\n",
+        )
+        for lane, jobs in (("web", PATH_MAP_WEB_JOBS), ("app", PATH_MAP_APP_JOBS))
+        for job in jobs
+    ),
+    (
+        "".join(
+            "      " + job.upper().replace("-", "_") + "_GATE: ${{ needs.changes.outputs." + job + " }}\n"
+            for job in PATH_MAP_JOBS
+        ),
+        "      WEB: ${{ needs.changes.outputs.web }}\n"
+        "      APP: ${{ needs.changes.outputs.app }}\n",
+    ),
+    (
+        "          pair() {\n"
+        '            case "$2" in\n'
+        '              true) test "$3" = success && return 0 ;;\n'
+        '              false) test "$3" = skipped && return 0 ;;\n'
+        "            esac\n"
+        "            echo \"qd-check: $1 has the gate '$2' and the result '$3'\"\n"
+        "            return 1\n"
+        "          }\n"
+        + "".join(
+            "          pair " + job + ' "$' + job.upper().replace("-", "_") + '_GATE" "$' + job.upper().replace("-", "_") + '_RESULT" || exit 1\n'
+            for job in PATH_MAP_JOBS
+        ),
+        '          if [ "$WEB" = "true" ]; then\n'
+        "            expected=success\n"
+        "          else\n"
+        "            expected=skipped\n"
+        "          fi\n"
+        '          for result in "$WEB_STATIC_RESULT" "$WEB_BUILD_RESULT" "$WEB_BROWSER_RESULT" "$WEB_DESIGN_RESULT" "$WEB_DESIGN_SELFTEST_RESULT"; do\n'
+        '            test "$result" = "$expected" || exit 1\n'
+        "          done\n"
+        '          if [ "$APP" = "true" ]; then\n'
+        "            expected=success\n"
+        "          else\n"
+        "            expected=skipped\n"
+        "          fi\n"
+        '          for result in "$APP_STATIC_RESULT" "$APP_BUILD_RESULT" "$APP_BROWSER_RESULT"; do\n'
+        '            test "$result" = "$expected" || exit 1\n'
+        "          done\n",
+    ),
+)
+
+
+def without_path_map(text):
+    if not any(trace in text for trace in PATH_MAP_TRACES):
+        return text
+    for new, old in PATH_MAP_PIECES:
+        if text.count(new) != 1:
+            raise ValueError("unexpected path map: not found exactly once: " + new.strip().splitlines()[0])
+        text = text.replace(new, old)
+    for trace in PATH_MAP_TRACES:
+        if trace in text:
+            raise ValueError("unexpected path map: still there after it was taken out: " + trace)
+    return text
+
+
+class PathMapReconstructionTest(unittest.TestCase):
+    def test_a_changed_piece_is_refused_and_never_silently_kept(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        for new, _ in PATH_MAP_PIECES:
+            label = new.strip().splitlines()[0]
+            self.assertEqual(text.count(new), 1, label)
+            changed = text.replace(new, new[:-1] + " \n", 1)
+            with self.assertRaisesRegex(ValueError, "unexpected path map", msg=label):
+                without_path_map(changed)
 
 
 class WorkflowNullValuesTest(unittest.TestCase):
@@ -1088,7 +1221,7 @@ class WorkflowNullValuesTest(unittest.TestCase):
         self.assertEqual((result.returncode, result.stdout, result.stderr), (0, "", ""))
 
     def test_the_r1_workflow_has_exactly_one_null_finding(self):
-        original = ci_with_selftest_env(without_ignore_refusal(without_scan_config(without_server_lane(without_app_lanes(WORKFLOW.read_text(encoding="utf-8"))))))
+        original = ci_with_selftest_env(without_ignore_refusal(without_scan_config(without_server_lane(without_app_lanes(without_path_map(WORKFLOW.read_text(encoding="utf-8")))))))
         original = original.replace(
             "      - name: Fetch main for the design comparison\n"
             "        run: git -c credential.helper= fetch --no-tags --depth=1 origin main:refs/remotes/origin/main\n\n",

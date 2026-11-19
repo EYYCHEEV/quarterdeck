@@ -9,7 +9,7 @@ import tokenize
 
 HASH = chr(35)
 SCRIPT_SHEBANGS = (HASH + "!/usr/bin/env python3", HASH + "!/usr/bin/python3")
-TS_FAMILY = {".ts", ".tsx", ".js", ".mjs", ".cjs", ".jsx"}
+TS_FAMILY = {".ts", ".tsx", ".js", ".mjs", ".cjs", ".jsx", ".mts", ".cts"}
 STYLE_FAMILY = {".css"}
 HTML_FAMILY = {".html", ".htm"}
 YAML_FAMILY = {".yml", ".yaml"}

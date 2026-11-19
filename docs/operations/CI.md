@@ -19,11 +19,23 @@ The stdlib-only `tools/ci/workflow-contexts` checker runs through the CI tool te
 | web-design | `design:check` as four parallel jobs, one per size: 390, 744x1133, 1133x744 and 1512. The 390 job also measures the first screen | As web-browser | 40 min each |
 | web-design-selftest | The design check at 390 with a planted spill. It must exit with code 1 and print a failure line, or the lane fails | As web-browser | 30 min |
 | leaks | gitleaks 8.30.1: `dir` on the checkout and `git` on the pull request's own commits. It loads `tools/ci/gitleaks.toml`: the default rules plus three per-file exceptions for the named digest fields listed there, for `generic-api-key` only. Other keys, files and rules still fail, as do values in the six named fields that are not exactly 64 lowercase hex characters. A different 64-character hex value, or a repeated matching line for one of those six fields, passes this public scan. The maintainers' own scan before each push checks those fields with the default rules, without this file. Inline allow markers are not honored. gitleaks always reads a `.gitleaksignore` file at the top of the checkout, whatever its options say, so this repository keeps none, and the scan step fails right before it runs gitleaks if one is there. A pull request that changes `tools/ci/` or `.github/` can change what this job runs, so those changes are reviewed as code. Output is redacted: the rule id and the path only | The tarball and its checksums file, by sha256 in `tools/ci/pins.json` | 10 min |
-| no-comments | Python by its tokenizer; `.ts`, `.tsx`, `.js` and `.mjs` by a check for a line that starts with a comment; `.css`, `.html`, `.yml` and shell files by their own checks. The keep-list is empty. Inside `apps/web`, the web-static lane also runs the syntax-aware TypeScript scanner through `npm run lint`. The lane checks file kinds too: no symlinks or special files, and every binary file listed by sha256 in `tools/ci/binaries.txt` | Scripts in this repository | 5 min |
+| no-comments | Python by its tokenizer; `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, `.mts` and `.cts` by a check for a line that starts with a comment; `.css`, `.html`, `.yml` and shell files by their own checks. The keep-list is empty. Inside `apps/web`, the web-static lane also runs the syntax-aware TypeScript scanner through `npm run lint`. The lane checks file kinds too: no symlinks or special files, and every binary file listed by sha256 in `tools/ci/binaries.txt` | Scripts in this repository | 5 min |
 | pr-title | The title is a conventional commit title | None | 2 min |
 | qd-check | The aggregate. It always runs. It fails if any lane failed or was skipped when it should not have been | None | 2 min |
 
 Path filters only choose which lanes do real work. `qd-check` always runs, so a required check is never left unreported.
+
+On a pull request the `changes` job runs `tools/ci/ci-changes`. It reads the files the pull request would change on `main` and counts a filtered lane as needed only when one of them is in a place that lane's app reads:
+
+- The five web lanes (`web-static`, `web-build`, `web-browser`, `web-design` and `web-design-selftest`) run for a change in `apps/web`, or in `licenses`, `deploy/qd-web` or `deploy/captain-app`, which the font test in `apps/web` reads.
+- The three new app lanes (`app-static`, `app-build` and `app-browser`) run for a change in `apps/quarterdeck`, or in `apps/server`, which the new app's bundle check loads.
+- All eight run for a change in `.github` or `tools/ci`, to a lock file in any folder, or to any file at the top of the repository. A lock file is a file named `package-lock.json`, `npm-shrinkwrap.json`, `pnpm-lock.yaml` or `pylock.toml`, a name that starts with `pylock.` and ends with `.toml`, or any name that ends with `.lock` or `.lockb`.
+- All eight run on every push to `main`, and whenever the changed files cannot be read.
+- An app with no `package.json` keeps its lanes off.
+
+The map starts in observe mode. In observe mode a lane that is not needed still runs: every filtered lane of an app that has its `package.json` is turned on, as it was before the map. The `changes` job only names the lanes the map would have skipped, by job name, in its log and in its job summary. After a day of pull requests that log is read for wrong skips. A later change then sets `CI_CHANGES_MODE` to `enforce` for the `changes` job. Only that exact value makes a lane that is not needed skip. Any other value, or none, is observe mode.
+
+The other lanes (`python`, `server`, `extension`, `no-comments`, `leaks` and `pr-title`) are not filtered. `qd-check` requires each filtered lane to have succeeded when it was turned on and to have been skipped when it was not.
 
 ## Required checks
 
