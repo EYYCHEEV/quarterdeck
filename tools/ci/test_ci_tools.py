@@ -101,6 +101,27 @@ class NoCommentsTest(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("tool:2 comment", result.stdout)
 
+    def test_module_and_commonjs_typescript_comments_fail(self):
+        with TempRepo() as repo:
+            repo.add("a.mts", "const a = 1;\n// note\n")
+            repo.add("b.cts", "const b = 1;\n/* note */\n")
+            result = self.run_check(repo)
+            self.assertEqual(result.returncode, 1, result.stdout)
+            self.assertIn("a.mts:2 comment", result.stdout)
+            self.assertIn("b.cts:2 comment", result.stdout)
+
+    def test_the_workflow_runs_the_comment_check_on_every_pull_request_and_never_behind_a_gate(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("\non:\n  pull_request:\n  push:\n", text)
+        job = re.search(r"^  no-comments:\n(.*?)^  [A-Za-z0-9_-]+:\n", text, re.DOTALL | re.MULTILINE)
+        self.assertIsNotNone(job)
+        lines = job.group(1).splitlines()
+        self.assertEqual([line for line in lines if line.lstrip().startswith(("if:", "- if:", "needs:", "continue-on-error:"))], [])
+        self.assertIn("        run: python3 tools/ci/no-comments", lines)
+        self.assertIn("      - no-comments\n", text)
+        self.assertIn("      COMMENTS_RESULT: ${{ needs.no-comments.result }}\n", text)
+        self.assertRegex(text, r'\n          for result in [^\n]*"\$COMMENTS_RESULT"[^\n]*; do\n            test "\$result" = success \|\| exit 1\n')
+
 
 class FileKindsTest(unittest.TestCase):
     def run_check(self, repo):
