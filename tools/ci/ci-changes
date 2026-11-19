@@ -1,0 +1,89 @@
+#!/usr/bin/env python3
+
+import os
+import pathlib
+import subprocess
+import sys
+
+WEB_JOBS = ("web-static", "web-build", "web-browser", "web-design", "web-design-selftest")
+APP_JOBS = ("app-static", "app-build", "app-browser")
+EVERY_JOB = WEB_JOBS + APP_JOBS
+APP_MANIFESTS = (
+    ("apps/web/package.json", WEB_JOBS),
+    ("apps/quarterdeck/package.json", APP_JOBS),
+)
+FOLDER_JOBS = (
+    ("apps/web/", WEB_JOBS),
+    ("licenses/", WEB_JOBS),
+    ("deploy/qd-web/", WEB_JOBS),
+    ("deploy/captain-app/", WEB_JOBS),
+    ("apps/quarterdeck/", APP_JOBS),
+    ("apps/server/", APP_JOBS),
+)
+SHARED_FOLDERS = (".github/", "tools/ci/")
+LOCKFILE_NAMES = frozenset({"package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml"})
+LOCKFILE_ENDINGS = (".lock", ".lockb")
+
+
+def is_lockfile(path):
+    name = path.rsplit("/", 1)[-1]
+    return name in LOCKFILE_NAMES or name.endswith(LOCKFILE_ENDINGS)
+
+
+def jobs_for(path):
+    if "/" not in path or path.startswith(SHARED_FOLDERS) or is_lockfile(path):
+        return EVERY_JOB
+    return tuple(job for folder, jobs in FOLDER_JOBS if path.startswith(folder) for job in jobs)
+
+
+def git_output(root, *args):
+    try:
+        done = subprocess.run(["git", *args], cwd=root, capture_output=True)
+    except OSError:
+        return None
+    return os.fsdecode(done.stdout) if done.returncode == 0 else None
+
+
+def changed_paths(root):
+    parents = git_output(root, "rev-list", "--parents", "-n", "1", "HEAD")
+    if parents is None or len(parents.split()) != 3:
+        return None
+    listed = git_output(root, "diff", "--name-only", "--no-renames", "-z", "HEAD^1", "HEAD")
+    if listed is None:
+        return None
+    return [path for path in listed.split("\0") if path] or None
+
+
+def needed_jobs(event, root):
+    if event == "push":
+        return set(EVERY_JOB), "a push runs every job"
+    if event != "pull_request":
+        return set(EVERY_JOB), "this event is not known, so every job runs"
+    paths = changed_paths(root)
+    if paths is None:
+        return set(EVERY_JOB), "the changed files could not be read, so every job runs"
+    return {job for path in paths for job in jobs_for(path)}, f"read {len(paths)} changed file(s)"
+
+
+def gates(event, root):
+    needed, why = needed_jobs(event, root)
+    present = {job for manifest, jobs in APP_MANIFESTS if (root / manifest).is_file() for job in jobs}
+    return {job: job in needed and job in present for job in EVERY_JOB}, why
+
+
+def main():
+    root = pathlib.Path(os.environ.get("CI_CHANGES_ROOT") or ".")
+    found, why = gates(os.environ.get("EVENT", ""), root)
+    lines = [f"{job}={'true' if found[job] else 'false'}" for job in EVERY_JOB]
+    print("ci-changes: " + why)
+    for line in lines:
+        print(line)
+    target = os.environ.get("GITHUB_OUTPUT")
+    if target:
+        with open(target, "a", encoding="utf-8") as output:
+            output.write("".join(line + "\n" for line in lines))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

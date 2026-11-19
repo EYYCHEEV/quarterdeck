@@ -20,31 +20,26 @@ jobs:
     permissions:
       contents: read
     outputs:
-      web: ${{ steps.web.outputs.web }}
-      app: ${{ steps.app.outputs.app }}
+      web-static: ${{ steps.gates.outputs.web-static }}
+      web-build: ${{ steps.gates.outputs.web-build }}
+      web-browser: ${{ steps.gates.outputs.web-browser }}
+      web-design: ${{ steps.gates.outputs.web-design }}
+      web-design-selftest: ${{ steps.gates.outputs.web-design-selftest }}
+      app-static: ${{ steps.gates.outputs.app-static }}
+      app-build: ${{ steps.gates.outputs.app-build }}
+      app-browser: ${{ steps.gates.outputs.app-browser }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          fetch-depth: 2
           persist-credentials: false
 
-      - name: Look for the web app
-        id: web
-        run: |
-          if [ -f apps/web/package.json ]; then
-            echo "web=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "web=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Look for the new app
-        id: app
-        run: |
-          if [ -f apps/quarterdeck/package.json ]; then
-            echo "app=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "app=false" >> "$GITHUB_OUTPUT"
-          fi
+      - name: Choose the jobs this change needs
+        id: gates
+        env:
+          EVENT: ${{ github.event_name }}
+        run: python3 tools/ci/ci-changes
 
   python:
     name: Python tests
@@ -198,7 +193,7 @@ jobs:
   web-static:
     name: Web static checks
     needs: changes
-    if: needs.changes.outputs.web == 'true'
+    if: needs.changes.outputs.web-static == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -242,7 +237,7 @@ jobs:
   web-build:
     name: Web build
     needs: changes
-    if: needs.changes.outputs.web == 'true'
+    if: needs.changes.outputs.web-build == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -286,7 +281,7 @@ jobs:
   web-browser:
     name: Web browser checks
     needs: changes
-    if: needs.changes.outputs.web == 'true'
+    if: needs.changes.outputs.web-browser == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     permissions:
@@ -323,7 +318,7 @@ jobs:
   web-design:
     name: Web design check ${{ matrix.size }}
     needs: changes
-    if: needs.changes.outputs.web == 'true'
+    if: needs.changes.outputs.web-design == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     permissions:
@@ -397,7 +392,7 @@ jobs:
   web-design-selftest:
     name: Web design check self-test
     needs: changes
-    if: needs.changes.outputs.web == 'true'
+    if: needs.changes.outputs.web-design-selftest == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -434,7 +429,7 @@ jobs:
   app-static:
     name: New app static checks
     needs: changes
-    if: needs.changes.outputs.app == 'true'
+    if: needs.changes.outputs.app-static == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -478,7 +473,7 @@ jobs:
   app-build:
     name: New app build twice
     needs: changes
-    if: needs.changes.outputs.app == 'true'
+    if: needs.changes.outputs.app-build == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -526,7 +521,7 @@ jobs:
   app-browser:
     name: New app browser tests
     needs: changes
-    if: needs.changes.outputs.app == 'true'
+    if: needs.changes.outputs.app-browser == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -597,8 +592,14 @@ jobs:
     permissions: {}
     env:
       CHANGES_RESULT: ${{ needs.changes.result }}
-      WEB: ${{ needs.changes.outputs.web }}
-      APP: ${{ needs.changes.outputs.app }}
+      WEB_STATIC_GATE: ${{ needs.changes.outputs.web-static }}
+      WEB_BUILD_GATE: ${{ needs.changes.outputs.web-build }}
+      WEB_BROWSER_GATE: ${{ needs.changes.outputs.web-browser }}
+      WEB_DESIGN_GATE: ${{ needs.changes.outputs.web-design }}
+      WEB_DESIGN_SELFTEST_GATE: ${{ needs.changes.outputs.web-design-selftest }}
+      APP_STATIC_GATE: ${{ needs.changes.outputs.app-static }}
+      APP_BUILD_GATE: ${{ needs.changes.outputs.app-build }}
+      APP_BROWSER_GATE: ${{ needs.changes.outputs.app-browser }}
       PYTHON_RESULT: ${{ needs.python.result }}
       SERVER_RESULT: ${{ needs.server.result }}
       EXTENSION_RESULT: ${{ needs.extension.result }}
@@ -618,19 +619,19 @@ jobs:
           for result in "$CHANGES_RESULT" "$PYTHON_RESULT" "$SERVER_RESULT" "$EXTENSION_RESULT" "$COMMENTS_RESULT" "$LEAKS_RESULT"; do
             test "$result" = success || exit 1
           done
-          if [ "$WEB" = "true" ]; then
-            expected=success
-          else
-            expected=skipped
-          fi
-          for result in "$WEB_STATIC_RESULT" "$WEB_BUILD_RESULT" "$WEB_BROWSER_RESULT" "$WEB_DESIGN_RESULT" "$WEB_DESIGN_SELFTEST_RESULT"; do
-            test "$result" = "$expected" || exit 1
-          done
-          if [ "$APP" = "true" ]; then
-            expected=success
-          else
-            expected=skipped
-          fi
-          for result in "$APP_STATIC_RESULT" "$APP_BUILD_RESULT" "$APP_BROWSER_RESULT"; do
-            test "$result" = "$expected" || exit 1
-          done
+          pair() {
+            case "$2" in
+              true) test "$3" = success && return 0 ;;
+              false) test "$3" = skipped && return 0 ;;
+            esac
+            echo "qd-check: $1 has the gate '$2' and the result '$3'"
+            return 1
+          }
+          pair web-static "$WEB_STATIC_GATE" "$WEB_STATIC_RESULT" || exit 1
+          pair web-build "$WEB_BUILD_GATE" "$WEB_BUILD_RESULT" || exit 1
+          pair web-browser "$WEB_BROWSER_GATE" "$WEB_BROWSER_RESULT" || exit 1
+          pair web-design "$WEB_DESIGN_GATE" "$WEB_DESIGN_RESULT" || exit 1
+          pair web-design-selftest "$WEB_DESIGN_SELFTEST_GATE" "$WEB_DESIGN_SELFTEST_RESULT" || exit 1
+          pair app-static "$APP_STATIC_GATE" "$APP_STATIC_RESULT" || exit 1
+          pair app-build "$APP_BUILD_GATE" "$APP_BUILD_RESULT" || exit 1
+          pair app-browser "$APP_BROWSER_GATE" "$APP_BROWSER_RESULT" || exit 1

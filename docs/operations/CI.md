@@ -25,6 +25,16 @@ The stdlib-only `tools/ci/workflow-contexts` checker runs through the CI tool te
 
 Path filters only choose which lanes do real work. `qd-check` always runs, so a required check is never left unreported.
 
+On a pull request the `changes` job runs `tools/ci/ci-changes`. It reads the files the pull request would change on `main` and turns a filtered lane on only when one of them is in a place that lane's app reads:
+
+- The five web lanes (`web-static`, `web-build`, `web-browser`, `web-design` and `web-design-selftest`) run for a change in `apps/web`, or in `licenses`, `deploy/qd-web` or `deploy/captain-app`, which the font test in `apps/web` reads.
+- The three new app lanes (`app-static`, `app-build` and `app-browser`) run for a change in `apps/quarterdeck`, or in `apps/server`, which the new app's bundle check loads.
+- All eight run for a change in `.github` or `tools/ci`, to any lock file, or to any file at the top of the repository.
+- All eight run on every push to `main`, and whenever the changed files cannot be read.
+- An app with no `package.json` keeps its lanes off.
+
+The other lanes (`python`, `server`, `extension`, `no-comments`, `leaks` and `pr-title`) are not filtered. `qd-check` requires each filtered lane to have succeeded when it was turned on and to have been skipped when it was not.
+
 ## Required checks
 
 A pull request needs three checks green on its current head before it can be merged.
