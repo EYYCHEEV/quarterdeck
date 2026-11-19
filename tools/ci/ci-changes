@@ -21,13 +21,13 @@ FOLDER_JOBS = (
     ("apps/server/", APP_JOBS),
 )
 SHARED_FOLDERS = (".github/", "tools/ci/")
-LOCKFILE_NAMES = frozenset({"package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml"})
+LOCKFILE_NAMES = frozenset({"package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "pylock.toml"})
 LOCKFILE_ENDINGS = (".lock", ".lockb")
 
 
 def is_lockfile(path):
     name = path.rsplit("/", 1)[-1]
-    return name in LOCKFILE_NAMES or name.endswith(LOCKFILE_ENDINGS)
+    return name in LOCKFILE_NAMES or name.endswith(LOCKFILE_ENDINGS) or (name.startswith("pylock.") and name.endswith(".toml"))
 
 
 def jobs_for(path):

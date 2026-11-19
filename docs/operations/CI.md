@@ -29,7 +29,7 @@ On a pull request the `changes` job runs `tools/ci/ci-changes`. It reads the fil
 
 - The five web lanes (`web-static`, `web-build`, `web-browser`, `web-design` and `web-design-selftest`) run for a change in `apps/web`, or in `licenses`, `deploy/qd-web` or `deploy/captain-app`, which the font test in `apps/web` reads.
 - The three new app lanes (`app-static`, `app-build` and `app-browser`) run for a change in `apps/quarterdeck`, or in `apps/server`, which the new app's bundle check loads.
-- All eight run for a change in `.github` or `tools/ci`, to any lock file, or to any file at the top of the repository.
+- All eight run for a change in `.github` or `tools/ci`, to a lock file in any folder, or to any file at the top of the repository. A lock file is a file named `package-lock.json`, `npm-shrinkwrap.json`, `pnpm-lock.yaml` or `pylock.toml`, a name that starts with `pylock.` and ends with `.toml`, or any name that ends with `.lock` or `.lockb`.
 - All eight run on every push to `main`, and whenever the changed files cannot be read.
 - An app with no `package.json` keeps its lanes off.
 

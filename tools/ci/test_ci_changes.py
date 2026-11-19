@@ -116,6 +116,9 @@ class PathMapRulesTest(unittest.TestCase):
     def test_a_lockfile_anywhere_turns_on_every_job(self):
         self.assert_jobs(GATED_JOBS, "apps/web/package-lock.json", "apps/quarterdeck/package-lock.json", "omp-quarterdeck/bun.lock", "omp-quarterdeck/bun.lockb", "signup/uv.lock", "deploy/npm-shrinkwrap.json", "docs/pnpm-lock.yaml")
 
+    def test_a_python_lockfile_anywhere_turns_on_every_job(self):
+        self.assert_jobs(GATED_JOBS, "signup/pylock.toml", "pylock.toml", "apps/server/pylock.dev.toml", "qd-client-wheel/pylock.build.toml")
+
     def test_a_file_at_the_top_of_the_repository_turns_on_every_job(self):
         self.assert_jobs(GATED_JOBS, ".gitignore", ".editorconfig", "THIRD_PARTY_NOTICES.md", "README.md", "package.json")
 
@@ -136,6 +139,8 @@ class PathMapRulesTest(unittest.TestCase):
             "tools/ci-old/pins.json",
             "docs/.github/workflows/ci.yml",
             "docs/package-lock.json.md",
+            "docs/pylock-notes.toml",
+            "signup/pylock.toml.txt",
         )
 
 
@@ -207,6 +212,11 @@ class PathMapToolTest(unittest.TestCase):
 
     def test_a_pull_request_that_touches_a_shared_file_turns_on_every_gate(self):
         for name in (".github/workflows/ci.yml", "tools/ci/pins.json", "apps/web/package-lock.json", ".gitignore"):
+            root = self.pull_request(lambda root: write(root, name, "changed\n"))
+            self.assertEqual(self.gates(root, "pull_request"), only(GATED_JOBS), name)
+
+    def test_a_pull_request_that_changes_only_a_python_lockfile_turns_on_every_gate(self):
+        for name in ("signup/pylock.toml", "pylock.toml", "apps/server/pylock.dev.toml"):
             root = self.pull_request(lambda root: write(root, name, "changed\n"))
             self.assertEqual(self.gates(root, "pull_request"), only(GATED_JOBS), name)
 
