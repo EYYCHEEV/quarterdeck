@@ -23,6 +23,8 @@ FOLDER_JOBS = (
 SHARED_FOLDERS = (".github/", "tools/ci/")
 LOCKFILE_NAMES = frozenset({"package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "pylock.toml"})
 LOCKFILE_ENDINGS = (".lock", ".lockb")
+ENFORCE_MODE = "enforce"
+OBSERVE_NOTE = "ci-changes: observe mode, the path map skips no job"
 
 
 def is_lockfile(path):
@@ -65,23 +67,28 @@ def needed_jobs(event, root):
     return {job for path in paths for job in jobs_for(path)}, f"read {len(paths)} changed file(s)"
 
 
-def gates(event, root):
+def gates(event, root, enforce):
     needed, why = needed_jobs(event, root)
     present = {job for manifest, jobs in APP_MANIFESTS if (root / manifest).is_file() for job in jobs}
-    return {job: job in needed and job in present for job in EVERY_JOB}, why
+    skipped = [job for job in EVERY_JOB if job in present and job not in needed]
+    running = present.difference(skipped) if enforce else present
+    return running, skipped, why
 
 
 def main():
     root = pathlib.Path(os.environ.get("CI_CHANGES_ROOT") or ".")
-    found, why = gates(os.environ.get("EVENT", ""), root)
-    lines = [f"{job}={'true' if found[job] else 'false'}" for job in EVERY_JOB]
+    enforce = os.environ.get("CI_CHANGES_MODE") == ENFORCE_MODE
+    running, skipped, why = gates(os.environ.get("EVENT", ""), root, enforce)
+    lines = [f"{job}={'true' if job in running else 'false'}" for job in EVERY_JOB]
+    notes = [] if enforce else [OBSERVE_NOTE, "ci-changes: the path map would have skipped: " + (", ".join(skipped) or "none")]
     print("ci-changes: " + why)
-    for line in lines:
+    for line in notes + lines:
         print(line)
-    target = os.environ.get("GITHUB_OUTPUT")
-    if target:
-        with open(target, "a", encoding="utf-8") as output:
-            output.write("".join(line + "\n" for line in lines))
+    for name, rows, end in (("GITHUB_OUTPUT", lines, "\n"), ("GITHUB_STEP_SUMMARY", notes, "\n\n")):
+        target = os.environ.get(name)
+        if target and rows:
+            with open(target, "a", encoding="utf-8") as output:
+                output.write("".join(row + end for row in rows))
     return 0
 
 

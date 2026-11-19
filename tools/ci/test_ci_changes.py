@@ -32,6 +32,10 @@ def env_name(job):
     return job.upper().replace("-", "_")
 
 
+def observe_notes(skipped):
+    return ["ci-changes: observe mode, the path map skips no job", "ci-changes: the path map would have skipped: " + (", ".join(skipped) or "none")]
+
+
 def git_env(**extra):
     env = {
         **os.environ,
@@ -175,19 +179,32 @@ class PathMapToolTest(unittest.TestCase):
         )
         return target
 
-    def run_tool(self, root, event, path=None):
+    def run_tool(self, root, event, path=None, mode="enforce"):
         output = root.parent / "github-output"
-        env = git_env(CI_CHANGES_ROOT=str(root), EVENT=event, GITHUB_OUTPUT=str(output), GIT_CEILING_DIRECTORIES=str(root.parent))
+        summary = root.parent / "github-step-summary"
+        env = git_env(CI_CHANGES_ROOT=str(root), EVENT=event, GITHUB_OUTPUT=str(output), GITHUB_STEP_SUMMARY=str(summary), GIT_CEILING_DIRECTORIES=str(root.parent))
+        env.pop("CI_CHANGES_MODE", None)
+        if mode is not None:
+            env["CI_CHANGES_MODE"] = mode
         if path is not None:
             env["PATH"] = path
         result = subprocess.run([sys.executable, "-B", str(HERE / "ci-changes")], capture_output=True, text=True, env=env, timeout=30)
         self.assertEqual((result.returncode, result.stderr), (0, ""))
         written = output.read_text(encoding="utf-8")
         output.unlink()
-        return result.stdout, dict(line.split("=", 1) for line in written.splitlines())
+        noted = summary.read_text(encoding="utf-8") if summary.exists() else ""
+        summary.unlink(missing_ok=True)
+        return result.stdout, dict(line.split("=", 1) for line in written.splitlines()), noted
 
     def gates(self, root, event, path=None):
         return self.run_tool(root, event, path)[1]
+
+    def observed(self, root, event, skipped):
+        printed, found, noted = self.run_tool(root, event, mode=None)
+        notes = observe_notes(skipped)
+        self.assertEqual(printed.splitlines()[1:3], notes)
+        self.assertEqual(noted, "".join(note + "\n\n" for note in notes))
+        return found
 
     def test_a_push_turns_on_every_gate(self):
         self.assertEqual(self.gates(self.folder(BASE_FILES), "push"), only(GATED_JOBS))
@@ -209,6 +226,12 @@ class PathMapToolTest(unittest.TestCase):
     def test_a_pull_request_outside_the_map_turns_on_no_gate(self):
         root = self.pull_request(lambda root: write(root, "docs/notes.md", "more notes\n"))
         self.assertEqual(self.gates(root, "pull_request"), only(()))
+
+    def test_with_no_mode_every_job_of_a_present_app_runs_and_the_map_names_what_it_would_skip(self):
+        for name, skipped in (("docs/notes.md", GATED_JOBS), ("apps/web/src/a.ts", APP_JOBS), ("apps/quarterdeck/web/src/b.ts", WEB_JOBS), ("tools/ci/pins.json", ())):
+            root = self.pull_request(lambda root: write(root, name, "changed\n"))
+            self.assertEqual(self.observed(root, "pull_request", skipped), only(GATED_JOBS), name)
+        self.assertEqual(self.observed(self.folder(BASE_FILES), "push", ()), only(GATED_JOBS))
 
     def test_a_pull_request_that_touches_a_shared_file_turns_on_every_gate(self):
         for name in (".github/workflows/ci.yml", "tools/ci/pins.json", "apps/web/package-lock.json", ".gitignore"):
@@ -234,6 +257,12 @@ class PathMapToolTest(unittest.TestCase):
         self.assertEqual(self.gates(root, "pull_request"), only(()))
         shared = self.pull_request(lambda root: write(root, "tools/ci/pins.json", "{}\n"), base)
         self.assertEqual(self.gates(shared, "pull_request"), only(WEB_JOBS))
+
+    def test_an_absent_app_keeps_its_gates_off_in_observe_mode_and_is_not_named(self):
+        base = {name: content for name, content in BASE_FILES.items() if name != "apps/quarterdeck/package.json"}
+        root = self.pull_request(lambda root: write(root, "docs/notes.md", "more notes\n"), base)
+        self.assertEqual(self.observed(root, "pull_request", WEB_JOBS), only(WEB_JOBS))
+        self.assertEqual(self.observed(self.folder(base), "push", ()), only(WEB_JOBS))
 
     def test_every_case_where_the_change_cannot_be_read_turns_on_every_gate(self):
         every = only(GATED_JOBS)
@@ -261,11 +290,23 @@ class PathMapToolTest(unittest.TestCase):
         merged = self.pull_request(lambda root: write(root, "apps/web/src/a.ts", "export const a = 2;\n"))
         self.assertEqual(self.gates(self.shallow_copy(merged, 2), "pull_request"), only(WEB_JOBS))
 
+    def test_any_mode_but_the_exact_word_enforce_is_observe_mode(self):
+        root = self.pull_request(lambda root: write(root, "docs/notes.md", "more notes\n"))
+        for mode in ("Enforce", "ENFORCE", "enforce ", " enforce", "enforced", "yes", "true", "1", "observe", ""):
+            self.assertEqual(self.run_tool(root, "pull_request", mode=mode)[1], only(GATED_JOBS), repr(mode))
+        self.assertEqual(self.gates(root, "pull_request"), only(()))
+
     def test_the_log_names_the_gates_and_never_a_changed_file(self):
         root = self.pull_request(lambda root: write(root, "docs/line one\n::error::made up", "x\n"))
-        printed, found = self.run_tool(root, "pull_request")
+        printed, found, noted = self.run_tool(root, "pull_request")
         self.assertEqual(found, only(()))
         self.assertEqual(printed.splitlines(), ["ci-changes: read 1 changed file(s)"] + [job + "=false" for job in GATED_JOBS])
+        self.assertEqual(noted, "")
+        printed, found, noted = self.run_tool(root, "pull_request", mode=None)
+        notes = observe_notes(GATED_JOBS)
+        self.assertEqual(found, only(GATED_JOBS))
+        self.assertEqual(printed.splitlines(), ["ci-changes: read 1 changed file(s)"] + notes + [job + "=true" for job in GATED_JOBS])
+        self.assertEqual(noted, "".join(note + "\n\n" for note in notes))
 
 
 class PathMapWorkflowTest(unittest.TestCase):
