@@ -36,7 +36,7 @@ Say how you found the problem, how you checked the change, and what you saw. Giv
 
 ### Bot tools
 
-You need Python 3.11 or newer, Bun, and `flock`. Run the same checks as CI from the repository root:
+You need Python 3.11 or newer and Bun. Run the same checks as CI from the repository root:
 
 ```sh
 python3 -m unittest discover -s signup -p 'test_*.py'

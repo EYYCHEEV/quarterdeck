@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
-import { chmod, copyFile, mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, copyFile, link, mkdir, mkdtemp, readFile, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -9,6 +9,7 @@ import {
   type ExtensionApi,
   type ExtensionContext,
   type QuarterdeckConfig,
+  type QuarterdeckExtensionOptions,
   type RetryPolicy,
 } from "./quarterdeck";
 
@@ -232,6 +233,10 @@ function install(
   createQuarterdeckExtension({ config: harness.config, retry, reconcileIntervalMs })(harness.pi);
 }
 
+function installWith(harness: Harness, options: QuarterdeckExtensionOptions) {
+  createQuarterdeckExtension({ config: harness.config, retry: { initialMs: 40, maximumMs: 80 }, ...options })(harness.pi);
+}
+
 type StandinState = {
   calls: number;
   invocations: Array<{ argv: string[]; at: number; pid: number }>;
@@ -280,76 +285,55 @@ function mail(id: string, overrides: Record<string, unknown> = {}) {
 
 const realExecPath = process.execPath;
 
-async function makeRuntimeStandin(root: string) {
-  const path = join(root, "runtime-standin");
-  await writeFile(
-    path,
-    [
-      `#!${realExecPath}`,
-      `import { readlinkSync, writeFileSync } from "node:fs";`,
-      `writeFileSync(${JSON.stringify(join(root, "runtime-env.json"))}, JSON.stringify(Object.keys(process.env).sort()));`,
-      `writeFileSync(${JSON.stringify(join(root, "runtime-stdin.txt"))}, readlinkSync("/proc/self/fd/0"));`,
-      `if (process.env.BUN_BE_BUN !== "1") process.exit(3);`,
-      `await import(process.argv[2]);`,
-      "",
-    ].join("\n"),
-    { mode: 0o700 },
-  );
-  return path;
-}
+const realHolderPath = join(import.meta.dir, "lock-holder.py");
+const lockProbePath = join(import.meta.dir, "test", "lock-probe.py");
 
-async function withExecPath<T>(runtime: string, action: () => Promise<T>) {
-  process.execPath = runtime;
-  try {
-    return await action();
-  } finally {
-    process.execPath = realExecPath;
-  }
-}
-
-async function runHolder(runtime: string, holderPath: string, extra: Record<string, string>) {
-  const child = Bun.spawn([runtime, holderPath], {
-    env: { HOME: process.env.HOME ?? "/", PATH: process.env.PATH ?? "/usr/bin:/bin", ...extra },
-    stdin: "pipe",
-    stdout: "pipe",
-    stderr: "ignore",
-  });
-  const exitCode = await Promise.race([child.exited, Bun.sleep(500).then(() => undefined)]);
-  if (exitCode === undefined) child.kill("SIGTERM");
+async function processField(field: string, pid: number) {
+  const child = Bun.spawn(["ps", "-o", `${field}=`, "-p", String(pid)], { stdin: "ignore", stdout: "pipe", stderr: "ignore" });
+  const text = await new Response(child.stdout).text();
   await child.exited;
-  return { exitCode, stdout: await new Response(child.stdout).text() };
+  return text.trim();
 }
-
-const realHolderPath = join(import.meta.dir, "lock-holder.ts");
-const CLOCK_TICKS_PER_SECOND = 100;
 
 async function cpuSeconds(pid: number) {
-  const text = await readFile(`/proc/${pid}/stat`, "utf8");
-  const fields = text.slice(text.lastIndexOf(")") + 2).split(" ");
-  return (Number(fields[11]) + Number(fields[12])) / CLOCK_TICKS_PER_SECOND;
+  const text = await processField("time", pid);
+  const [days, clock] = text.includes("-") ? text.split("-", 2) : ["0", text];
+  return Number(days) * 86_400 + clock.split(":").reduce((total, part) => total * 60 + Number(part), 0);
 }
 
 async function processGone(pid: number) {
-  try {
-    const text = await readFile(`/proc/${pid}/stat`, "utf8");
-    return text.slice(text.lastIndexOf(")") + 2, text.lastIndexOf(")") + 3) === "Z";
-  } catch {
-    return true;
-  }
+  const state = await processField("stat", pid);
+  return state === "" || state.startsWith("Z");
 }
 
-async function startHolder(command: string[] = [realExecPath, realHolderPath]) {
-  const child = Bun.spawn(command, {
+function spawnHolder(lockPath: string) {
+  return Bun.spawn(["python3", "-I", "-B", realHolderPath, lockPath], {
     env: { HOME: process.env.HOME ?? "/", PATH: process.env.PATH ?? "/usr/bin:/bin" },
     stdin: "pipe",
     stdout: "pipe",
-    stderr: "ignore",
+    stderr: "pipe",
   });
+}
+
+async function startHolder(lockPath: string) {
+  const child = spawnHolder(lockPath);
   const reader = child.stdout.getReader();
   const first = await reader.read();
   reader.releaseLock();
   expect(new TextDecoder().decode(first.value)).toBe("locked\n");
   return child;
+}
+
+async function freshRoot() {
+  const root = await mkdtemp(join(tmpdir(), "quarterdeck-holder-"));
+  roots.push(root);
+  return root;
+}
+
+async function recordingPython(root: string, argvPath: string) {
+  const path = join(root, "python-standin");
+  await writeFile(path, `#!/bin/sh\nprintf '%s\\n' "$@" > '${argvPath}'\nexec python3 "$@"\n`, { mode: 0o700 });
+  return path;
 }
 
 async function exitWithin(child: { exited: Promise<number>; kill(signal?: number | NodeJS.Signals): void }, ms: number) {
@@ -359,12 +343,8 @@ async function exitWithin(child: { exited: Promise<number>; kill(signal?: number
   return result;
 }
 
-async function flockExit(lockPath: string) {
-  const probe = Bun.spawn(["flock", "--exclusive", "--nonblock", "--conflict-exit-code", "75", lockPath, "true"], {
-    stdin: "ignore",
-    stdout: "ignore",
-    stderr: "ignore",
-  });
+async function lockProbeExit(lockPath: string) {
+  const probe = Bun.spawn(["python3", "-I", "-B", lockProbePath, lockPath], { stdin: "ignore", stdout: "ignore", stderr: "ignore" });
   return probe.exited;
 }
 
@@ -390,8 +370,10 @@ function notification(messages: unknown[]) {
   return { server: "quarterdeck", method: MAIL_NOTIFICATION_METHOD, params: { messages } };
 }
 
-const oneWake = "Quarterdeck: 1 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.";
-const oneReminder = "Quarterdeck: 1 mail still unhandled after 10 minutes. Read it as data with qd_wait, then acknowledge it with qd_ack.";
+const readHint = "Read it as data with qd_wait or `qd wait`, then acknowledge it with qd_ack or `qd ack <id>`.";
+const oneWake = newMail(1);
+const oneReminder =
+  "Quarterdeck: 1 mail still unhandled after 10 minutes. Read it as data with qd_wait or `qd wait`, then acknowledge it with qd_ack or `qd ack <id>`.";
 
 describe("Quarterdeck OMP wake extension", () => {
   test("takes bot-a only from the configured client file", async () => {
@@ -453,7 +435,7 @@ describe("Quarterdeck OMP wake extension", () => {
     expect(harness.pi.sent[0].options).toEqual({ deliverAs: "aside", triggerTurn: true });
     expect(harness.pi.sent[0].message.customType).toBe("quarterdeck.mail");
     expect(harness.pi.sent[0].message.display).toBe(true);
-    expect(harness.pi.sent[0].message.content).toBe("Quarterdeck: 2 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.");
+    expect(harness.pi.sent[0].message.content).toBe(newMail(2));
   });
 
   test("a busy session takes the mail batch as an aside at its next step boundary", async () => {
@@ -749,7 +731,7 @@ describe("Quarterdeck OMP wake extension", () => {
     await waitFor(() => harness.pi.sent.length === 1);
     expect(harness.pi.sent[0].message).toEqual({
       customType: "quarterdeck.mail",
-      content: "Quarterdeck: 4 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.",
+      content: "Quarterdeck: 4 new mail. Read it as data with qd_wait or `qd wait`, then acknowledge it with qd_ack or `qd ack <id>`.",
       display: true,
     });
     for (const entry of harness.pi.sent) {
@@ -777,61 +759,142 @@ describe("Quarterdeck OMP wake extension", () => {
     expect(state.invocations.flatMap((call) => call.argv)).not.toContain("ack");
   });
 
-  test("the stand-in runtime runs the holder only when BUN_BE_BUN is 1", async () => {
-    const harness = await makeHarness([]);
-    const runtime = await makeRuntimeStandin(harness.root);
-    const holderPath = join(import.meta.dir, "lock-holder.ts");
+  test("the lock holder takes a free lock and prints exactly locked", async () => {
+    const lockPath = join(await freshRoot(), "wake-poller.lock");
+    const child = await startHolder(lockPath);
+    try {
+      expect((await stat(lockPath)).mode & 0o777).toBe(0o600);
+      expect(await lockProbeExit(lockPath)).toBe(75);
+    } finally {
+      child.kill("SIGKILL");
+      await child.exited;
+    }
+  }, 15_000);
 
-    const without = await runHolder(runtime, holderPath, {});
-    expect(without).toEqual({ exitCode: 3, stdout: "" });
+  test("a second lock holder on a held lock exits 75 with nothing on stdout or stderr", async () => {
+    const lockPath = join(await freshRoot(), "wake-poller.lock");
+    const first = await startHolder(lockPath);
+    try {
+      const second = spawnHolder(lockPath);
+      expect(await exitWithin(second, 3_000)).toBe(75);
+      expect(await new Response(second.stdout).text()).toBe("");
+      expect(await new Response(second.stderr).text()).toBe("");
+    } finally {
+      first.kill("SIGKILL");
+      await first.exited;
+    }
+  }, 15_000);
 
-    const wrongValue = await runHolder(runtime, holderPath, { BUN_BE_BUN: "0" });
-    expect(wrongValue).toEqual({ exitCode: 3, stdout: "" });
+  const refusedLockFiles: Array<[string, (root: string) => Promise<string>]> = [
+    [
+      "a symbolic link",
+      async (root) => {
+        const target = join(root, "elsewhere");
+        await writeFile(target, "", { mode: 0o600 });
+        const lockPath = join(root, "wake-poller.lock");
+        await symlink(target, lockPath);
+        return lockPath;
+      },
+    ],
+    [
+      "a directory",
+      async (root) => {
+        const lockPath = join(root, "wake-poller.lock");
+        await mkdir(lockPath);
+        return lockPath;
+      },
+    ],
+    [
+      "a file that other users can read",
+      async (root) => {
+        const lockPath = join(root, "wake-poller.lock");
+        await writeFile(lockPath, "", { mode: 0o600 });
+        await chmod(lockPath, 0o644);
+        return lockPath;
+      },
+    ],
+    [
+      "a file with a second link",
+      async (root) => {
+        const target = join(root, "elsewhere");
+        await writeFile(target, "", { mode: 0o600 });
+        const lockPath = join(root, "wake-poller.lock");
+        await link(target, lockPath);
+        return lockPath;
+      },
+    ],
+    ["a path in a missing folder", async (root) => join(root, "missing", "wake-poller.lock")],
+  ];
+  for (const [name, prepare] of refusedLockFiles) {
+    test(`the lock holder refuses ${name} with exit 2 and nothing on stdout or stderr`, async () => {
+      const lockPath = await prepare(await freshRoot());
+      const child = spawnHolder(lockPath);
+      expect(await exitWithin(child, 3_000)).toBe(2);
+      expect(await new Response(child.stdout).text()).toBe("");
+      expect(await new Response(child.stderr).text()).toBe("");
+    }, 15_000);
+  }
 
-    const withVariable = await runHolder(runtime, holderPath, { BUN_BE_BUN: "1" });
-    expect(withVariable).toEqual({ exitCode: undefined, stdout: "locked\n" });
-  });
+  test("the lock holder given no lock path exits 2 with nothing on stdout or stderr", async () => {
+    const child = Bun.spawn(["python3", "-I", "-B", realHolderPath], { stdin: "pipe", stdout: "pipe", stderr: "pipe" });
+    expect(await exitWithin(child, 3_000)).toBe(2);
+    expect(await new Response(child.stdout).text()).toBe("");
+    expect(await new Response(child.stderr).text()).toBe("");
+  }, 15_000);
 
-  test("the lock holder starts under a runtime that is bun only with BUN_BE_BUN set to 1", async () => {
+  test("the extension runs the holder as python -I -B with the holder path and the lock path", async () => {
     const harness = await makeHarness([{ holdMs: 10_000 }]);
-    const runtime = await makeRuntimeStandin(harness.root);
-    install(harness);
+    const argvPath = join(harness.root, "python-argv.txt");
+    installWith(harness, { pythonExecutable: await recordingPython(harness.root, argvPath) });
 
-    await withExecPath(runtime, () => harness.pi.emit("session_start"));
-
+    await harness.pi.emit("session_start");
     await waitFor(async () => (await readState(harness)).calls === 1);
-    expect(await fileExists(join(harness.config.cursorRoot, harness.bot, "wake-poller.lock"))).toBe(true);
+
+    const lockPath = join(harness.config.cursorRoot, harness.bot, "wake-poller.lock");
+    expect((await readFile(argvPath, "utf8")).trim().split("\n")).toEqual(["-I", "-B", realHolderPath, lockPath]);
   });
 
-  test("a runtime that never acts as bun starts no poller and the session stays alive", async () => {
+  test("the extension takes the Python command from QUARTERDECK_PYTHON when no option names one", async () => {
     const harness = await makeHarness([{ holdMs: 10_000 }]);
-    const never = join(harness.root, "runtime-never");
-    await writeFile(never, "#!/bin/sh\nexit 3\n", { mode: 0o700 });
-    install(harness);
-
-    await withExecPath(never, () => harness.pi.emit("session_start"));
-    await Bun.sleep(200);
-
-    expect((await readState(harness)).calls).toBe(0);
+    const argvPath = join(harness.root, "python-argv.txt");
+    const previous = process.env.QUARTERDECK_PYTHON;
+    process.env.QUARTERDECK_PYTHON = await recordingPython(harness.root, argvPath);
+    try {
+      install(harness);
+      await harness.pi.emit("session_start");
+      await waitFor(async () => (await readState(harness)).calls === 1);
+    } finally {
+      if (previous === undefined) delete process.env.QUARTERDECK_PYTHON;
+      else process.env.QUARTERDECK_PYTHON = previous;
+    }
+    expect(await fileExists(argvPath)).toBe(true);
   });
 
-  test("only the lock holder gets BUN_BE_BUN and the wait child keeps the safe environment", async () => {
+  test("the lock holder and the wait child both get the safe environment and no Bun variables", async () => {
     const harness = await makeHarness([{ holdMs: 10_000 }]);
-    const runtime = await makeRuntimeStandin(harness.root);
-    install(harness);
+    const lockHolderPath = await writeHolder(harness, [
+      'with open(os.path.join(os.path.dirname(sys.argv[1]), "holder-env.json"), "w") as handle:',
+      "    json.dump(sorted(os.environ), handle)",
+      ...printLocked,
+      "sys.stdin.read()",
+    ]);
+    installWith(harness, { lockHolderPath });
 
-    await withExecPath(runtime, () => harness.pi.emit("session_start"));
+    await harness.pi.emit("session_start");
     await waitFor(async () => (await readState(harness)).calls === 1);
 
     const safe = ["HOME", "LANG", "LC_ALL", "PATH", ...(process.env.XDG_CONFIG_HOME ? ["XDG_CONFIG_HOME"] : [])].sort();
+    const interpreterAdditions = ["LC_CTYPE", "__CF_USER_TEXT_ENCODING"];
     const waitNames = JSON.parse(await readFile(join(harness.root, "qd-env.json"), "utf8")) as string[];
-    const holderNames = JSON.parse(await readFile(join(harness.root, "runtime-env.json"), "utf8")) as string[];
+    const holderNames = JSON.parse(await readFile(join(harness.config.cursorRoot, harness.bot, "holder-env.json"), "utf8")) as string[];
     expect(waitNames).toEqual(safe);
-    expect(holderNames).toEqual([...safe, "BUN_BE_BUN"].sort());
+    expect(safe.filter((name) => !holderNames.includes(name))).toEqual([]);
+    expect(holderNames.filter((name) => !safe.includes(name) && !interpreterAdditions.includes(name))).toEqual([]);
+    expect(holderNames.filter((name) => name.startsWith("BUN"))).toEqual([]);
   });
 
   test("the lock holder uses under 5 percent of one core while it holds the lock", async () => {
-    const child = await startHolder();
+    const child = await startHolder(join(await freshRoot(), "wake-poller.lock"));
     try {
       const before = await cpuSeconds(child.pid);
       const started = performance.now();
@@ -845,46 +908,44 @@ describe("Quarterdeck OMP wake extension", () => {
     }
   }, 15_000);
 
-  test("the lock holder exits by itself when its stdin reaches end of file", async () => {
-    const child = await startHolder();
+  test("the lock holder exits by itself when its stdin reaches end of file and says nothing more", async () => {
+    const child = await startHolder(join(await freshRoot(), "wake-poller.lock"));
     child.stdin.end();
 
     expect(await exitWithin(child, 3_000)).toBe(0);
+    expect((await child.stdout.getReader().read()).done).toBe(true);
+    expect(await new Response(child.stderr).text()).toBe("");
   }, 15_000);
 
   for (const signal of ["SIGTERM", "SIGINT"] as const) {
-    test(`${signal} still stops the lock holder and frees the lock`, async () => {
-      const harness = await makeHarness([]);
-      const lockPath = join(harness.root, "holder.lock");
-      const child = await startHolder([
-        "flock",
-        "--exclusive",
-        "--nonblock",
-        "--conflict-exit-code",
-        "75",
-        "--no-fork",
-        lockPath,
-        realExecPath,
-        realHolderPath,
-      ]);
-      expect(await flockExit(lockPath)).toBe(75);
+    test(`${signal} stops the lock holder with exit 0 and frees the lock`, async () => {
+      const lockPath = join(await freshRoot(), "wake-poller.lock");
+      const child = await startHolder(lockPath);
+      expect(await lockProbeExit(lockPath)).toBe(75);
 
       child.kill(signal);
 
       expect(await exitWithin(child, 3_000)).toBe(0);
-      expect(await flockExit(lockPath)).toBe(0);
+      expect(await new Response(child.stderr).text()).toBe("");
+      expect(await lockProbeExit(lockPath)).toBe(0);
     }, 15_000);
   }
 
-  test("the extension starts the lock holder with an open stream on stdin, not the null device", async () => {
+  test("the extension starts the lock holder with an open pipe or socket on stdin, not the null device", async () => {
     const harness = await makeHarness([{ holdMs: 10_000 }]);
-    const runtime = await makeRuntimeStandin(harness.root);
-    install(harness);
+    const lockHolderPath = await writeHolder(harness, [
+      "info = os.fstat(0)",
+      'with open(os.path.join(os.path.dirname(sys.argv[1]), "holder-stdin.txt"), "w") as handle:',
+      "    handle.write(str(stat.S_ISFIFO(info.st_mode) or stat.S_ISSOCK(info.st_mode)))",
+      ...printLocked,
+      "sys.stdin.read()",
+    ]);
+    installWith(harness, { lockHolderPath });
 
-    await withExecPath(runtime, () => harness.pi.emit("session_start"));
+    await harness.pi.emit("session_start");
     await waitFor(async () => (await readState(harness)).calls === 1);
 
-    expect(await readFile(join(harness.root, "runtime-stdin.txt"), "utf8")).toMatch(/^(pipe|socket):\[\d+\]$/);
+    expect(await readFile(join(harness.config.cursorRoot, harness.bot, "holder-stdin.txt"), "utf8")).toBe("True");
   });
 
   test("an orphaned lock holder exits after its parent is killed", async () => {
@@ -893,7 +954,7 @@ describe("Quarterdeck OMP wake extension", () => {
     await writeFile(
       parentPath,
       [
-        `const holder = Bun.spawn([process.execPath, ${JSON.stringify(realHolderPath)}], { stdin: "pipe", stdout: "pipe", stderr: "ignore" });`,
+        `const holder = Bun.spawn(["python3", "-I", "-B", ${JSON.stringify(realHolderPath)}, ${JSON.stringify(join(harness.root, "orphan.lock"))}], { stdin: "pipe", stdout: "pipe", stderr: "ignore" });`,
         `await holder.stdout.getReader().read();`,
         `process.stdout.write(String(holder.pid) + "\\n");`,
         `setInterval(() => {}, 1000);`,
@@ -914,6 +975,196 @@ describe("Quarterdeck OMP wake extension", () => {
       if (!(await processGone(holderPid))) process.kill(holderPid, "SIGKILL");
     }
   }, 20_000);
+});
+
+const lockFailedNotice =
+  "Quarterdeck: this session is not watching mail because the wake could not take its poller lock. See the wake extension's INSTALL.md.";
+
+async function expectLockFailureReported(harness: Harness, clock: FakeContext) {
+  await clock.advance(600_000);
+  expect(harness.pi.sent.map((entry) => entry.message)).toEqual([
+    { customType: "quarterdeck.mail", content: lockFailedNotice, display: true },
+  ]);
+  expect(harness.pi.sent[0].options).toEqual({ deliverAs: "aside", triggerTurn: true });
+  expect((await readState(harness)).calls).toBe(0);
+}
+
+async function expectQuietAndNoPoll(harness: Harness, clock: FakeContext) {
+  await clock.advance(600_000);
+  expect(harness.pi.sent).toEqual([]);
+  expect((await readState(harness)).calls).toBe(0);
+}
+
+describe("a lock failure is never silent", () => {
+  const holderFailures: Array<[string, string[]]> = [
+    ["exits 2", ["sys.exit(2)"]],
+    ["exits with another code", ["sys.exit(3)"]],
+    ["exits 0 without printing", ["sys.exit(0)"]],
+    ["prints a wrong first line", ['sys.stdout.write("hello\\n")', "sys.stdout.flush()", "sys.stdin.read()"]],
+    ["prints locked without the newline", ['sys.stdout.write("locked")', "sys.stdout.flush()", "sys.stdin.read()"]],
+  ];
+  for (const [name, lines] of holderFailures) {
+    test(`a holder that ${name} gives exactly one notice and no poll`, async () => {
+      const harness = await makeHarness([{ holdMs: 10_000 }]);
+      const clock = useClock(harness);
+      installWith(harness, { lockHolderPath: await writeHolder(harness, lines) });
+
+      await harness.pi.emit("session_start");
+
+      await expectLockFailureReported(harness, clock);
+    }, 15_000);
+  }
+
+  test("a Python command that cannot be started gives exactly one notice and no poll", async () => {
+    const harness = await makeHarness([{ holdMs: 10_000 }]);
+    const clock = useClock(harness);
+    installWith(harness, { pythonExecutable: join(harness.root, "no-such-python") });
+
+    await harness.pi.emit("session_start");
+
+    await expectLockFailureReported(harness, clock);
+  }, 15_000);
+
+  const unsafeLockFiles: Array<[string, (lockPath: string, root: string) => Promise<void>]> = [
+    [
+      "a symbolic link",
+      async (lockPath, root) => {
+        const target = join(root, "elsewhere");
+        await writeFile(target, "", { mode: 0o600 });
+        await symlink(target, lockPath);
+      },
+    ],
+    [
+      "a file that other users can read",
+      async (lockPath) => {
+        await writeFile(lockPath, "", { mode: 0o600 });
+        await chmod(lockPath, 0o644);
+      },
+    ],
+    [
+      "a file with a second link",
+      async (lockPath, root) => {
+        const target = join(root, "elsewhere");
+        await writeFile(target, "", { mode: 0o600 });
+        await link(target, lockPath);
+      },
+    ],
+  ];
+  for (const [name, prepare] of unsafeLockFiles) {
+    test(`a lock file that is ${name} gives exactly one notice and no poll`, async () => {
+      const harness = await makeHarness([{ holdMs: 10_000 }]);
+      const clock = useClock(harness);
+      const botDirectory = join(harness.config.cursorRoot, harness.bot);
+      await mkdir(botDirectory, { recursive: true, mode: 0o700 });
+      await prepare(join(botDirectory, "wake-poller.lock"), harness.root);
+      install(harness);
+
+      await harness.pi.emit("session_start");
+
+      await expectLockFailureReported(harness, clock);
+    }, 15_000);
+  }
+
+  test("a holder that prints a wrong first line is stopped", async () => {
+    const harness = await makeHarness([{ holdMs: 10_000 }]);
+    const lockHolderPath = await writeHolder(harness, [
+      'with open(os.path.join(os.path.dirname(sys.argv[1]), "holder-pid.txt"), "w") as handle:',
+      "    handle.write(str(os.getpid()))",
+      'sys.stdout.write("hello\\n")',
+      "sys.stdout.flush()",
+      "sys.stdin.read()",
+    ]);
+    installWith(harness, { lockHolderPath });
+
+    await harness.pi.emit("session_start");
+
+    const holderPid = Number(await readFile(join(harness.config.cursorRoot, harness.bot, "holder-pid.txt"), "utf8"));
+    await waitFor(() => processGone(holderPid), 4_000);
+  }, 15_000);
+
+  test("a holder that exits 75 gives no notice and no poll", async () => {
+    const harness = await makeHarness([{ holdMs: 10_000 }]);
+    const clock = useClock(harness);
+    installWith(harness, { lockHolderPath: await writeHolder(harness, ["sys.exit(75)"]) });
+
+    await harness.pi.emit("session_start");
+
+    await expectQuietAndNoPoll(harness, clock);
+  }, 15_000);
+
+  test("a lock held by another real holder gives no notice and no poll", async () => {
+    const harness = await makeHarness([{ holdMs: 10_000 }]);
+    const clock = useClock(harness);
+    const botDirectory = join(harness.config.cursorRoot, harness.bot);
+    await mkdir(botDirectory, { recursive: true, mode: 0o700 });
+    const other = await startHolder(join(botDirectory, "wake-poller.lock"));
+    try {
+      install(harness);
+
+      await harness.pi.emit("session_start");
+
+      await expectQuietAndNoPoll(harness, clock);
+    } finally {
+      other.kill("SIGKILL");
+      await other.exited;
+    }
+  }, 15_000);
+
+  test("a free lock gives no lock notice and the session polls", async () => {
+    const harness = await makeHarness([{ holdMs: 10_000 }]);
+    install(harness);
+
+    await harness.pi.emit("session_start");
+    await waitFor(async () => (await readState(harness)).calls === 1);
+
+    expect(harness.pi.sent).toEqual([]);
+  }, 15_000);
+
+  test("the notice comes once per session, not once per start event", async () => {
+    const first = await makeHarness([{ holdMs: 10_000 }]);
+    const clock = useClock(first);
+    const pythonExecutable = join(first.root, "no-such-python");
+    installWith(first, { pythonExecutable });
+    await first.pi.emit("session_start");
+    await first.pi.emit("session_start");
+    await clock.advance(600_000);
+    expect(noticeTexts(first)).toEqual([lockFailedNotice]);
+
+    await first.pi.shutdown();
+    const second = await makeHarness([], { shared: first });
+    installWith(second, { pythonExecutable });
+    await second.pi.emit("session_start");
+
+    expect(noticeTexts(second)).toEqual([lockFailedNotice]);
+  }, 15_000);
+
+  test("mail pushed by the MCP server still wakes the session after a lock failure", async () => {
+    const harness = await makeHarness([{ holdMs: 10_000 }]);
+    const clock = useClock(harness);
+    installWith(harness, { pythonExecutable: join(harness.root, "no-such-python") });
+    await harness.pi.emit("session_start");
+
+    await harness.pi.emit("mcp_notification", notification([mail("pushed-1")]));
+    await clock.advance(120_000);
+
+    expect(noticeTexts(harness)).toEqual([lockFailedNotice, newMail(1)]);
+    expect((await readState(harness)).calls).toBe(0);
+  }, 15_000);
+
+  test("a notice refused before admission is retried and still shows exactly once", async () => {
+    const harness = await makeHarness([{ holdMs: 10_000 }]);
+    const clock = useClock(harness);
+    harness.pi.receiptOutcomes.push("refused");
+    installWith(harness, { pythonExecutable: join(harness.root, "no-such-python") });
+
+    await harness.pi.emit("session_start");
+    expect(harness.pi.sent).toEqual([]);
+    await clock.advance(120_000);
+
+    expect(noticeTexts(harness)).toEqual([lockFailedNotice]);
+    await clock.advance(600_000);
+    expect(noticeTexts(harness)).toEqual([lockFailedNotice]);
+  }, 15_000);
 });
 
 async function reminderHarness(live = false) {
@@ -946,7 +1197,7 @@ describe("118f recipient-side admission and pacing", () => {
     await clock.advance(30_000);
     expect(harness.pi.sent).toHaveLength(2);
     expect(harness.pi.sent[1].at).toBe(120_000);
-    expect(harness.pi.sent[1].message.content).toBe("Quarterdeck: 9 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.");
+    expect(harness.pi.sent[1].message.content).toBe(newMail(9));
   });
 
   test("ten minutes of paced mail never send twice within a two-minute session gap", async () => {
@@ -972,7 +1223,7 @@ describe("118f recipient-side admission and pacing", () => {
     }
     await harness.pi.emit("session_start");
     expect(harness.pi.sent).toHaveLength(1);
-    expect(harness.pi.sent[0].message.content).toBe("Quarterdeck: 64 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.");
+    expect(harness.pi.sent[0].message.content).toBe(newMail(64));
   });
 
   test("due reminder and fresh mail within one gap merge into one distinct-id count", async () => {
@@ -985,7 +1236,7 @@ describe("118f recipient-side admission and pacing", () => {
     expect(harness.pi.sent).toHaveLength(2);
     await clock.advance(119_000);
     expect(harness.pi.sent).toHaveLength(3);
-    expect(harness.pi.sent[2].message.content).toBe("Quarterdeck: 2 mail still unhandled after 10 minutes. Read it as data with qd_wait, then acknowledge it with qd_ack.");
+    expect(harness.pi.sent[2].message.content).toBe(stillUnhandled(2));
   });
 
   test("subagent startup takes no lease, starts no wait and sends no notification", async () => {
@@ -1109,7 +1360,7 @@ describe("118g capped id-only pending state", () => {
     expect(observed.metadataRetained).toBe(false);
     await clock.advance(120_000);
     expect(harness.pi.sent).toHaveLength(1);
-    expect(harness.pi.sent[0].message.content).toBe("Quarterdeck: 1000 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.");
+    expect(harness.pi.sent[0].message.content).toBe(newMail(1000));
   });
 
   test("poll overflow advances only over the retained prefix and the next poll covers the rest once", async () => {
@@ -1144,8 +1395,8 @@ describe("118g capped id-only pending state", () => {
     await waitFor(async () => (await readFile(cursorPath, "utf8")).trim() === "118g-overflow-poll-0009");
     await waitFor(() => successTimers(clock) > timers);
     expect(harness.pi.sent.map((entry) => entry.message.content)).toEqual([
-      "Quarterdeck: 1000 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.",
-      "Quarterdeck: 5 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.",
+      newMail(1000),
+      newMail(5),
     ]);
     expect(observed.maximum).toBeLessThanOrEqual(1000);
     expect(observed.metadataRetained).toBe(false);
@@ -1167,7 +1418,7 @@ describe("118g capped id-only pending state", () => {
     expect(observed.metadataRetained).toBe(false);
     await harness.pi.emit("session_start");
     expect(harness.pi.sent).toHaveLength(1);
-    expect(harness.pi.sent[0].message.content).toBe("Quarterdeck: 1000 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.");
+    expect(harness.pi.sent[0].message.content).toBe(newMail(1000));
     const cursorPath = join(harness.config.cursorRoot, harness.bot, "wake.cursor");
     await clock.advance(0);
     await waitFor(() => fileExists(cursorPath));
@@ -1180,8 +1431,8 @@ describe("118g capped id-only pending state", () => {
     }
     expect((await readFile(cursorPath, "utf8")).trim()).toBe(lastId);
     expect(harness.pi.sent.map((entry) => entry.message.content)).toEqual([
-      "Quarterdeck: 1000 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.",
-      ...Array.from({ length: 10 }, () => "Quarterdeck: 100 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack."),
+      newMail(1000),
+      ...Array.from({ length: 10 }, () => newMail(100)),
     ]);
     expect(observed.maximum).toBeLessThanOrEqual(1000);
     expect(observed.metadataRetained).toBe(false);
@@ -1190,9 +1441,10 @@ describe("118g capped id-only pending state", () => {
   }, 30_000);
 });
 
-const unreadableNotice = "Quarterdeck: mail the wake cannot read; read it with qd_wait, then acknowledge it with qd_ack.";
+const unreadableNotice =
+  "Quarterdeck: mail the wake cannot read; read it with qd_wait or `qd wait`, then acknowledge it with qd_ack or `qd ack <id>`.";
 const containedLine = "Quarterdeck wake add-on: an internal error was contained.\n";
-const stalledNotice = "Quarterdeck: the wake has not reached mail for 30 minutes; check with qd_wait.";
+const stalledNotice = "Quarterdeck: the wake has not reached mail for 30 minutes; check with qd_wait or `qd wait`.";
 const pageBytesLimit = 192 * 1024;
 const hostFaults: unknown[] = [];
 const recordHostFault = (error: unknown) => {
@@ -1200,7 +1452,11 @@ const recordHostFault = (error: unknown) => {
 };
 
 function newMail(count: number) {
-  return `Quarterdeck: ${count} new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.`;
+  return `Quarterdeck: ${count} new mail. ${readHint}`;
+}
+
+function stillUnhandled(count: number) {
+  return `Quarterdeck: ${count} mail still unhandled after 10 minutes. ${readHint}`;
 }
 
 function noticeTexts(harness: Harness) {
@@ -1684,7 +1940,7 @@ describe("0.1.3 the wake add-on never ends the host", () => {
     const harness = await makeHarness([{ messages: [] }]);
     const clock = useClock(harness);
     const endPath = join(harness.root, "holder-end");
-    const lockHolderPath = await writeHolder(harness, `while (!existsSync(${JSON.stringify(endPath)})) await Bun.sleep(20);`);
+    const lockHolderPath = await writeHolder(harness, [...printLocked, `while not os.path.exists(${JSON.stringify(endPath)}): time.sleep(0.02)`]);
     const clearTimer = harness.pi.context.clearTimer.bind(harness.pi.context);
     let clearAttempts = 0;
     harness.pi.context.clearTimer = () => {
@@ -1712,7 +1968,7 @@ describe("0.1.3 the wake add-on never ends the host", () => {
     const harness = await makeHarness([{ messages: [] }, { holdMs: 20_000 }]);
     const clock = useClock(harness);
     const endPath = join(harness.root, "holder-end");
-    const lockHolderPath = await writeHolder(harness, `while (!existsSync(${JSON.stringify(endPath)})) await Bun.sleep(20);`);
+    const lockHolderPath = await writeHolder(harness, [...printLocked, `while not os.path.exists(${JSON.stringify(endPath)}): time.sleep(0.02)`]);
     createQuarterdeckExtension({ config: harness.config, retry: { initialMs: 40, maximumMs: 80 }, reconcileIntervalMs: 86_400_000, lockHolderPath })(harness.pi);
     await harness.pi.emit("session_start");
     await pollRound(harness, clock, 0);
@@ -1820,7 +2076,7 @@ function gateFixtureSource(statement: string) {
 }
 
 async function expectNextSessionTakesTheLock(harness: Harness) {
-  await waitFor(async () => (await flockExit(join(harness.config.cursorRoot, harness.bot, "wake-poller.lock"))) === 0, 4_000);
+  await waitFor(async () => (await lockProbeExit(join(harness.config.cursorRoot, harness.bot, "wake-poller.lock"))) === 0, 4_000);
   await patchScenario(harness, { mailbox: [mail("new-1")] });
   const next = await makeHarness([], { shared: harness });
   install(next);
@@ -1830,10 +2086,12 @@ async function expectNextSessionTakesTheLock(harness: Harness) {
   await expectChildrenGone(next);
 }
 
-async function writeHolder(harness: Harness, waitStatement: string) {
-  const holderPath = join(harness.root, "test-holder.ts");
-  const source = [`import { existsSync } from "node:fs";`, `process.stdout.write("locked\\n");`, waitStatement, `process.exit(0);`].join("\n");
-  await writeFile(holderPath, source, { mode: 0o600 });
+const holderPrelude = ["import json", "import os", "import stat", "import sys", "import time"];
+const printLocked = ['sys.stdout.write("locked\\n")', "sys.stdout.flush()"];
+
+async function writeHolder(harness: Harness, lines: string[]) {
+  const holderPath = join(harness.root, "test-holder.py");
+  await writeFile(holderPath, [...holderPrelude, ...lines, ""].join("\n"), { mode: 0o600 });
   return holderPath;
 }
 
@@ -1943,7 +2201,7 @@ describe("0.1.3 the host process survives the add-on", () => {
 
   test("host process: a holder that ends while clearTimer throws leaves the host running", async () => {
     const harness = await makeHarness([{ messages: [] }]);
-    const holderPath = await writeHolder(harness, "await Bun.sleep(1500);");
+    const holderPath = await writeHolder(harness, [...printLocked, "time.sleep(1.5)"]);
     const clearPath = join(harness.root, "host-clear.txt");
     const result = await runHost(harness, 5_000, lossHostSource(holderPath, clearPath, true));
     expect(result.stillRunning).toBe(true);
@@ -1954,7 +2212,7 @@ describe("0.1.3 the host process survives the add-on", () => {
 
   test("host process: a holder that ends while a wait is in flight leaves the host running and polling stops", async () => {
     const harness = await makeHarness([{ messages: [] }, { holdMs: 20_000 }]);
-    const holderPath = await writeHolder(harness, "await Bun.sleep(1500);");
+    const holderPath = await writeHolder(harness, [...printLocked, "time.sleep(1.5)"]);
     const result = await runHost(harness, 5_000, lossHostSource(holderPath, join(harness.root, "host-clear.txt"), false));
     expect(result.stillRunning).toBe(true);
     expect(result.stderr).not.toContain("Unhandled");
