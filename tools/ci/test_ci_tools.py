@@ -940,7 +940,7 @@ class WorkflowContextsTest(unittest.TestCase):
                 self.assertEqual((result.returncode, result.stdout), (0, ""))
 
     def test_the_original_ci_has_exactly_the_three_reported_findings(self):
-        original = without_ignore_refusal(without_scan_config(without_server_lane(without_app_lanes(without_path_map(WORKFLOW.read_text(encoding="utf-8"))))))
+        original = without_ignore_refusal(without_scan_config(without_server_lane(without_app_lanes(without_path_map(without_extension_macos(WORKFLOW.read_text(encoding="utf-8")))))))
         original = original.replace(
             "      - name: Fetch main for the design comparison\n"
             "        run: git -c credential.helper= fetch --no-tags --depth=1 origin main:refs/remotes/origin/main\n\n",
@@ -1090,6 +1090,41 @@ class AppLanesReconstructionTest(unittest.TestCase):
                     without_app_lanes(changed)
 
 
+EXTENSION_MACOS_PIECES = (
+    "      - extension-macos\n",
+    "      EXTENSION_MACOS_RESULT: ${{ needs.extension-macos.result }}\n",
+    ' "$EXTENSION_MACOS_RESULT"',
+)
+
+
+def without_extension_macos(text):
+    start = text.find("  extension-macos:\n")
+    if start < 0:
+        return text
+    text = text[:start] + text[text.index("  no-comments:\n", start):]
+    for piece in EXTENSION_MACOS_PIECES:
+        if text.count(piece) != 1:
+            raise ValueError("unexpected macOS lane: not found exactly once: " + piece.strip())
+        text = text.replace(piece, "")
+    return text
+
+
+class ExtensionMacosReconstructionTest(unittest.TestCase):
+    def test_a_changed_or_missing_piece_is_refused_and_never_silently_kept(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        for piece in EXTENSION_MACOS_PIECES:
+            with self.subTest(piece=piece.strip()):
+                self.assertEqual(text.count(piece), 1)
+                for changed in (text.replace(piece, piece + piece, 1), text.replace(piece, "", 1)):
+                    with self.assertRaisesRegex(ValueError, "unexpected macOS lane"):
+                        without_extension_macos(changed)
+
+    def test_taking_the_lane_out_leaves_no_trace_of_it(self):
+        original = without_extension_macos(WORKFLOW.read_text(encoding="utf-8"))
+        self.assertNotIn("macos", original.lower())
+        self.assertEqual(without_extension_macos(original), original)
+
+
 PATH_MAP_WEB_JOBS = ("web-static", "web-build", "web-browser", "web-design", "web-design-selftest")
 PATH_MAP_APP_JOBS = ("app-static", "app-build", "app-browser")
 PATH_MAP_JOBS = PATH_MAP_WEB_JOBS + PATH_MAP_APP_JOBS
@@ -1221,7 +1256,7 @@ class WorkflowNullValuesTest(unittest.TestCase):
         self.assertEqual((result.returncode, result.stdout, result.stderr), (0, "", ""))
 
     def test_the_r1_workflow_has_exactly_one_null_finding(self):
-        original = ci_with_selftest_env(without_ignore_refusal(without_scan_config(without_server_lane(without_app_lanes(without_path_map(WORKFLOW.read_text(encoding="utf-8")))))))
+        original = ci_with_selftest_env(without_ignore_refusal(without_scan_config(without_server_lane(without_app_lanes(without_path_map(without_extension_macos(WORKFLOW.read_text(encoding="utf-8"))))))))
         original = original.replace(
             "      - name: Fetch main for the design comparison\n"
             "        run: git -c credential.helper= fetch --no-tags --depth=1 origin main:refs/remotes/origin/main\n\n",

@@ -1,6 +1,6 @@
 # CI
 
-Every pull request and every push to `main` runs `.github/workflows/ci.yml` on GitHub-hosted `ubuntu-24.04` runners. No job in this repository runs on a self-hosted runner.
+Every pull request and every push to `main` runs `.github/workflows/ci.yml` on GitHub-hosted runners: `ubuntu-24.04`, and `macos-15` for the one job that runs the bot tools on a Mac. No job in this repository runs on a self-hosted runner.
 
 This page lists the lanes, the required checks, the pin rules, and the rules that keep secrets out of reach.
 
@@ -13,6 +13,7 @@ The stdlib-only `tools/ci/workflow-contexts` checker runs through the CI tool te
 | python | The bot-tool unittest suites: `signup`, `mail`, `golive/connect` and `qd-client-wheel` | The runner's `python3` | 10 min |
 | server | Each server suite in its own process with an allowlisted environment, through `deploy/server_lane.py`. The lane first builds each package layout and stops if one holds the public `signup_flow.py` or `qd_jmap.py`, a link, a linked folder, an archive or a special file, or if a package manifest lists a public copy. Four chat tests of Backchannel (the owner's older chat and approvals app, in `apps/server/captain-app`) need Node, and the lane stops with one plain line if it is missing. The job's only permission is `contents: read`, and it has no secrets | A job container pinned by digest to `docker.io/library/python@sha256:0aecac02dc3d4c5dbb024b753af084cafe41f5416e02193f1ce345d671ec966e`, the image the `approval-qd` service uses in `deploy/approval-qd/compose.approval-qd.json`, and Node 22.21.0 by checksum in `tools/ci/pins.json` | 20 min |
 | extension | `bun test` for `omp-quarterdeck` | `oven-sh/setup-bun` by commit, Bun 1.3.14 | 10 min |
+| extension-macos | The bot tools on a Mac: the `mail`, `golive/connect` and `qd-client-wheel` unittest suites, `bun test` for `omp-quarterdeck`, and a check that the sum command in `omp-quarterdeck/INSTALL.md` passes a file that matches and fails a changed one. It has no secrets and its only permission is `contents: read` | `oven-sh/setup-bun` by commit, Bun 1.3.14; the runner's `python3` | 15 min |
 | web-static | In `apps/web`: `npm ci --ignore-scripts`, `npm audit signatures`, lint, typecheck, `test:data` and `test:taskcard` | Node 22.21.0 linux-x64 by checksum in `tools/ci/pins.json`, and the lock file's integrity values | 10 min |
 | web-build | Builds `npm run build:app -- --server` and `npm run build:app -- --server --chat`, and writes each bundle's sha256 to the job summary. It publishes no release artifact | As web-static | 10 min |
 | web-browser | `test:app` and `test:chat` | Playwright 1.64.1 from the lock file, and the Chrome for Testing headless shell below | 25 min |
@@ -35,7 +36,7 @@ On a pull request the `changes` job runs `tools/ci/ci-changes`. It reads the fil
 
 The map starts in observe mode. In observe mode a lane that is not needed still runs: every filtered lane of an app that has its `package.json` is turned on, as it was before the map. The `changes` job only names the lanes the map would have skipped, by job name, in its log and in its job summary. After a day of pull requests that log is read for wrong skips. A later change then sets `CI_CHANGES_MODE` to `enforce` for the `changes` job. Only that exact value makes a lane that is not needed skip. Any other value, or none, is observe mode.
 
-The other lanes (`python`, `server`, `extension`, `no-comments`, `leaks` and `pr-title`) are not filtered. `qd-check` requires each filtered lane to have succeeded when it was turned on and to have been skipped when it was not.
+The other lanes (`python`, `server`, `extension`, `extension-macos`, `no-comments`, `leaks` and `pr-title`) are not filtered. `qd-check` requires each filtered lane to have succeeded when it was turned on and to have been skipped when it was not.
 
 ## Required checks
 
@@ -60,7 +61,7 @@ The repository allows exactly four actions, each pinned by full commit SHA:
 
 A workflow never refers to an action by tag or branch. Node and the browser come from `tools/ci/pins.json` through `tools/ci/fetch-pinned`, so they need no extra action. The `server` job runs in a container image pinned by digest in `.github/workflows/ci.yml`, the same image that the `approval-qd` service uses.
 
-The `ubuntu-24.04` runner image itself is updated by GitHub and cannot be pinned by digest. Every tool that matters is pinned inside it.
+The `ubuntu-24.04` and `macos-15` runner images are updated by GitHub and cannot be pinned by digest. Every tool that matters is pinned inside them, except the `python3` of the `macos-15` image.
 
 ## The browser
 

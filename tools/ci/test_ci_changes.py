@@ -2,17 +2,18 @@ import hashlib
 import os
 import pathlib
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
 
-from test_ci_tools import HERE, WORKFLOW, load_module, step_value, without_path_map, workflow_steps
+from test_ci_tools import HERE, WORKFLOW, load_module, step_value, without_extension_macos, without_path_map, workflow_steps
 
 WEB_JOBS = ("web-static", "web-build", "web-browser", "web-design", "web-design-selftest")
 APP_JOBS = ("app-static", "app-build", "app-browser")
 GATED_JOBS = WEB_JOBS + APP_JOBS
-UNGATED_JOBS = ("python", "server", "extension", "no-comments", "leaks")
+UNGATED_JOBS = ("python", "server", "extension", "extension-macos", "no-comments", "leaks")
 MAIN_JOBS = ("changes", *UNGATED_JOBS, *GATED_JOBS, "pr-title", "qd-check")
 MAIN_WORKFLOW_BLOB = "c639e234756c0b8222d0064fd46493ac425c246a"
 BASE_FILES = {
@@ -316,7 +317,7 @@ class PathMapWorkflowTest(unittest.TestCase):
 
     def verdict(self, script, **changed):
         env = {"PATH": os.environ.get("PATH", "")}
-        for name in ("CHANGES", "PYTHON", "SERVER", "EXTENSION", "COMMENTS", "LEAKS"):
+        for name in ("CHANGES", "PYTHON", "SERVER", "EXTENSION", "EXTENSION_MACOS", "COMMENTS", "LEAKS"):
             env[name + "_RESULT"] = "success"
         for job in GATED_JOBS:
             env[env_name(job) + "_GATE"] = "true"
@@ -333,7 +334,7 @@ class PathMapWorkflowTest(unittest.TestCase):
 
     def test_with_the_path_map_taken_out_the_workflow_is_the_file_on_main_byte_for_byte(self):
         self.assertIn("python3 tools/ci/ci-changes", self.text)
-        data = without_path_map(self.text).encode("utf-8")
+        data = without_path_map(without_extension_macos(self.text)).encode("utf-8")
         blob = hashlib.sha1(b"blob " + str(len(data)).encode("ascii") + b"\0" + data).hexdigest()
         self.assertEqual(blob, MAIN_WORKFLOW_BLOB)
 
@@ -407,9 +408,84 @@ class PathMapWorkflowTest(unittest.TestCase):
                 {gate: "TRUE", result: "success"},
             ):
                 self.assertEqual(self.verdict(script, **wrong), 1, (job, wrong))
-        for name in ("CHANGES", "PYTHON", "SERVER", "EXTENSION", "COMMENTS", "LEAKS"):
+        for name in ("CHANGES", "PYTHON", "SERVER", "EXTENSION", "EXTENSION_MACOS", "COMMENTS", "LEAKS"):
             for wrong in ("failure", "cancelled", "skipped", ""):
                 self.assertEqual(self.verdict(script, **{name + "_RESULT": wrong}), 1, (name, wrong))
+
+
+class ExtensionMacosWorkflowTest(unittest.TestCase):
+    SUM_COMMAND = 'grep -F "quarterdeck-omp-wake-$VERSION.tar.gz" SHA256SUMS | shasum -a 256 --check'
+
+    def setUp(self):
+        self.text = WORKFLOW.read_text(encoding="utf-8")
+        self.block = job_blocks(self.text)["extension-macos"]
+        self.steps = [step for step in workflow_steps(self.text) if step["job"] == "extension-macos"]
+
+    def lines(self, step):
+        return [line for line in step["lines"] if line.strip()]
+
+    def test_the_job_is_named_runs_on_the_standard_macos_runner_and_reads_only(self):
+        self.assertEqual(job_setting(self.block, "name"), "Bot tools on macOS")
+        self.assertEqual(job_setting(self.block, "runs-on"), "macos-15")
+        self.assertEqual(job_setting(self.block, "timeout-minutes"), "15")
+        self.assertEqual(job_list(self.block, "permissions"), ["contents: read"])
+
+    def test_the_job_is_never_gated_and_never_self_hosted(self):
+        gated = [
+            line for line in self.block
+            if line.startswith(("    if:", "    needs:", "    container:", "    continue-on-error:", "    strategy:"))
+        ]
+        self.assertEqual(gated, [])
+        self.assertNotIn("self-hosted", "\n".join(self.block))
+
+    def test_the_steps_are_the_bot_tool_suites_the_extension_tests_and_the_sum_check_in_order(self):
+        self.assertEqual([step_value(step, "name") for step in self.steps], [
+            "Checkout",
+            "Set up Bun",
+            "Mail client tests",
+            "Connect client and MCP tests",
+            "Wheel build tests",
+            "Run the extension tests",
+            "Check the install guide's sum command",
+        ])
+
+    def test_checkout_bun_and_the_extension_tests_are_the_linux_extension_job_steps(self):
+        linux = [step for step in workflow_steps(self.text) if step["job"] == "extension"]
+        self.assertEqual([self.lines(step) for step in self.steps[:2]], [self.lines(step) for step in linux[:2]])
+        self.assertEqual(self.lines(self.steps[5]), self.lines(linux[2]))
+
+    def test_the_python_suites_are_in_the_form_of_the_linux_python_job(self):
+        linux = {step_value(step, "name"): step for step in workflow_steps(self.text) if step["job"] == "python"}
+        for step in self.steps[2:5]:
+            name = step_value(step, "name")
+            self.assertEqual(self.lines(step), self.lines(linux[name]), name)
+
+    def test_the_sum_step_holds_the_install_guide_command_to_the_guide_and_stops_a_changed_file(self):
+        script = step_value(self.steps[6], "run")
+        guide = (HERE.parent.parent / "omp-quarterdeck" / "INSTALL.md").read_text(encoding="utf-8")
+        self.assertIn("\n" + self.SUM_COMMAND + "\n", guide)
+        self.assertIn(self.SUM_COMMAND, script)
+        self.assertIn("grep -Fxq", script)
+        self.assertIn("if " + self.SUM_COMMAND + "; then", script)
+
+    def test_the_guide_command_passes_the_downloaded_file_and_stops_a_changed_one(self):
+        shasum = shutil.which("shasum")
+        if shasum is None:
+            self.skipTest("shasum is not installed")
+        name = "quarterdeck-omp-wake-0.0.0.tar.gz"
+        with tempfile.TemporaryDirectory() as directory:
+            folder = pathlib.Path(directory)
+            archive = folder / name
+            archive.write_bytes(b"wake archive\n")
+            other = hashlib.sha256(b"wheel\n").hexdigest()
+            sums = other + "  quarterdeck_mcp-0.0.0-py3-none-any.whl\n" + hashlib.sha256(archive.read_bytes()).hexdigest() + "  " + name + "\n"
+            chosen = "".join(row for row in sums.splitlines(keepends=True) if name in row)
+            passed = subprocess.run([shasum, "-a", "256", "--check"], input=chosen, cwd=folder, capture_output=True, text=True)
+            self.assertEqual((passed.returncode, passed.stdout), (0, name + ": OK\n"))
+            archive.write_bytes(b"changed\n")
+            stopped = subprocess.run([shasum, "-a", "256", "--check"], input=chosen, cwd=folder, capture_output=True, text=True)
+            self.assertEqual(stopped.returncode, 1)
+            self.assertIn(name + ": FAILED", stopped.stdout)
 
 
 if __name__ == "__main__":
