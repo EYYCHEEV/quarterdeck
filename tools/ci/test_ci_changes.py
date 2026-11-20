@@ -2,7 +2,6 @@ import hashlib
 import os
 import pathlib
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -414,8 +413,6 @@ class PathMapWorkflowTest(unittest.TestCase):
 
 
 class ExtensionMacosWorkflowTest(unittest.TestCase):
-    SUM_COMMAND = 'grep -F "quarterdeck-omp-wake-$VERSION.tar.gz" SHA256SUMS | shasum -a 256 --check'
-
     def setUp(self):
         self.text = WORKFLOW.read_text(encoding="utf-8")
         self.block = job_blocks(self.text)["extension-macos"]
@@ -446,7 +443,7 @@ class ExtensionMacosWorkflowTest(unittest.TestCase):
             "Connect client and MCP tests",
             "Wheel build tests",
             "Run the extension tests",
-            "Check the install guide's sum command",
+            "Check the install guide's sum commands",
         ])
 
     def test_checkout_bun_and_the_extension_tests_are_the_linux_extension_job_steps(self):
@@ -460,32 +457,13 @@ class ExtensionMacosWorkflowTest(unittest.TestCase):
             name = step_value(step, "name")
             self.assertEqual(self.lines(step), self.lines(linux[name]), name)
 
-    def test_the_sum_step_holds_the_install_guide_command_to_the_guide_and_stops_a_changed_file(self):
-        script = step_value(self.steps[6], "run")
-        guide = (HERE.parent.parent / "omp-quarterdeck" / "INSTALL.md").read_text(encoding="utf-8")
-        self.assertIn("\n" + self.SUM_COMMAND + "\n", guide)
-        self.assertIn(self.SUM_COMMAND, script)
-        self.assertIn("grep -Fxq", script)
-        self.assertIn("if " + self.SUM_COMMAND + "; then", script)
-
-    def test_the_guide_command_passes_the_downloaded_file_and_stops_a_changed_one(self):
-        shasum = shutil.which("shasum")
-        if shasum is None:
-            self.skipTest("shasum is not installed")
-        name = "quarterdeck-omp-wake-0.0.0.tar.gz"
-        with tempfile.TemporaryDirectory() as directory:
-            folder = pathlib.Path(directory)
-            archive = folder / name
-            archive.write_bytes(b"wake archive\n")
-            other = hashlib.sha256(b"wheel\n").hexdigest()
-            sums = other + "  quarterdeck_mcp-0.0.0-py3-none-any.whl\n" + hashlib.sha256(archive.read_bytes()).hexdigest() + "  " + name + "\n"
-            chosen = "".join(row for row in sums.splitlines(keepends=True) if name in row)
-            passed = subprocess.run([shasum, "-a", "256", "--check"], input=chosen, cwd=folder, capture_output=True, text=True)
-            self.assertEqual((passed.returncode, passed.stdout), (0, name + ": OK\n"))
-            archive.write_bytes(b"changed\n")
-            stopped = subprocess.run([shasum, "-a", "256", "--check"], input=chosen, cwd=folder, capture_output=True, text=True)
-            self.assertEqual(stopped.returncode, 1)
-            self.assertIn(name + ": FAILED", stopped.stdout)
+    def test_the_sum_step_runs_the_guide_tests_and_requires_shasum(self):
+        self.assertEqual(self.lines(self.steps[6]), [
+            "      - name: Check the install guide's sum commands",
+            "        env:",
+            '          QD_REQUIRE_SHASUM: "1"',
+            "        run: python3 -m unittest discover -s tools/ci -p 'test_install_sums.py'",
+        ])
 
 
 if __name__ == "__main__":

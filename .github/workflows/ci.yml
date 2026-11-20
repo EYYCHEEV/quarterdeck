@@ -146,24 +146,10 @@ jobs:
         working-directory: omp-quarterdeck
         run: bun test
 
-      - name: Check the install guide's sum command
-        run: |
-          set -eu
-          VERSION=0.0.0
-          grep -Fxq 'grep -F "quarterdeck-omp-wake-$VERSION.tar.gz" SHA256SUMS | shasum -a 256 --check' omp-quarterdeck/INSTALL.md
-          folder="$RUNNER_TEMP/sum-check"
-          mkdir "$folder"
-          cd "$folder"
-          printf 'wake archive\n' > "quarterdeck-omp-wake-$VERSION.tar.gz"
-          wheel_sum=$(printf 'wheel\n' | shasum -a 256 | cut -d ' ' -f 1)
-          printf '%s  quarterdeck_mcp-%s-py3-none-any.whl\n' "$wheel_sum" "$VERSION" > SHA256SUMS
-          shasum -a 256 "quarterdeck-omp-wake-$VERSION.tar.gz" >> SHA256SUMS
-          grep -F "quarterdeck-omp-wake-$VERSION.tar.gz" SHA256SUMS | shasum -a 256 --check
-          printf 'changed\n' >> "quarterdeck-omp-wake-$VERSION.tar.gz"
-          if grep -F "quarterdeck-omp-wake-$VERSION.tar.gz" SHA256SUMS | shasum -a 256 --check; then
-            echo "the sum check passed a changed file"
-            exit 1
-          fi
+      - name: Check the install guide's sum commands
+        env:
+          QD_REQUIRE_SHASUM: "1"
+        run: python3 -m unittest discover -s tools/ci -p 'test_install_sums.py'
 
   no-comments:
     name: No comments in code

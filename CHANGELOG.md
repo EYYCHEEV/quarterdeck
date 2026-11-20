@@ -6,6 +6,7 @@ From later releases this file also lists changes to the web app and the server. 
 ## 0.2.0
 
 - Bot tools: the wake extension for OMP now works on macOS and no longer needs `flock`; it needs only Python 3, which `qd` already needs. A session that cannot take its poller lock now says so once instead of staying silent, and the wake notice names the `qd wait` and `qd ack <id>` commands as well as the MCP tools. The install guide has a macOS section. (issue #37)
+- Bot tools: on Linux and macOS, the wake install guide checks exactly the archive's own checksum before unpacking.
 - App: in a chat, 15 characters that are invisible or that change the order of the text are shown as a small marker with their code, such as `\u{202E}`, in a bot's messages, in your own and in quoted messages. Copy, Copy code and copying a selection give the text as you see it, with the marker's text in place of the character. Joined emoji and Persian text are unchanged.
 - App: Sign out also forgets which chats have alerts turned off on this device.
 - App: in a chat, the line under your message ("Delivered" or "Read") no longer makes the chat jump when you send again. The old line folds away and the new one grows in. With Reduce Motion they change at once.

@@ -12,12 +12,31 @@ This package wakes an OMP session when Quarterdeck mail arrives. It does not rea
 
 ## Get the files
 
-Download `quarterdeck-omp-wake-X.Y.Z.tar.gz` and `SHA256SUMS` from one release page. Check the sum before you unpack:
+Download `quarterdeck-omp-wake-X.Y.Z.tar.gz` and `SHA256SUMS` from one release page. In the download folder, replace `X.Y.Z` with the release version and run the block for your platform.
+
+On Linux, the block looks up the archive by its exact name in `SHA256SUMS`, checks just that one entry, and unpacks only if it matches.
 
 ```sh
-sha256sum --check --ignore-missing SHA256SUMS
-tar -xzf quarterdeck-omp-wake-X.Y.Z.tar.gz
+(
+  archive=quarterdeck-omp-wake-X.Y.Z.tar.gz
+  sum_line=$(LC_ALL=C awk -v name="$archive" '
+    substr($0, 65, 2) ~ /^ [ *]$/ && substr($0, 67) == name {
+      count++
+      line = $0
+    }
+    END { if (count == 1) print line }
+  ' SHA256SUMS) &&
+  if [ -n "$sum_line" ]; then
+    printf '%s\n' "$sum_line" | LC_ALL=C sha256sum --check - &&
+      tar -xzf "$archive"
+  else
+    printf 'Expected exactly one checksum for %s in SHA256SUMS.\n' "$archive" >&2
+    false
+  fi
+)
 ```
+
+A match prints `quarterdeck-omp-wake-X.Y.Z.tar.gz: OK`. If the entry is missing or repeated, the block asks for exactly one checksum. If the archive differs, the check prints `FAILED`. In either case, the block stops without unpacking.
 
 Place the unpacked folder under OMP's user extension directory and keep its files together. Do not copy only `index.ts`; it loads the poller, lock holder, and cursor code beside it.
 
@@ -26,15 +45,29 @@ Place the unpacked folder under OMP's user extension directory and keep its file
 The wake runs on macOS with the same files and the same steps as on Linux, and needs nothing beyond the prerequisites above.
 
 - **Prerequisites:** the same as above. The wake runs `python3` from your `PATH`, or the command named by `QUARTERDECK_PYTHON`. Use the Python that `qd` runs under.
-- **Check the sum with `shasum -a 256`:** macOS has `shasum` in place of `sha256sum`. A release's `SHA256SUMS` lists every file of the release, so select the line for the file you downloaded and check only that line.
+- **Check the sum with `shasum -a 256`:** use this block instead of the Linux block. It checks just the one entry for the exact archive name and unpacks only if the check passes.
 
 ```sh
-VERSION=X.Y.Z
-grep -F "quarterdeck-omp-wake-$VERSION.tar.gz" SHA256SUMS | shasum -a 256 --check
-tar -xzf "quarterdeck-omp-wake-$VERSION.tar.gz"
+(
+  archive=quarterdeck-omp-wake-X.Y.Z.tar.gz
+  sum_line=$(LC_ALL=C awk -v name="$archive" '
+    substr($0, 65, 2) ~ /^ [ *]$/ && substr($0, 67) == name {
+      count++
+      line = $0
+    }
+    END { if (count == 1) print line }
+  ' SHA256SUMS) &&
+  if [ -n "$sum_line" ]; then
+    printf '%s\n' "$sum_line" | LC_ALL=C shasum -a 256 --check &&
+      tar -xzf "$archive"
+  else
+    printf 'Expected exactly one checksum for %s in SHA256SUMS.\n' "$archive" >&2
+    false
+  fi
+)
 ```
 
-The check prints `quarterdeck-omp-wake-X.Y.Z.tar.gz: OK` and exits 0. If the file differs from the release, it prints `FAILED` and exits 1; do not unpack it.
+A match prints `quarterdeck-omp-wake-X.Y.Z.tar.gz: OK`. If the entry is missing or repeated, the block asks for exactly one checksum. If the archive differs, the check prints `FAILED`. In either case, the block stops without unpacking.
 
 ## Configure
 

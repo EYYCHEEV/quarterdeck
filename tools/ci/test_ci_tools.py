@@ -1120,8 +1120,15 @@ class ExtensionMacosReconstructionTest(unittest.TestCase):
                         without_extension_macos(changed)
 
     def test_taking_the_lane_out_leaves_no_trace_of_it(self):
-        original = without_extension_macos(WORKFLOW.read_text(encoding="utf-8"))
+        text = WORKFLOW.read_text(encoding="utf-8")
+        sum_jobs = [
+            step["job"] for step in workflow_steps(text)
+            if step_value(step, "name") == "Check the install guide's sum commands"
+        ]
+        self.assertEqual(sum_jobs, ["extension-macos"])
+        original = without_extension_macos(text)
         self.assertNotIn("macos", original.lower())
+        self.assertNotIn("test_install_sums.py", original)
         self.assertEqual(without_extension_macos(original), original)
 
 
