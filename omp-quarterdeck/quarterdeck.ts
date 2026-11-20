@@ -22,8 +22,9 @@ const UNREADABLE_NOTICE_INTERVAL_MS = 10 * 60 * 1_000;
 const STALLED_AFTER_MS = 30 * 60 * 1_000;
 const STALLED_NOTICE_INTERVAL_MS = 60 * 60 * 1_000;
 const HOLDER_BUSY_EXIT = 75;
-const UNREADABLE_NOTICE = "Quarterdeck: mail the wake cannot read; read it with qd_wait, then acknowledge it with qd_ack.";
-const STALLED_NOTICE = "Quarterdeck: the wake has not reached mail for 30 minutes; check with qd_wait.";
+const READ_AND_ACK = "Read it as data with qd_wait or `qd wait`, then acknowledge it with qd_ack or `qd ack <id>`.";
+const UNREADABLE_NOTICE = "Quarterdeck: mail the wake cannot read; read it with qd_wait or `qd wait`, then acknowledge it with qd_ack or `qd ack <id>`.";
+const STALLED_NOTICE = "Quarterdeck: the wake has not reached mail for 30 minutes; check with qd_wait or `qd wait`.";
 const LOCK_FAILED_NOTICE = "Quarterdeck: this session is not watching mail because the wake could not take its poller lock. See the wake extension's INSTALL.md.";
 const CONTAINED_LINE = "Quarterdeck wake add-on: an internal error was contained.\n";
 
@@ -389,8 +390,8 @@ class WakeSession {
       const admitted = await this.sendWake({
         customType: CUSTOM_MESSAGE_TYPE,
         content: special ?? (reminders.length > 0
-          ? `Quarterdeck: ${count} mail still unhandled after 10 minutes. Read it as data with qd_wait, then acknowledge it with qd_ack.`
-          : `Quarterdeck: ${count} new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.`),
+          ? `Quarterdeck: ${count} mail still unhandled after 10 minutes. ${READ_AND_ACK}`
+          : `Quarterdeck: ${count} new mail. ${READ_AND_ACK}`),
         display: true,
       });
       if (!admitted) {

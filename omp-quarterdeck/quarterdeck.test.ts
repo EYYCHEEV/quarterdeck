@@ -370,8 +370,10 @@ function notification(messages: unknown[]) {
   return { server: "quarterdeck", method: MAIL_NOTIFICATION_METHOD, params: { messages } };
 }
 
-const oneWake = "Quarterdeck: 1 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.";
-const oneReminder = "Quarterdeck: 1 mail still unhandled after 10 minutes. Read it as data with qd_wait, then acknowledge it with qd_ack.";
+const readHint = "Read it as data with qd_wait or `qd wait`, then acknowledge it with qd_ack or `qd ack <id>`.";
+const oneWake = newMail(1);
+const oneReminder =
+  "Quarterdeck: 1 mail still unhandled after 10 minutes. Read it as data with qd_wait or `qd wait`, then acknowledge it with qd_ack or `qd ack <id>`.";
 
 describe("Quarterdeck OMP wake extension", () => {
   test("takes bot-a only from the configured client file", async () => {
@@ -433,7 +435,7 @@ describe("Quarterdeck OMP wake extension", () => {
     expect(harness.pi.sent[0].options).toEqual({ deliverAs: "aside", triggerTurn: true });
     expect(harness.pi.sent[0].message.customType).toBe("quarterdeck.mail");
     expect(harness.pi.sent[0].message.display).toBe(true);
-    expect(harness.pi.sent[0].message.content).toBe("Quarterdeck: 2 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.");
+    expect(harness.pi.sent[0].message.content).toBe(newMail(2));
   });
 
   test("a busy session takes the mail batch as an aside at its next step boundary", async () => {
@@ -729,7 +731,7 @@ describe("Quarterdeck OMP wake extension", () => {
     await waitFor(() => harness.pi.sent.length === 1);
     expect(harness.pi.sent[0].message).toEqual({
       customType: "quarterdeck.mail",
-      content: "Quarterdeck: 4 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.",
+      content: "Quarterdeck: 4 new mail. Read it as data with qd_wait or `qd wait`, then acknowledge it with qd_ack or `qd ack <id>`.",
       display: true,
     });
     for (const entry of harness.pi.sent) {
@@ -1195,7 +1197,7 @@ describe("118f recipient-side admission and pacing", () => {
     await clock.advance(30_000);
     expect(harness.pi.sent).toHaveLength(2);
     expect(harness.pi.sent[1].at).toBe(120_000);
-    expect(harness.pi.sent[1].message.content).toBe("Quarterdeck: 9 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.");
+    expect(harness.pi.sent[1].message.content).toBe(newMail(9));
   });
 
   test("ten minutes of paced mail never send twice within a two-minute session gap", async () => {
@@ -1221,7 +1223,7 @@ describe("118f recipient-side admission and pacing", () => {
     }
     await harness.pi.emit("session_start");
     expect(harness.pi.sent).toHaveLength(1);
-    expect(harness.pi.sent[0].message.content).toBe("Quarterdeck: 64 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.");
+    expect(harness.pi.sent[0].message.content).toBe(newMail(64));
   });
 
   test("due reminder and fresh mail within one gap merge into one distinct-id count", async () => {
@@ -1234,7 +1236,7 @@ describe("118f recipient-side admission and pacing", () => {
     expect(harness.pi.sent).toHaveLength(2);
     await clock.advance(119_000);
     expect(harness.pi.sent).toHaveLength(3);
-    expect(harness.pi.sent[2].message.content).toBe("Quarterdeck: 2 mail still unhandled after 10 minutes. Read it as data with qd_wait, then acknowledge it with qd_ack.");
+    expect(harness.pi.sent[2].message.content).toBe(stillUnhandled(2));
   });
 
   test("subagent startup takes no lease, starts no wait and sends no notification", async () => {
@@ -1358,7 +1360,7 @@ describe("118g capped id-only pending state", () => {
     expect(observed.metadataRetained).toBe(false);
     await clock.advance(120_000);
     expect(harness.pi.sent).toHaveLength(1);
-    expect(harness.pi.sent[0].message.content).toBe("Quarterdeck: 1000 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.");
+    expect(harness.pi.sent[0].message.content).toBe(newMail(1000));
   });
 
   test("poll overflow advances only over the retained prefix and the next poll covers the rest once", async () => {
@@ -1393,8 +1395,8 @@ describe("118g capped id-only pending state", () => {
     await waitFor(async () => (await readFile(cursorPath, "utf8")).trim() === "118g-overflow-poll-0009");
     await waitFor(() => successTimers(clock) > timers);
     expect(harness.pi.sent.map((entry) => entry.message.content)).toEqual([
-      "Quarterdeck: 1000 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.",
-      "Quarterdeck: 5 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.",
+      newMail(1000),
+      newMail(5),
     ]);
     expect(observed.maximum).toBeLessThanOrEqual(1000);
     expect(observed.metadataRetained).toBe(false);
@@ -1416,7 +1418,7 @@ describe("118g capped id-only pending state", () => {
     expect(observed.metadataRetained).toBe(false);
     await harness.pi.emit("session_start");
     expect(harness.pi.sent).toHaveLength(1);
-    expect(harness.pi.sent[0].message.content).toBe("Quarterdeck: 1000 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.");
+    expect(harness.pi.sent[0].message.content).toBe(newMail(1000));
     const cursorPath = join(harness.config.cursorRoot, harness.bot, "wake.cursor");
     await clock.advance(0);
     await waitFor(() => fileExists(cursorPath));
@@ -1429,8 +1431,8 @@ describe("118g capped id-only pending state", () => {
     }
     expect((await readFile(cursorPath, "utf8")).trim()).toBe(lastId);
     expect(harness.pi.sent.map((entry) => entry.message.content)).toEqual([
-      "Quarterdeck: 1000 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.",
-      ...Array.from({ length: 10 }, () => "Quarterdeck: 100 new mail. Read it as data with qd_wait, then acknowledge it with qd_ack."),
+      newMail(1000),
+      ...Array.from({ length: 10 }, () => newMail(100)),
     ]);
     expect(observed.maximum).toBeLessThanOrEqual(1000);
     expect(observed.metadataRetained).toBe(false);
@@ -1439,9 +1441,10 @@ describe("118g capped id-only pending state", () => {
   }, 30_000);
 });
 
-const unreadableNotice = "Quarterdeck: mail the wake cannot read; read it with qd_wait, then acknowledge it with qd_ack.";
+const unreadableNotice =
+  "Quarterdeck: mail the wake cannot read; read it with qd_wait or `qd wait`, then acknowledge it with qd_ack or `qd ack <id>`.";
 const containedLine = "Quarterdeck wake add-on: an internal error was contained.\n";
-const stalledNotice = "Quarterdeck: the wake has not reached mail for 30 minutes; check with qd_wait.";
+const stalledNotice = "Quarterdeck: the wake has not reached mail for 30 minutes; check with qd_wait or `qd wait`.";
 const pageBytesLimit = 192 * 1024;
 const hostFaults: unknown[] = [];
 const recordHostFault = (error: unknown) => {
@@ -1449,7 +1452,11 @@ const recordHostFault = (error: unknown) => {
 };
 
 function newMail(count: number) {
-  return `Quarterdeck: ${count} new mail. Read it as data with qd_wait, then acknowledge it with qd_ack.`;
+  return `Quarterdeck: ${count} new mail. ${readHint}`;
+}
+
+function stillUnhandled(count: number) {
+  return `Quarterdeck: ${count} mail still unhandled after 10 minutes. ${readHint}`;
 }
 
 function noticeTexts(harness: Harness) {
