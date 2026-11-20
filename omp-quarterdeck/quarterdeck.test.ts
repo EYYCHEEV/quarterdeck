@@ -975,6 +975,196 @@ describe("Quarterdeck OMP wake extension", () => {
   }, 20_000);
 });
 
+const lockFailedNotice =
+  "Quarterdeck: this session is not watching mail because the wake could not take its poller lock. See the wake extension's INSTALL.md.";
+
+async function expectLockFailureReported(harness: Harness, clock: FakeContext) {
+  await clock.advance(600_000);
+  expect(harness.pi.sent.map((entry) => entry.message)).toEqual([
+    { customType: "quarterdeck.mail", content: lockFailedNotice, display: true },
+  ]);
+  expect(harness.pi.sent[0].options).toEqual({ deliverAs: "aside", triggerTurn: true });
+  expect((await readState(harness)).calls).toBe(0);
+}
+
+async function expectQuietAndNoPoll(harness: Harness, clock: FakeContext) {
+  await clock.advance(600_000);
+  expect(harness.pi.sent).toEqual([]);
+  expect((await readState(harness)).calls).toBe(0);
+}
+
+describe("a lock failure is never silent", () => {
+  const holderFailures: Array<[string, string[]]> = [
+    ["exits 2", ["sys.exit(2)"]],
+    ["exits with another code", ["sys.exit(3)"]],
+    ["exits 0 without printing", ["sys.exit(0)"]],
+    ["prints a wrong first line", ['sys.stdout.write("hello\\n")', "sys.stdout.flush()", "sys.stdin.read()"]],
+    ["prints locked without the newline", ['sys.stdout.write("locked")', "sys.stdout.flush()", "sys.stdin.read()"]],
+  ];
+  for (const [name, lines] of holderFailures) {
+    test(`a holder that ${name} gives exactly one notice and no poll`, async () => {
+      const harness = await makeHarness([{ holdMs: 10_000 }]);
+      const clock = useClock(harness);
+      installWith(harness, { lockHolderPath: await writeHolder(harness, lines) });
+
+      await harness.pi.emit("session_start");
+
+      await expectLockFailureReported(harness, clock);
+    }, 15_000);
+  }
+
+  test("a Python command that cannot be started gives exactly one notice and no poll", async () => {
+    const harness = await makeHarness([{ holdMs: 10_000 }]);
+    const clock = useClock(harness);
+    installWith(harness, { pythonExecutable: join(harness.root, "no-such-python") });
+
+    await harness.pi.emit("session_start");
+
+    await expectLockFailureReported(harness, clock);
+  }, 15_000);
+
+  const unsafeLockFiles: Array<[string, (lockPath: string, root: string) => Promise<void>]> = [
+    [
+      "a symbolic link",
+      async (lockPath, root) => {
+        const target = join(root, "elsewhere");
+        await writeFile(target, "", { mode: 0o600 });
+        await symlink(target, lockPath);
+      },
+    ],
+    [
+      "a file that other users can read",
+      async (lockPath) => {
+        await writeFile(lockPath, "", { mode: 0o600 });
+        await chmod(lockPath, 0o644);
+      },
+    ],
+    [
+      "a file with a second link",
+      async (lockPath, root) => {
+        const target = join(root, "elsewhere");
+        await writeFile(target, "", { mode: 0o600 });
+        await link(target, lockPath);
+      },
+    ],
+  ];
+  for (const [name, prepare] of unsafeLockFiles) {
+    test(`a lock file that is ${name} gives exactly one notice and no poll`, async () => {
+      const harness = await makeHarness([{ holdMs: 10_000 }]);
+      const clock = useClock(harness);
+      const botDirectory = join(harness.config.cursorRoot, harness.bot);
+      await mkdir(botDirectory, { recursive: true, mode: 0o700 });
+      await prepare(join(botDirectory, "wake-poller.lock"), harness.root);
+      install(harness);
+
+      await harness.pi.emit("session_start");
+
+      await expectLockFailureReported(harness, clock);
+    }, 15_000);
+  }
+
+  test("a holder that prints a wrong first line is stopped", async () => {
+    const harness = await makeHarness([{ holdMs: 10_000 }]);
+    const lockHolderPath = await writeHolder(harness, [
+      'with open(os.path.join(os.path.dirname(sys.argv[1]), "holder-pid.txt"), "w") as handle:',
+      "    handle.write(str(os.getpid()))",
+      'sys.stdout.write("hello\\n")',
+      "sys.stdout.flush()",
+      "sys.stdin.read()",
+    ]);
+    installWith(harness, { lockHolderPath });
+
+    await harness.pi.emit("session_start");
+
+    const holderPid = Number(await readFile(join(harness.config.cursorRoot, harness.bot, "holder-pid.txt"), "utf8"));
+    await waitFor(() => processGone(holderPid), 4_000);
+  }, 15_000);
+
+  test("a holder that exits 75 gives no notice and no poll", async () => {
+    const harness = await makeHarness([{ holdMs: 10_000 }]);
+    const clock = useClock(harness);
+    installWith(harness, { lockHolderPath: await writeHolder(harness, ["sys.exit(75)"]) });
+
+    await harness.pi.emit("session_start");
+
+    await expectQuietAndNoPoll(harness, clock);
+  }, 15_000);
+
+  test("a lock held by another real holder gives no notice and no poll", async () => {
+    const harness = await makeHarness([{ holdMs: 10_000 }]);
+    const clock = useClock(harness);
+    const botDirectory = join(harness.config.cursorRoot, harness.bot);
+    await mkdir(botDirectory, { recursive: true, mode: 0o700 });
+    const other = await startHolder(join(botDirectory, "wake-poller.lock"));
+    try {
+      install(harness);
+
+      await harness.pi.emit("session_start");
+
+      await expectQuietAndNoPoll(harness, clock);
+    } finally {
+      other.kill("SIGKILL");
+      await other.exited;
+    }
+  }, 15_000);
+
+  test("a free lock gives no lock notice and the session polls", async () => {
+    const harness = await makeHarness([{ holdMs: 10_000 }]);
+    install(harness);
+
+    await harness.pi.emit("session_start");
+    await waitFor(async () => (await readState(harness)).calls === 1);
+
+    expect(harness.pi.sent).toEqual([]);
+  }, 15_000);
+
+  test("the notice comes once per session, not once per start event", async () => {
+    const first = await makeHarness([{ holdMs: 10_000 }]);
+    const clock = useClock(first);
+    const pythonExecutable = join(first.root, "no-such-python");
+    installWith(first, { pythonExecutable });
+    await first.pi.emit("session_start");
+    await first.pi.emit("session_start");
+    await clock.advance(600_000);
+    expect(noticeTexts(first)).toEqual([lockFailedNotice]);
+
+    await first.pi.shutdown();
+    const second = await makeHarness([], { shared: first });
+    installWith(second, { pythonExecutable });
+    await second.pi.emit("session_start");
+
+    expect(noticeTexts(second)).toEqual([lockFailedNotice]);
+  }, 15_000);
+
+  test("mail pushed by the MCP server still wakes the session after a lock failure", async () => {
+    const harness = await makeHarness([{ holdMs: 10_000 }]);
+    const clock = useClock(harness);
+    installWith(harness, { pythonExecutable: join(harness.root, "no-such-python") });
+    await harness.pi.emit("session_start");
+
+    await harness.pi.emit("mcp_notification", notification([mail("pushed-1")]));
+    await clock.advance(120_000);
+
+    expect(noticeTexts(harness)).toEqual([lockFailedNotice, newMail(1)]);
+    expect((await readState(harness)).calls).toBe(0);
+  }, 15_000);
+
+  test("a notice refused before admission is retried and still shows exactly once", async () => {
+    const harness = await makeHarness([{ holdMs: 10_000 }]);
+    const clock = useClock(harness);
+    harness.pi.receiptOutcomes.push("refused");
+    installWith(harness, { pythonExecutable: join(harness.root, "no-such-python") });
+
+    await harness.pi.emit("session_start");
+    expect(harness.pi.sent).toEqual([]);
+    await clock.advance(120_000);
+
+    expect(noticeTexts(harness)).toEqual([lockFailedNotice]);
+    await clock.advance(600_000);
+    expect(noticeTexts(harness)).toEqual([lockFailedNotice]);
+  }, 15_000);
+});
+
 async function reminderHarness(live = false) {
   const harness = await makeHarness([
     { messages: [mail("unhandled")] }, { messages: [] },

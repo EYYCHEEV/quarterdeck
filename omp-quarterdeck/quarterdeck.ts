@@ -1,3 +1,4 @@
+import type { Subprocess } from "bun";
 import { constants } from "node:fs";
 import { chmod, lstat, mkdir, open, readFile, rename, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -20,8 +21,10 @@ const MAX_PENDING_IDS = 1000;
 const UNREADABLE_NOTICE_INTERVAL_MS = 10 * 60 * 1_000;
 const STALLED_AFTER_MS = 30 * 60 * 1_000;
 const STALLED_NOTICE_INTERVAL_MS = 60 * 60 * 1_000;
+const HOLDER_BUSY_EXIT = 75;
 const UNREADABLE_NOTICE = "Quarterdeck: mail the wake cannot read; read it with qd_wait, then acknowledge it with qd_ack.";
 const STALLED_NOTICE = "Quarterdeck: the wake has not reached mail for 30 minutes; check with qd_wait.";
+const LOCK_FAILED_NOTICE = "Quarterdeck: this session is not watching mail because the wake could not take its poller lock. See the wake extension's INSTALL.md.";
 const CONTAINED_LINE = "Quarterdeck wake add-on: an internal error was contained.\n";
 
 export interface QuarterdeckConfig {
@@ -146,12 +149,14 @@ export function createQuarterdeckExtension(options: QuarterdeckExtensionOptions 
       const botDirectory = join(config.cursorRoot, bot);
       await ensurePrivateDirectory(botDirectory);
       const cursorStore = new CursorStore(join(botDirectory, CURSOR_FILE));
-      const lease = await PollerLease.acquire({
+      const acquired = await PollerLease.acquire({
         pythonExecutable,
         holderPath: lockHolderPath,
         lockPath: join(botDirectory, LOCK_FILE),
       });
-      const current = new WakeSession({ config, context, cursorStore, lease, pi, reconcileIntervalMs, retry, pendingIds: pendingNotifications });
+      const lease = acquired.kind === "lease" ? acquired.lease : undefined;
+      const lockFailed = acquired.kind === "failed";
+      const current = new WakeSession({ config, context, cursorStore, lease, lockFailed, pi, reconcileIntervalMs, retry, pendingIds: pendingNotifications });
       session = current;
       try {
         await current.start();
@@ -189,6 +194,7 @@ class WakeSession {
   private lastUnreadableAt = Number.NEGATIVE_INFINITY;
   private unreadablePending = false;
   private stalledPending = false;
+  private lockFailedPending: boolean;
   private stopped = false;
   private pollerLost = false;
   private timer: unknown;
@@ -199,6 +205,7 @@ class WakeSession {
     context: ExtensionContext;
     cursorStore: CursorStore;
     lease: PollerLease | undefined;
+    lockFailed: boolean;
     pi: ExtensionApi;
     retry: RetryPolicy;
     reconcileIntervalMs: number;
@@ -208,6 +215,7 @@ class WakeSession {
     this.reconcileBackoffMs = state.retry.initialMs;
     this.pendingFresh = state.pendingIds;
     this.waiter = state.lease ? new QdCliWaiter(state.config) : undefined;
+    this.lockFailedPending = state.lockFailed;
     state.lease?.onLoss(() => this.stopPolling());
   }
 
@@ -364,7 +372,9 @@ class WakeSession {
   private async flushNotice() {
     if (this.stopped) return;
     const count = this.pendingFresh.size + this.pendingReminders.size;
-    const special = this.unreadablePending ? UNREADABLE_NOTICE : this.stalledPending ? STALLED_NOTICE : undefined;
+    const special = this.lockFailedPending
+      ? LOCK_FAILED_NOTICE
+      : this.unreadablePending ? UNREADABLE_NOTICE : this.stalledPending ? STALLED_NOTICE : undefined;
     if (count > 0 || special !== undefined) {
       const remaining = this.lastNoticeAt + NOTICE_INTERVAL_MS - Date.now();
       if (remaining > 0) {
@@ -388,7 +398,9 @@ class WakeSession {
         throw new Error("Quarterdeck notice was refused before admission");
       }
       const now = Date.now();
-      if (special === UNREADABLE_NOTICE) {
+      if (special === LOCK_FAILED_NOTICE) {
+        this.lockFailedPending = false;
+      } else if (special === UNREADABLE_NOTICE) {
         this.lastUnreadableAt = now;
         this.unreadablePending = false;
       } else if (special === STALLED_NOTICE) {
@@ -406,7 +418,7 @@ class WakeSession {
         }
       }
     }
-    if (this.pendingFresh.size + this.pendingReminders.size > 0 || this.unreadablePending || this.stalledPending) {
+    if (this.pendingFresh.size + this.pendingReminders.size > 0 || this.lockFailedPending || this.unreadablePending || this.stalledPending) {
       this.scheduleNotice(Math.max(0, this.lastNoticeAt + NOTICE_INTERVAL_MS - Date.now()));
       return;
     }
@@ -531,6 +543,12 @@ class CursorStore {
   }
 }
 
+type LeaseResult = { kind: "lease"; lease: PollerLease } | { kind: "held" } | { kind: "failed" };
+
+function holderEnded(exitCode: number): LeaseResult {
+  return exitCode === HOLDER_BUSY_EXIT ? { kind: "held" } : { kind: "failed" };
+}
+
 class PollerLease {
   private readonly lossHandlers = new Set<() => void>();
   private lost = false;
@@ -546,7 +564,7 @@ class PollerLease {
     ).catch(() => undefined);
   }
 
-  static async acquire(input: { pythonExecutable: string; holderPath: string; lockPath: string }) {
+  static async acquire(input: { pythonExecutable: string; holderPath: string; lockPath: string }): Promise<LeaseResult> {
     try {
       const lock = await open(
         input.lockPath,
@@ -567,22 +585,38 @@ class PollerLease {
         stdout: "pipe",
         stderr: "ignore",
       });
-      const reader = holder.stdout.getReader();
-      const first = await Promise.race([
-        reader.read().then((result) => ({ kind: "read" as const, result })),
-        holder.exited.then((exitCode) => ({ kind: "exit" as const, exitCode })),
-      ]);
-      reader.releaseLock();
-      if (first.kind === "exit") return undefined;
-      const text = new TextDecoder().decode(first.result.value);
-      if (first.result.done || text !== "locked\n") {
+      try {
+        return await PollerLease.awaitLock(holder);
+      } catch {
         holder.kill("SIGTERM");
-        return undefined;
+        return { kind: "failed" };
       }
-      return new PollerLease(() => holder.kill("SIGTERM"), holder.exited);
     } catch {
-      return undefined;
+      return { kind: "failed" };
     }
+  }
+
+  private static async awaitLock(holder: Subprocess<"pipe", "pipe", "ignore">): Promise<LeaseResult> {
+    const reader = holder.stdout.getReader();
+    const first = await Promise.race([
+      reader.read().then(
+        (result) => ({ kind: "read" as const, result }),
+        () => ({ kind: "unreadable" as const }),
+      ),
+      holder.exited.then((exitCode) => ({ kind: "exit" as const, exitCode })),
+    ]);
+    reader.releaseLock();
+    if (first.kind === "exit") return holderEnded(first.exitCode);
+    if (first.kind === "unreadable") {
+      holder.kill("SIGTERM");
+      return { kind: "failed" };
+    }
+    if (first.result.done) return holderEnded(await holder.exited);
+    if (new TextDecoder().decode(first.result.value) !== "locked\n") {
+      holder.kill("SIGTERM");
+      return { kind: "failed" };
+    }
+    return { kind: "lease", lease: new PollerLease(() => holder.kill("SIGTERM"), holder.exited) };
   }
 
   onLoss(handler: () => void) {
