@@ -59,7 +59,7 @@ export interface ExtensionApi {
 export interface QuarterdeckExtensionOptions {
   config?: QuarterdeckConfig;
   retry?: RetryPolicy;
-  flockExecutable?: string;
+  pythonExecutable?: string;
   lockHolderPath?: string;
   reconcileIntervalMs?: number;
 }
@@ -99,8 +99,8 @@ export function createQuarterdeckExtension(options: QuarterdeckExtensionOptions 
     const config = options.config ?? configFromEnvironment();
     const retry = normalizeRetry(options.retry ?? DEFAULT_RETRY);
     const reconcileIntervalMs = normalizeReconcileInterval(options.reconcileIntervalMs ?? RECONCILE_INTERVAL_MS);
-    const flockExecutable = options.flockExecutable ?? "flock";
-    const lockHolderPath = options.lockHolderPath ?? join(import.meta.dir, "lock-holder.ts");
+    const pythonExecutable = options.pythonExecutable ?? process.env.QUARTERDECK_PYTHON ?? "python3";
+    const lockHolderPath = options.lockHolderPath ?? join(import.meta.dir, "lock-holder.py");
     let session: WakeSession | undefined;
     let subagent = false;
     const pendingNotifications = new Set<string>();
@@ -147,7 +147,7 @@ export function createQuarterdeckExtension(options: QuarterdeckExtensionOptions 
       await ensurePrivateDirectory(botDirectory);
       const cursorStore = new CursorStore(join(botDirectory, CURSOR_FILE));
       const lease = await PollerLease.acquire({
-        flockExecutable,
+        pythonExecutable,
         holderPath: lockHolderPath,
         lockPath: join(botDirectory, LOCK_FILE),
       });
@@ -546,7 +546,7 @@ class PollerLease {
     ).catch(() => undefined);
   }
 
-  static async acquire(input: { flockExecutable: string; holderPath: string; lockPath: string }) {
+  static async acquire(input: { pythonExecutable: string; holderPath: string; lockPath: string }) {
     try {
       const lock = await open(
         input.lockPath,
@@ -561,18 +561,8 @@ class PollerLease {
         await lock.close().catch(() => undefined);
       }
 
-      const holder = Bun.spawn([
-        input.flockExecutable,
-        "--exclusive",
-        "--nonblock",
-        "--conflict-exit-code",
-        "75",
-        "--no-fork",
-        input.lockPath,
-        process.execPath,
-        input.holderPath,
-      ], {
-        env: { ...safeChildEnvironment(), BUN_BE_BUN: "1" },
+      const holder = Bun.spawn([input.pythonExecutable, "-I", "-B", input.holderPath, input.lockPath], {
+        env: safeChildEnvironment(),
         stdin: "pipe",
         stdout: "pipe",
         stderr: "ignore",
