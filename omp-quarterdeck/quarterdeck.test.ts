@@ -286,9 +286,10 @@ async function makeRuntimeStandin(root: string) {
     path,
     [
       `#!${realExecPath}`,
-      `import { readlinkSync, writeFileSync } from "node:fs";`,
+      `import { fstatSync, writeFileSync } from "node:fs";`,
       `writeFileSync(${JSON.stringify(join(root, "runtime-env.json"))}, JSON.stringify(Object.keys(process.env).sort()));`,
-      `writeFileSync(${JSON.stringify(join(root, "runtime-stdin.txt"))}, readlinkSync("/proc/self/fd/0"));`,
+      `const stdinInfo = fstatSync(0);`,
+      `writeFileSync(${JSON.stringify(join(root, "runtime-stdin.txt"))}, String(stdinInfo.isFIFO() || stdinInfo.isSocket()));`,
       `if (process.env.BUN_BE_BUN !== "1") process.exit(3);`,
       `await import(process.argv[2]);`,
       "",
@@ -321,21 +322,24 @@ async function runHolder(runtime: string, holderPath: string, extra: Record<stri
 }
 
 const realHolderPath = join(import.meta.dir, "lock-holder.ts");
-const CLOCK_TICKS_PER_SECOND = 100;
+const lockProbePath = join(import.meta.dir, "test", "lock-probe.py");
+
+async function processField(field: string, pid: number) {
+  const child = Bun.spawn(["ps", "-o", `${field}=`, "-p", String(pid)], { stdin: "ignore", stdout: "pipe", stderr: "ignore" });
+  const text = await new Response(child.stdout).text();
+  await child.exited;
+  return text.trim();
+}
 
 async function cpuSeconds(pid: number) {
-  const text = await readFile(`/proc/${pid}/stat`, "utf8");
-  const fields = text.slice(text.lastIndexOf(")") + 2).split(" ");
-  return (Number(fields[11]) + Number(fields[12])) / CLOCK_TICKS_PER_SECOND;
+  const text = await processField("time", pid);
+  const [days, clock] = text.includes("-") ? text.split("-", 2) : ["0", text];
+  return Number(days) * 86_400 + clock.split(":").reduce((total, part) => total * 60 + Number(part), 0);
 }
 
 async function processGone(pid: number) {
-  try {
-    const text = await readFile(`/proc/${pid}/stat`, "utf8");
-    return text.slice(text.lastIndexOf(")") + 2, text.lastIndexOf(")") + 3) === "Z";
-  } catch {
-    return true;
-  }
+  const state = await processField("stat", pid);
+  return state === "" || state.startsWith("Z");
 }
 
 async function startHolder(command: string[] = [realExecPath, realHolderPath]) {
@@ -359,12 +363,8 @@ async function exitWithin(child: { exited: Promise<number>; kill(signal?: number
   return result;
 }
 
-async function flockExit(lockPath: string) {
-  const probe = Bun.spawn(["flock", "--exclusive", "--nonblock", "--conflict-exit-code", "75", lockPath, "true"], {
-    stdin: "ignore",
-    stdout: "ignore",
-    stderr: "ignore",
-  });
+async function lockProbeExit(lockPath: string) {
+  const probe = Bun.spawn(["python3", "-I", "-B", lockProbePath, lockPath], { stdin: "ignore", stdout: "ignore", stderr: "ignore" });
   return probe.exited;
 }
 
@@ -867,12 +867,12 @@ describe("Quarterdeck OMP wake extension", () => {
         realExecPath,
         realHolderPath,
       ]);
-      expect(await flockExit(lockPath)).toBe(75);
+      expect(await lockProbeExit(lockPath)).toBe(75);
 
       child.kill(signal);
 
       expect(await exitWithin(child, 3_000)).toBe(0);
-      expect(await flockExit(lockPath)).toBe(0);
+      expect(await lockProbeExit(lockPath)).toBe(0);
     }, 15_000);
   }
 
@@ -884,7 +884,7 @@ describe("Quarterdeck OMP wake extension", () => {
     await withExecPath(runtime, () => harness.pi.emit("session_start"));
     await waitFor(async () => (await readState(harness)).calls === 1);
 
-    expect(await readFile(join(harness.root, "runtime-stdin.txt"), "utf8")).toMatch(/^(pipe|socket):\[\d+\]$/);
+    expect(await readFile(join(harness.root, "runtime-stdin.txt"), "utf8")).toBe("true");
   });
 
   test("an orphaned lock holder exits after its parent is killed", async () => {
@@ -1820,7 +1820,7 @@ function gateFixtureSource(statement: string) {
 }
 
 async function expectNextSessionTakesTheLock(harness: Harness) {
-  await waitFor(async () => (await flockExit(join(harness.config.cursorRoot, harness.bot, "wake-poller.lock"))) === 0, 4_000);
+  await waitFor(async () => (await lockProbeExit(join(harness.config.cursorRoot, harness.bot, "wake-poller.lock"))) === 0, 4_000);
   await patchScenario(harness, { mailbox: [mail("new-1")] });
   const next = await makeHarness([], { shared: harness });
   install(next);
