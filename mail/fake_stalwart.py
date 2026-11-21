@@ -77,6 +77,16 @@ class FakeStalwart:
             name, value = flt["header"]
             return (name == "Message-ID" and value == email["messageId"][0]
                     and email_id not in self.not_yet_indexed)
+        if "subject" in flt:
+            return (email_id not in self.not_yet_indexed and
+                    flt["subject"].casefold() in (email.get("subject") or "").casefold())
+        for field in ("from", "to"):
+            if field in flt:
+                needle = flt[field].casefold()
+                return email_id not in self.not_yet_indexed and any(
+                    needle in f'{address.get("name") or ""} <{address.get("email") or ""}>'.casefold()
+                    for address in email.get(field) or ()
+                )
         raise ValueError(f"stand-in has no filter {flt}")
 
     def Email_query(self, bot, args, created):

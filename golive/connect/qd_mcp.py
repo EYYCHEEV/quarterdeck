@@ -87,6 +87,15 @@ TOOLS = [
             "additionalProperties": False,
         },
     },
+    {
+        "name": "qd_owed",
+        "description": "List the Captain's chats that still wait for a reply.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+    },
 ]
 
 
@@ -180,8 +189,12 @@ class Server:
             return self.service.wait(values["after"], values["timeout"])
         if name == "qd_ack":
             values = _exact(arguments, {"id"})
-            self.service.ack(values["id"])
+            if self.service.ack(values["id"]):
+                return qd_connect.owed_warning("mcp", values["id"])
             return "acknowledged"
+        if name == "qd_owed":
+            _exact(arguments, set())
+            return self.service.owed()
         raise qd_connect.ConnectRefused("unknown tool")
 
     def handle(self, request: Any) -> dict[str, Any] | None:

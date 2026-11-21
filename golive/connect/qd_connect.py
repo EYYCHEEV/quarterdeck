@@ -104,6 +104,22 @@ class MailRefused(ConnectRefused):
         )
 
 
+OWED_WARNING = {
+    "cli": (
+        "qd: marked done, but the Captain's chat {id} is still owed a reply. "
+        "Reply with: printf '%s' \"your reply\" | qd --config CONFIG chat --resend-id ID"
+    ),
+    "mcp": (
+        "acknowledged. The Captain's chat {id} is still owed a reply: "
+        "send it with the qd_chat tool (text, resend_id)."
+    ),
+}
+
+
+def owed_warning(surface: str, message_id: str) -> str:
+    return OWED_WARNING[surface].format(id=message_id)
+
+
 def _no_constant(name: str) -> None:
     raise ValueError(name)
 
@@ -767,8 +783,19 @@ class ConnectService:
     def wait(self, after: str | None, timeout: float | None) -> list[dict[str, Any]]:
         return self._mail(lambda mailbox: qd_jmap.wait(mailbox, after, timeout))
 
-    def ack(self, message_id: str) -> None:
-        self._mail(lambda mailbox: mailbox.ack(message_id))
+    def owed(self) -> list[dict[str, str]]:
+        return self._mail(lambda mailbox: mailbox.owed())
+
+    def ack(self, message_id: str) -> bool:
+        def operation(mailbox):
+            if not mailbox.ack(message_id):
+                return False
+            try:
+                return any(entry["id"] == message_id for entry in mailbox.owed())
+            except Exception:
+                return False
+
+        return self._mail(operation)
 
 
 def _read_private_config(path: Path) -> bytes:
