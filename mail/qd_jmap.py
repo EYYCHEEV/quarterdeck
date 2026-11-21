@@ -20,6 +20,10 @@ HANDLED = "qd-handled"
 WORDS_HEADER = "X-QD-Words"
 BOT_NAME = re.compile(r"[a-z0-9][a-z0-9-]{0,62}")
 USING = ["urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail", "urn:ietf:params:jmap:submission"]
+CAPTAIN = "captain"
+CHAT_SCHEMA = "chat/1"
+CLIENT_ID = re.compile(r"[A-Za-z0-9_-]{1,80}")
+CHAT_CHUNK = 8
 
 
 class Refused(Exception):
@@ -175,6 +179,41 @@ def normal_body(text):
     return text.replace("\r\n", "\n")
 
 
+def parse_time(received_at):
+    return datetime.fromisoformat(received_at.replace("Z", "+00:00"))
+
+
+def local_time(received_at):
+    return parse_time(received_at).astimezone().isoformat(timespec="seconds")
+
+
+def body_of(email):
+    parts = [email.get("bodyValues", {}).get(p["partId"], {}).get("value", "") for p in email.get("textBody", [])]
+    return normal_body("".join(parts))
+
+
+def sender_of(email):
+    return (email.get("from") or [{}])[0].get("email", "").partition("@")[0]
+
+
+def is_chat(bot, subject, body):
+    if subject != f"CHAT: {bot}":
+        return False
+    try:
+        document = json.loads(body)
+    except (ValueError, RecursionError):
+        return False
+    if not isinstance(document, dict):
+        return False
+    client_id = document.get("clientId")
+    return (
+        document.get("qd") == CHAT_SCHEMA
+        and document.get("bot") == bot
+        and isinstance(document.get("text"), str)
+        and (client_id is None or (isinstance(client_id, str) and CLIENT_ID.fullmatch(client_id) is not None))
+    )
+
+
 class Mailbox:
     def __init__(self, jmap):
         self.jmap = jmap
@@ -289,15 +328,13 @@ class Mailbox:
             if not mail_id or mail_id in seen:
                 continue
             seen.add(mail_id)
-            parts = [email.get("bodyValues", {}).get(p["partId"], {}).get("value", "") for p in email.get("textBody", [])]
             messages.append({
                 "id": mail_id,
-                "sender": (email.get("from") or [{}])[0].get("email", "").partition("@")[0],
+                "sender": sender_of(email),
                 "recipient": self.bot,
                 "subject": email.get("subject", ""),
-                "body": normal_body("".join(parts)),
-                "sent": datetime.fromisoformat(email["receivedAt"].replace("Z", "+00:00")).astimezone()
-                        .isoformat(timespec="seconds"),
+                "body": body_of(email),
+                "sent": local_time(email["receivedAt"]),
             })
         return messages
 
@@ -311,6 +348,68 @@ class Mailbox:
         [done] = self.jmap.call(("Email/set", {"update": {c: {f"keywords/{HANDLED}": True} for c in todo}}))
         if set(done.get("updated") or {}) != set(todo):
             raise MailFailed("Stalwart did not mark every copy handled")
+
+    def newest_first(self, mailbox_id, properties):
+        position = 0
+        while True:
+            [found] = self.jmap.call(("Email/query", {"filter": {"inMailbox": mailbox_id}, "position": position,
+                                                      "limit": PAGE,
+                                                      "sort": [{"property": "receivedAt", "isAscending": False}]}))
+            ids = found.get("ids", [])
+            if ids:
+                [got] = self.jmap.call(("Email/get", {"ids": ids, "properties": properties}))
+                by_id = {m["id"]: m for m in got.get("list", [])}
+                yield [by_id[i] for i in ids if i in by_id]
+            if len(ids) < PAGE:
+                return
+            position += len(ids)
+
+    def chat_bodies(self, emails):
+        if not emails:
+            return {}
+        [got] = self.jmap.call(("Email/get", {"ids": [e["id"] for e in emails],
+                                              "properties": ["id", "textBody", "bodyValues"],
+                                              "fetchTextBodyValues": True}))
+        return {m["id"]: body_of(m) for m in got.get("list", [])}
+
+    def newest_reply(self):
+        subject = f"CHAT: {self.bot}"
+        captain = f"{CAPTAIN}@{self.domain}"
+        for page in self.newest_first(self.sent, ["id", "to", "subject", "receivedAt"]):
+            to_him = [e for e in page if e.get("subject") == subject
+                      and captain in [a.get("email", "").lower() for a in e.get("to") or []]]
+            for start in range(0, len(to_him), CHAT_CHUNK):
+                chunk = to_him[start:start + CHAT_CHUNK]
+                bodies = self.chat_bodies(chunk)
+                for email in chunk:
+                    if is_chat(self.bot, subject, bodies.get(email["id"], "")):
+                        return parse_time(email["receivedAt"])
+        return None
+
+    def owed(self):
+        subject = f"CHAT: {self.bot}"
+        replied = self.newest_reply()
+        asked, answered = {}, set()
+        for page in self.newest_first(self.inbox_id, ["id", "messageId", "from", "subject", "receivedAt"]):
+            reached, from_him = False, []
+            for email in page:
+                mail_id = first_id(email)
+                if replied is not None and parse_time(email["receivedAt"]) <= replied:
+                    reached = True
+                    answered.add(mail_id)
+                elif mail_id and email.get("subject") == subject and sender_of(email) == CAPTAIN:
+                    from_him.append(email)
+            bodies = self.chat_bodies(from_him)
+            for email in from_him:
+                mail_id = first_id(email)
+                if is_chat(self.bot, subject, bodies.get(email["id"], "")) and (
+                        mail_id not in asked or parse_time(email["receivedAt"]) < parse_time(asked[mail_id]["receivedAt"])):
+                    asked[mail_id] = email
+            if reached:
+                break
+        still = [email for mail_id, email in asked.items() if mail_id not in answered]
+        return [{"id": first_id(email), "sent": local_time(email["receivedAt"])}
+                for email in sorted(reversed(still), key=lambda email: parse_time(email["receivedAt"]))]
 
 
 def first_id(email):

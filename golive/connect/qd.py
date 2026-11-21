@@ -33,6 +33,8 @@ def parser() -> argparse.ArgumentParser:
 
     ack = commands.add_parser("ack")
     ack.add_argument("id")
+
+    commands.add_parser("owed")
     return result
 
 
@@ -91,8 +93,12 @@ def main(
                     ),
                     flush=True,
                 )
+        elif args.command == "owed":
+            for entry in client.owed():
+                print(json.dumps(entry, ensure_ascii=False, separators=(",", ":")), flush=True)
         else:
-            client.ack(args.id)
+            if client.ack(args.id):
+                print(qd_connect.owed_warning("cli", args.id), file=sys.stderr, flush=True)
         return 0
     except qd_connect.MailRefused as refusal:
         print(refusal.text("cli"), file=sys.stderr)

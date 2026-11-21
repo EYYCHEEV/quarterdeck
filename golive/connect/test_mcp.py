@@ -39,15 +39,19 @@ class FakeService:
     def ack(self, message_id):
         self.calls.append(("ack", message_id))
 
+    def owed(self):
+        self.calls.append(("owed",))
+        return [{"id": "message-id", "sent": "2026-11-20T09:00:00-05:00"}]
+
 
 class McpTests(unittest.TestCase):
-    def test_lists_join_invite_send_chat_wait_and_ack(self):
+    def test_lists_join_invite_send_chat_wait_ack_and_owed(self):
         server = qd_mcp.Server(FakeService())
         response = server.handle({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}})
         names = [tool["name"] for tool in response["result"]["tools"]]
         self.assertEqual(
             names,
-            ["qd_join", "qd_create_invite", "qd_send", "qd_chat", "qd_wait", "qd_ack"],
+            ["qd_join", "qd_create_invite", "qd_send", "qd_chat", "qd_wait", "qd_ack", "qd_owed"],
         )
 
     def test_the_release_workflow_expects_exactly_the_servers_tool_list(self):
@@ -98,6 +102,7 @@ class McpTests(unittest.TestCase):
             ("qd_chat", {"text": "hello", "resend_id": "r"}),
             ("qd_wait", {"after": None, "timeout": 1.0}),
             ("qd_ack", {"id": "message-id"}),
+            ("qd_owed", {}),
         ]
         for index, (name, arguments) in enumerate(calls):
             response = server.handle(
@@ -122,6 +127,7 @@ class McpTests(unittest.TestCase):
                 ("chat", "hello", "r"),
                 ("wait", None, 1.0),
                 ("ack", "message-id"),
+                ("owed",),
             ],
         )
         listed_schema = server.handle({"jsonrpc": "2.0", "id": 9, "method": "tools/list", "params": {}})
