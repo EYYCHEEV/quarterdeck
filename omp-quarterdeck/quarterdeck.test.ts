@@ -25,6 +25,7 @@ class FakeContext implements ExtensionContext {
   private nextTimer = 0;
   private readonly cancelTimers = new Map<number, () => void>();
   readonly scheduledDelays: number[] = [];
+  readonly scheduledHandles: number[] = [];
   agent?: { kind: "main" | "sub" };
   manual = false;
   now = 0;
@@ -33,6 +34,7 @@ class FakeContext implements ExtensionContext {
   setTimeout(callback: () => void, delay: number) {
     this.scheduledDelays.push(delay);
     const handle = ++this.nextTimer;
+    this.scheduledHandles.push(handle);
     if (this.manual) {
       this.virtualTimers.set(handle, { at: this.now + delay, callback });
       return handle;
@@ -1521,6 +1523,27 @@ async function pollRound(harness: Harness, clock: FakeContext, advanceMs: number
   expect(hostFaults.map(String)).toEqual([]);
 }
 
+function breakClearTimer(harness: Harness) {
+  const original = harness.pi.context.clearTimer.bind(harness.pi.context);
+  const cleared: unknown[] = [];
+  harness.pi.context.clearTimer = (handle) => {
+    cleared.push(handle);
+    throw new Error("clear-timer-detail");
+  };
+  return {
+    cleared,
+    restore() {
+      harness.pi.context.clearTimer = original;
+    },
+  };
+}
+
+function lastTimerHandle(clock: FakeContext, wanted: (delay: number) => boolean) {
+  const handles = clock.scheduledHandles.filter((_, index) => wanted(clock.scheduledDelays[index]));
+  expect(handles).not.toHaveLength(0);
+  return handles[handles.length - 1];
+}
+
 async function pageAll(harness: Harness, clock: FakeContext, lastId: string, limit: number) {
   await harness.pi.emit("session_start");
   await pollRound(harness, clock, 0);
@@ -1793,12 +1816,7 @@ describe("0.1.3 the wake add-on never ends the host", () => {
 
   test("case 9a: an ordinary stop with a throwing clearTimer still stops the wait child, frees the lock and lets the next session poll", async () => {
     const harness = await makeHarness([{ messages: [] }, { holdMs: 20_000 }]);
-    const clearTimer = harness.pi.context.clearTimer.bind(harness.pi.context);
-    let clearAttempts = 0;
-    harness.pi.context.clearTimer = () => {
-      clearAttempts += 1;
-      throw new Error("clear-timer-detail");
-    };
+    const clearing = breakClearTimer(harness);
     const lines = recordStderr();
     install(harness, { initialMs: 40, maximumMs: 80 }, 86_400_000);
     await harness.pi.emit("session_start");
@@ -1807,12 +1825,13 @@ describe("0.1.3 the wake add-on never ends the host", () => {
     await harness.pi.emit("mcp_notification", notification([mail("push-1")]));
     await harness.pi.emit("mcp_notification", notification([mail("push-2")]));
     await waitFor(() => harness.pi.context.scheduledDelays.some((delay) => delay > 100_000));
+    const noticeTimer = lastTimerHandle(harness.pi.context, (delay) => delay > 100_000);
     try {
       await expect(harness.pi.emit("session_shutdown")).resolves.toBeUndefined();
-      expect(clearAttempts).toBeGreaterThan(0);
+      expect(clearing.cleared).toContain(noticeTimer);
       await waitFor(() => processGone(waitPid), 4_000);
     } finally {
-      harness.pi.context.clearTimer = clearTimer;
+      clearing.restore();
       if (!(await processGone(waitPid))) process.kill(waitPid, "SIGKILL");
     }
     expect(lines).toEqual([]);
@@ -1822,21 +1841,17 @@ describe("0.1.3 the wake add-on never ends the host", () => {
 
   test("case 9b: an ordinary stop with a throwing clearTimer and a poll timer pending still frees the lock and lets the next session poll", async () => {
     const harness = await makeHarness([{ messages: [] }, { messages: [] }, { holdMs: 20_000 }]);
-    const clearTimer = harness.pi.context.clearTimer.bind(harness.pi.context);
-    let clearAttempts = 0;
-    harness.pi.context.clearTimer = () => {
-      clearAttempts += 1;
-      throw new Error("clear-timer-detail");
-    };
+    const clearing = breakClearTimer(harness);
     const lines = recordStderr();
     install(harness, { initialMs: 40, maximumMs: 80, successMs: 60_000 }, 86_400_000);
     await harness.pi.emit("session_start");
     await waitFor(() => harness.pi.context.scheduledDelays.includes(60_000));
+    const pollTimer = lastTimerHandle(harness.pi.context, (delay) => delay === 60_000);
     try {
       await expect(harness.pi.emit("session_shutdown")).resolves.toBeUndefined();
-      expect(clearAttempts).toBeGreaterThan(0);
+      expect(clearing.cleared).toContain(pollTimer);
     } finally {
-      harness.pi.context.clearTimer = clearTimer;
+      clearing.restore();
     }
     expect(lines).toEqual([]);
     expect(hostFaults.map(String)).toEqual([]);
@@ -1941,25 +1956,22 @@ describe("0.1.3 the wake add-on never ends the host", () => {
     const clock = useClock(harness);
     const endPath = join(harness.root, "holder-end");
     const lockHolderPath = await writeHolder(harness, [...printLocked, `while not os.path.exists(${JSON.stringify(endPath)}): time.sleep(0.02)`]);
-    const clearTimer = harness.pi.context.clearTimer.bind(harness.pi.context);
-    let clearAttempts = 0;
-    harness.pi.context.clearTimer = () => {
-      clearAttempts += 1;
-      throw new Error("clear-timer-detail");
-    };
+    const clearing = breakClearTimer(harness);
     createQuarterdeckExtension({ config: harness.config, retry: { initialMs: 40, maximumMs: 80 }, reconcileIntervalMs: 86_400_000, lockHolderPath })(harness.pi);
     await harness.pi.emit("session_start");
     await pollRound(harness, clock, 0);
+    await waitFor(() => clock.scheduledDelays.includes(250));
+    const pollTimer = lastTimerHandle(clock, (delay) => delay === 250);
     const callsBefore = (await readState(harness)).calls;
     await writeFile(endPath, "");
     try {
-      await waitFor(() => clearAttempts > 0);
+      await waitFor(() => clearing.cleared.includes(pollTimer));
       await clock.advance(1_000);
       await settle(harness, clock);
       expect((await readState(harness)).calls).toBe(callsBefore);
       expect(hostFaults.map(String)).toEqual([]);
     } finally {
-      harness.pi.context.clearTimer = clearTimer;
+      clearing.restore();
     }
     await expectChildrenGone(harness);
   }, 30_000);
