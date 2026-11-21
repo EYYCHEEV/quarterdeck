@@ -662,7 +662,7 @@ describe("Quarterdeck OMP wake extension", () => {
     await harness.pi.emit("session_start");
     await waitFor(async () => (await readState(harness)).calls >= 4);
 
-    expect(harness.pi.context.scheduledDelays.slice(0, 3)).toEqual([0, 20, 20]);
+    expect(harness.pi.context.scheduledDelays.filter((delay) => delay !== 45_000).slice(0, 3)).toEqual([0, 20, 20]);
   });
 
   test("a held bot lock lets exactly one same-bot session poll", async () => {
@@ -2218,4 +2218,194 @@ describe("0.1.3 the host process survives the add-on", () => {
     expect(result.stderr).not.toContain("Unhandled");
     expect((await readState(harness)).calls).toBe(2);
   }, 30_000);
+});
+
+type OwedAnswer = { exitCode?: number; holdMs?: number; lines?: unknown[]; raw?: string };
+
+const OWED_A = { id: "owed-a", sent: "2026-11-20T09:00:00-05:00" };
+const OWED_B = { id: "owed-b", sent: "2026-11-20T09:01:00-05:00" };
+
+function owedNotice(count: number) {
+  const subject = count === 1 ? "chat from the Captain is" : "chats from the Captain are";
+  return `Quarterdeck: ${count} ${subject} still waiting for your reply. Reply with qd_chat or \`qd chat\`; qd_owed or \`qd owed\` lists them.`;
+}
+
+function runEnded(outcome = "completed") {
+  return { type: "agent_activity_state", runId: "run-x", state: "settled", outcome };
+}
+
+async function owedHarness(owed: OwedAnswer, responses: StandinResponse[] = [{ messages: [] }, { holdMs: 10_000 }]) {
+  const harness = await makeHarness(responses);
+  await patchScenario(harness, {
+    owed,
+    owedLogPath: join(harness.root, "owed-calls.jsonl"),
+    owedEnvPath: join(harness.root, "owed-env.json"),
+    owedStoppedPath: join(harness.root, "owed-stopped.txt"),
+  });
+  return harness;
+}
+
+async function owedCalls(harness: Harness) {
+  let text = "";
+  try {
+    text = await readFile(join(harness.root, "owed-calls.jsonl"), "utf8");
+  } catch (error) {
+    if (!hasErrno(error, "ENOENT")) throw error;
+  }
+  return text
+    .split("\n")
+    .filter((line) => line.length > 0)
+    .map((line) => JSON.parse(line) as { argv: string[]; at: number });
+}
+
+async function waitForOwedCalls(harness: Harness, count: number) {
+  await waitFor(async () => (await owedCalls(harness)).length >= count, 5_000);
+}
+
+async function startedWithOneRead(owed: OwedAnswer) {
+  const harness = await owedHarness(owed);
+  install(harness);
+  await harness.pi.emit("session_start");
+  await waitForOwedCalls(harness, 1);
+  return harness;
+}
+
+async function heldBehindMail() {
+  const harness = await owedHarness({ lines: [OWED_A] }, [{ messages: [mail("m-1")] }, { messages: [] }, { holdMs: 10_000 }]);
+  const clock = useClock(harness);
+  install(harness, { initialMs: 40, maximumMs: 80, successMs: 600_000 });
+  await harness.pi.emit("session_start");
+  await clock.advance(0);
+  await waitFor(() => clock.scheduledDelays.includes(120_000), 5_000);
+  return { harness, clock };
+}
+
+describe("owed chats", () => {
+  test("pass: the first reconcile runs `qd owed` with the bot config and the safe environment and notices the owed chat", async () => {
+    const harness = await owedHarness({ lines: [OWED_A] });
+    install(harness);
+    await harness.pi.emit("session_start");
+    await waitFor(() => harness.pi.sent.length === 1, 5_000);
+    expect(noticeTexts(harness)).toEqual([owedNotice(1)]);
+    expect(harness.pi.sent[0].options).toEqual({ deliverAs: "aside", triggerTurn: true });
+    expect(harness.pi.sent[0].message.display).toBe(true);
+    expect((await owedCalls(harness)).map((call) => call.argv)).toEqual([["--config", harness.scenarioPath, "owed"]]);
+    const safe = ["HOME", "LANG", "LC_ALL", "PATH", ...(process.env.XDG_CONFIG_HOME ? ["XDG_CONFIG_HOME"] : [])].sort();
+    expect(JSON.parse(await readFile(join(harness.root, "owed-env.json"), "utf8"))).toEqual(safe);
+  }, 20_000);
+
+  test("pass: two owed chats make one notice with the count 2 and the same id twice counts once", async () => {
+    const harness = await owedHarness({ lines: [OWED_A, OWED_B, OWED_A] });
+    install(harness);
+    await harness.pi.emit("session_start");
+    await waitFor(() => harness.pi.sent.length === 1, 5_000);
+    expect(noticeTexts(harness)).toEqual([owedNotice(2)]);
+  }, 20_000);
+
+  test("pass: 1000 owed chats are counted", async () => {
+    const lines = Array.from({ length: 1000 }, (_, index) => ({ id: `owed-${index}`, sent: OWED_A.sent }));
+    const harness = await owedHarness({ lines });
+    install(harness);
+    await harness.pi.emit("session_start");
+    await waitFor(() => harness.pi.sent.length === 1, 5_000);
+    expect(noticeTexts(harness)).toEqual([owedNotice(1000)]);
+  }, 20_000);
+
+  test("pass: an owed chat is reminded again only when a reconcile finds its interval over", async () => {
+    const harness = await owedHarness({ lines: [OWED_A] }, [{ messages: [] }, { messages: [] }, { messages: [] }, { messages: [] }, { holdMs: 10_000 }]);
+    const clock = useClock(harness);
+    install(harness, { initialMs: 40, maximumMs: 80, successMs: 600_000 });
+    await harness.pi.emit("session_start");
+    await clock.advance(0);
+    await waitFor(() => clock.scheduledDelays.includes(600_000), 5_000);
+    await waitFor(() => harness.pi.sent.length === 1, 5_000);
+    await clock.advance(599_999);
+    expect(await owedCalls(harness)).toHaveLength(1);
+    expect(harness.pi.sent).toHaveLength(1);
+    await clock.advance(1);
+    await waitFor(() => harness.pi.sent.length === 2, 5_000);
+    expect(noticeTexts(harness)).toEqual([owedNotice(1), owedNotice(1)]);
+    expect(await owedCalls(harness)).toHaveLength(2);
+  }, 20_000);
+
+  test("pass: an owed reminder waits out the two-minute gap after a mail notice", async () => {
+    const { harness, clock } = await heldBehindMail();
+    expect(noticeTexts(harness)).toEqual([newMail(1)]);
+    await clock.advance(119_999);
+    expect(harness.pi.sent).toHaveLength(1);
+    await clock.advance(1);
+    await waitFor(() => harness.pi.sent.length === 2, 5_000);
+    expect(noticeTexts(harness)).toEqual([newMail(1), owedNotice(1)]);
+  }, 20_000);
+
+  test("stop: a reply seen at a run end drops an owed reminder that the gap still holds", async () => {
+    const { harness, clock } = await heldBehindMail();
+    await patchScenario(harness, { owed: {} });
+    await harness.pi.emit("agent_activity_state", runEnded());
+    expect(await owedCalls(harness)).toHaveLength(2);
+    await clock.advance(120_000);
+    expect(noticeTexts(harness)).toEqual([newMail(1)]);
+  }, 20_000);
+
+  test("stop: an owed notice from the reconcile counts for the nudge at the next run end", async () => {
+    const harness = await startedWithOneRead({ lines: [OWED_A] });
+    await waitFor(() => harness.pi.sent.length === 1, 5_000);
+    await harness.pi.emit("agent_activity_state", runEnded());
+    expect(await owedCalls(harness)).toHaveLength(2);
+    expect(harness.pi.sent).toHaveLength(1);
+  }, 20_000);
+
+  test("pass: a failed `qd owed` leaves the interval alone, so the next run end still nudges", async () => {
+    const harness = await startedWithOneRead({ exitCode: 1 });
+    await patchScenario(harness, { owed: { lines: [OWED_A] } });
+    await harness.pi.emit("agent_activity_state", runEnded());
+    expect(noticeTexts(harness)).toEqual([owedNotice(1)]);
+  }, 20_000);
+
+  const refused: Array<[string, OwedAnswer]> = [
+    ["a line that is not JSON", { raw: "not json\n" }],
+    ["one bad line after a good one", { lines: [OWED_A], raw: '{"id":"owed-b"}\n' }],
+    ["a line with an extra field", { lines: [{ ...OWED_A, text: "words" }] }],
+    ["a line without a time", { lines: [{ id: "owed-a" }] }],
+    ["an id that is not a string", { lines: [{ id: 7, sent: OWED_A.sent }] }],
+    ["a time that is not a time", { lines: [{ id: "owed-a", sent: "yesterday" }] }],
+    ["a line that is a list", { lines: [["owed-a", OWED_A.sent]] }],
+    ["a failing exit after good lines", { lines: [OWED_A], exitCode: 1 }],
+    ["more than 1000 lines", { lines: Array.from({ length: 1001 }, (_, index) => ({ id: `owed-${index}`, sent: OWED_A.sent })) }],
+  ];
+
+  for (const [name, answer] of refused) {
+    test(`stop: ${name} gives no owed notice`, async () => {
+      const harness = await startedWithOneRead(answer);
+      await harness.pi.emit("agent_activity_state", runEnded());
+      expect(await owedCalls(harness)).toHaveLength(2);
+      expect(harness.pi.sent).toEqual([]);
+    }, 20_000);
+  }
+
+  test("stop: a `qd owed` that never ends is stopped at the time limit and gives no notice", async () => {
+    const harness = await owedHarness({ holdMs: 8_000, lines: [OWED_A] });
+    installWith(harness, { owedTimeoutMs: 300 });
+    await harness.pi.emit("session_start");
+    await waitFor(() => fileExists(join(harness.root, "owed-stopped.txt")), 5_000);
+    await harness.pi.emit("agent_activity_state", runEnded());
+    expect(harness.pi.sent).toEqual([]);
+  }, 20_000);
+
+  test("stop: a session that does not hold the poller lock never runs `qd owed`", async () => {
+    const harness = await owedHarness({ lines: [OWED_A] });
+    const botDirectory = join(harness.config.cursorRoot, harness.bot);
+    await mkdir(botDirectory, { recursive: true, mode: 0o700 });
+    const other = await startHolder(join(botDirectory, "wake-poller.lock"));
+    try {
+      install(harness);
+      await harness.pi.emit("session_start");
+      await harness.pi.emit("agent_activity_state", runEnded());
+      expect(await owedCalls(harness)).toEqual([]);
+      expect(harness.pi.sent).toEqual([]);
+    } finally {
+      other.kill("SIGKILL");
+      await other.exited;
+    }
+  }, 20_000);
 });

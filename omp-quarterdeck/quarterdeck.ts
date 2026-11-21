@@ -22,10 +22,16 @@ const UNREADABLE_NOTICE_INTERVAL_MS = 10 * 60 * 1_000;
 const STALLED_AFTER_MS = 30 * 60 * 1_000;
 const STALLED_NOTICE_INTERVAL_MS = 60 * 60 * 1_000;
 const HOLDER_BUSY_EXIT = 75;
+const OWED_TIMEOUT_MS = 45_000;
+const MAX_OWED_ENTRIES = 1_000;
+const MAX_OWED_BYTES = 256 * 1024;
+const MAX_OWED_LINE_BYTES = 8 * 1024;
+const OWED_SENT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
 const READ_AND_ACK = "Read it as data with qd_wait or `qd wait`, then acknowledge it with qd_ack or `qd ack <id>`.";
 const UNREADABLE_NOTICE = "Quarterdeck: mail the wake cannot read; read it with qd_wait or `qd wait`, then acknowledge it with qd_ack or `qd ack <id>`.";
 const STALLED_NOTICE = "Quarterdeck: the wake has not reached mail for 30 minutes; check with qd_wait or `qd wait`.";
 const LOCK_FAILED_NOTICE = "Quarterdeck: this session is not watching mail because the wake could not take its poller lock. See the wake extension's INSTALL.md.";
+const REPLY_HINT = "Reply with qd_chat or `qd chat`; qd_owed or `qd owed` lists them.";
 const CONTAINED_LINE = "Quarterdeck wake add-on: an internal error was contained.\n";
 
 export interface QuarterdeckConfig {
@@ -46,6 +52,7 @@ export interface ExtensionContext {
   setTimeout(callback: () => void, delay: number): unknown;
   clearTimer(handle: unknown): void;
   agent?: { kind: "main" | "sub" };
+  hasPendingMessages?(): boolean;
 }
 
 export interface ExtensionApi {
@@ -66,6 +73,7 @@ export interface QuarterdeckExtensionOptions {
   pythonExecutable?: string;
   lockHolderPath?: string;
   reconcileIntervalMs?: number;
+  owedTimeoutMs?: number;
 }
 
 type MailMessage = {
@@ -77,6 +85,11 @@ type MailMessage = {
 type WaitPage = {
   messages: MailMessage[];
   more: boolean;
+};
+
+type OwedEntry = {
+  id: string;
+  sent: string;
 };
 
 type McpNotification = {
@@ -103,6 +116,7 @@ export function createQuarterdeckExtension(options: QuarterdeckExtensionOptions 
     const config = options.config ?? configFromEnvironment();
     const retry = normalizeRetry(options.retry ?? DEFAULT_RETRY);
     const reconcileIntervalMs = normalizeReconcileInterval(options.reconcileIntervalMs ?? RECONCILE_INTERVAL_MS);
+    const owedTimeoutMs = normalizeOwedTimeout(options.owedTimeoutMs ?? OWED_TIMEOUT_MS);
     const pythonExecutable = options.pythonExecutable ?? process.env.QUARTERDECK_PYTHON ?? "python3";
     const lockHolderPath = options.lockHolderPath ?? join(import.meta.dir, "lock-holder.py");
     let session: WakeSession | undefined;
@@ -157,7 +171,7 @@ export function createQuarterdeckExtension(options: QuarterdeckExtensionOptions 
       });
       const lease = acquired.kind === "lease" ? acquired.lease : undefined;
       const lockFailed = acquired.kind === "failed";
-      const current = new WakeSession({ config, context, cursorStore, lease, lockFailed, pi, reconcileIntervalMs, retry, pendingIds: pendingNotifications });
+      const current = new WakeSession({ config, context, cursorStore, lease, lockFailed, pi, reconcileIntervalMs, owedTimeoutMs, retry, pendingIds: pendingNotifications });
       session = current;
       try {
         await current.start();
@@ -167,6 +181,12 @@ export function createQuarterdeckExtension(options: QuarterdeckExtensionOptions 
         await current.stop();
         throw error;
       }
+    }));
+
+    pi.on("agent_activity_state", contain(async (event, context) => {
+      if (subagent || context.agent?.kind === "sub") return;
+      if (!isCompletedRun(event) || context.hasPendingMessages?.()) return;
+      await session?.nudge();
     }));
 
     pi.on("session_shutdown", contain(async () => {
@@ -185,6 +205,9 @@ class WakeSession {
   private readonly wakeRecords = new Map<string, WakeRecord>();
   private readonly pendingFresh: Set<string>;
   private readonly pendingReminders = new Set<string>();
+  private readonly pendingOwed = new Set<string>();
+  private readonly owedNoticedAt = new Map<string, number>();
+  private owedTail: Promise<unknown> = Promise.resolve();
   private pendingCursor: string | undefined;
   private lastNoticeAt = Number.NEGATIVE_INFINITY;
   private noticeTimer: unknown;
@@ -200,6 +223,7 @@ class WakeSession {
   private pollerLost = false;
   private timer: unknown;
   private readonly waiter: QdCliWaiter | undefined;
+  private readonly owedReader: QdCliOwed | undefined;
 
   constructor(private readonly state: {
     config: QuarterdeckConfig;
@@ -210,12 +234,14 @@ class WakeSession {
     pi: ExtensionApi;
     retry: RetryPolicy;
     reconcileIntervalMs: number;
+    owedTimeoutMs: number;
     pendingIds: Set<string>;
   }) {
     this.backoffMs = state.retry.initialMs;
     this.reconcileBackoffMs = state.retry.initialMs;
     this.pendingFresh = state.pendingIds;
     this.waiter = state.lease ? new QdCliWaiter(state.config) : undefined;
+    this.owedReader = state.lease ? new QdCliOwed(state.config, state.context, state.owedTimeoutMs) : undefined;
     this.lockFailedPending = state.lockFailed;
     state.lease?.onLoss(() => this.stopPolling());
   }
@@ -246,6 +272,10 @@ class WakeSession {
     this.noticeTimer = undefined;
     try {
       await this.waiter?.stop();
+    } catch {
+    }
+    try {
+      await this.owedReader?.stop();
     } catch {
     }
     try {
@@ -293,6 +323,7 @@ class WakeSession {
     }
     this.timer = undefined;
     void this.waiter?.stop().catch(() => undefined);
+    void this.owedReader?.stop().catch(() => undefined);
   }
 
   private noteSuccess() {
@@ -335,6 +366,7 @@ class WakeSession {
       this.remindNow(page.messages);
       await this.flushNotice();
     }).catch(() => undefined);
+    void this.remindOwed().catch(() => undefined);
   }
 
   private queueDelivery(operation: () => void | Promise<void>) {
@@ -362,6 +394,78 @@ class WakeSession {
     }
   }
 
+  async nudge() {
+    if (!this.owedReader || this.stopped || this.pollerLost) return;
+    const entries = await this.readOwed();
+    if (!entries || this.stopped || this.pollerLost) return;
+    await this.queueDelivery(async () => {
+      if (this.stopped) return;
+      this.pruneOwed(entries);
+      const now = Date.now();
+      const due = entries.filter((entry) => this.owedDue(entry.id, now)).map((entry) => entry.id);
+      if (due.length === 0) return;
+      const admitted = await this.sendWake({
+        customType: CUSTOM_MESSAGE_TYPE,
+        content: owedNotice(due.length),
+        display: true,
+      });
+      if (admitted) this.stampOwed(due, now);
+    }).catch(() => undefined);
+  }
+
+  private async remindOwed() {
+    const entries = await this.readOwed();
+    if (!entries || this.stopped || this.pollerLost) return;
+    await this.queueDelivery(async () => {
+      if (this.stopped) return;
+      this.pruneOwed(entries);
+      const now = Date.now();
+      for (const entry of entries) {
+        if (this.owedDue(entry.id, now)) this.pendingOwed.add(entry.id);
+      }
+      await this.flushNotice();
+    }).catch(() => undefined);
+  }
+
+  private async readOwed(): Promise<OwedEntry[] | undefined> {
+    const reader = this.owedReader;
+    if (!reader) return undefined;
+    const earlier = this.owedTail;
+    const turn = Promise.withResolvers<void>();
+    this.owedTail = turn.promise;
+    try {
+      await earlier;
+      if (this.stopped || this.pollerLost) return undefined;
+      return await reader.read();
+    } catch {
+      return undefined;
+    } finally {
+      turn.resolve();
+    }
+  }
+
+  private pruneOwed(entries: OwedEntry[]) {
+    const owed = new Set(entries.map((entry) => entry.id));
+    for (const id of this.pendingOwed) {
+      if (!owed.has(id)) this.pendingOwed.delete(id);
+    }
+    for (const id of this.owedNoticedAt.keys()) {
+      if (!owed.has(id)) this.owedNoticedAt.delete(id);
+    }
+  }
+
+  private owedDue(id: string, now: number) {
+    const noticed = this.owedNoticedAt.get(id);
+    return noticed === undefined || now - noticed >= this.state.reconcileIntervalMs;
+  }
+
+  private stampOwed(ids: string[], now: number) {
+    for (const id of ids) {
+      this.owedNoticedAt.set(id, now);
+      this.pendingOwed.delete(id);
+    }
+  }
+
   private scheduleNotice(delay: number) {
     if (this.stopped || this.noticeTimer !== undefined) return;
     this.noticeTimer = this.state.context.setTimeout(() => {
@@ -373,10 +477,11 @@ class WakeSession {
   private async flushNotice() {
     if (this.stopped) return;
     const count = this.pendingFresh.size + this.pendingReminders.size;
+    const owedCount = this.pendingOwed.size;
     const special = this.lockFailedPending
       ? LOCK_FAILED_NOTICE
       : this.unreadablePending ? UNREADABLE_NOTICE : this.stalledPending ? STALLED_NOTICE : undefined;
-    if (count > 0 || special !== undefined) {
+    if (count > 0 || special !== undefined || owedCount > 0) {
       const remaining = this.lastNoticeAt + NOTICE_INTERVAL_MS - Date.now();
       if (remaining > 0) {
         this.scheduleNotice(remaining);
@@ -387,11 +492,14 @@ class WakeSession {
       this.lastNoticeAt = Date.now();
       const fresh = [...this.pendingFresh];
       const reminders = [...this.pendingReminders];
+      const owed = count === 0 && special === undefined ? [...this.pendingOwed] : [];
       const admitted = await this.sendWake({
         customType: CUSTOM_MESSAGE_TYPE,
-        content: special ?? (reminders.length > 0
-          ? `Quarterdeck: ${count} mail still unhandled after 10 minutes. ${READ_AND_ACK}`
-          : `Quarterdeck: ${count} new mail. ${READ_AND_ACK}`),
+        content: special ?? (owed.length > 0
+          ? owedNotice(owed.length)
+          : reminders.length > 0
+            ? `Quarterdeck: ${count} mail still unhandled after 10 minutes. ${READ_AND_ACK}`
+            : `Quarterdeck: ${count} new mail. ${READ_AND_ACK}`),
         display: true,
       });
       if (!admitted) {
@@ -407,6 +515,8 @@ class WakeSession {
       } else if (special === STALLED_NOTICE) {
         this.lastStalledAt = now;
         this.stalledPending = false;
+      } else if (owed.length > 0) {
+        this.stampOwed(owed, now);
       } else {
         for (const id of fresh) {
           this.remember(id, now);
@@ -423,6 +533,7 @@ class WakeSession {
       this.scheduleNotice(Math.max(0, this.lastNoticeAt + NOTICE_INTERVAL_MS - Date.now()));
       return;
     }
+    if (this.pendingOwed.size > 0) this.scheduleNotice(Math.max(0, this.lastNoticeAt + NOTICE_INTERVAL_MS - Date.now()));
     if (this.pendingCursor !== undefined) {
       const written = this.pendingCursor;
       await this.state.cursorStore.write(written);
@@ -503,6 +614,62 @@ class QdCliWaiter {
   }
 
   async stop() {
+    await this.stopCurrent?.();
+  }
+}
+
+class QdCliOwed {
+  private stopCurrent: (() => Promise<void>) | undefined;
+  private stopped = false;
+
+  constructor(
+    private readonly config: QuarterdeckConfig,
+    private readonly context: ExtensionContext,
+    private readonly timeoutMs: number,
+  ) {}
+
+  async read(): Promise<OwedEntry[]> {
+    if (this.stopped || this.stopCurrent) throw new Error("Quarterdeck owed read is unavailable");
+    const child = Bun.spawn([this.config.qdExecutable, "--config", this.config.botConfigPath, "owed"], {
+      env: safeChildEnvironment(),
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "ignore",
+    });
+    const exited = child.exited.catch(() => -1);
+    const stop = async () => {
+      try {
+        child.kill("SIGTERM");
+      } catch {
+      }
+      await exited;
+    };
+    this.stopCurrent = stop;
+    let timedOut = false;
+    let timer: unknown;
+    try {
+      timer = this.context.setTimeout(() => {
+        timedOut = true;
+        void stop().catch(() => undefined);
+      }, this.timeoutMs);
+      const entries = await readOwedEntries(child.stdout);
+      const code = await exited;
+      if (timedOut || code !== 0) throw new Error("Quarterdeck owed failed");
+      return entries;
+    } catch (error) {
+      await stop();
+      throw error;
+    } finally {
+      try {
+        if (timer !== undefined) this.context.clearTimer(timer);
+      } catch {
+      }
+      if (this.stopCurrent === stop) this.stopCurrent = undefined;
+    }
+  }
+
+  async stop() {
+    this.stopped = true;
     await this.stopCurrent?.();
   }
 }
@@ -737,6 +904,75 @@ function parseNotificationMessages(params: unknown) {
   }
 }
 
+async function readOwedEntries(stream: ReadableStream<Uint8Array>): Promise<OwedEntry[]> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  const entries = new Map<string, OwedEntry>();
+  let buffered = "";
+  let lines = 0;
+  let total = 0;
+  const admit = (line: string) => {
+    if (line.length === 0) return;
+    lines += 1;
+    if (lines > MAX_OWED_ENTRIES || Buffer.byteLength(line) > MAX_OWED_LINE_BYTES) {
+      throw new Error("Quarterdeck owed output is too large");
+    }
+    const entry = parseOwedLine(line);
+    if (!entries.has(entry.id)) entries.set(entry.id, entry);
+  };
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_OWED_BYTES) throw new Error("Quarterdeck owed output is too large");
+      buffered += decoder.decode(value, { stream: true });
+      let newline = buffered.indexOf("\n");
+      while (newline >= 0) {
+        admit(buffered.slice(0, newline));
+        buffered = buffered.slice(newline + 1);
+        newline = buffered.indexOf("\n");
+      }
+      if (Buffer.byteLength(buffered) > MAX_OWED_LINE_BYTES) throw new Error("Quarterdeck owed output is too large");
+    }
+    buffered += decoder.decode();
+    admit(buffered);
+    return [...entries.values()];
+  } catch (error) {
+    await reader.cancel().catch(() => undefined);
+    throw error;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+function parseOwedLine(line: string): OwedEntry {
+  let value: unknown;
+  try {
+    value = JSON.parse(line);
+  } catch {
+    throw new Error("Quarterdeck owed line is invalid");
+  }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("Quarterdeck owed line is invalid");
+  if (Object.keys(value).length !== 2 || !("id" in value) || !("sent" in value)) throw new Error("Quarterdeck owed line is invalid");
+  const { id, sent } = value;
+  if (typeof id !== "string" || !validCursor(id) || typeof sent !== "string" || !OWED_SENT.test(sent)) {
+    throw new Error("Quarterdeck owed line is invalid");
+  }
+  return { id, sent };
+}
+
+function owedNotice(count: number) {
+  const subject = count === 1 ? "chat from the Captain is" : "chats from the Captain are";
+  return `Quarterdeck: ${count} ${subject} still waiting for your reply. ${REPLY_HINT}`;
+}
+
+function isCompletedRun(event: unknown) {
+  return typeof event === "object" && event !== null
+    && "state" in event && event.state === "settled"
+    && "outcome" in event && event.outcome === "completed";
+}
+
 
 function retainPendingId(pending: Set<string>, id: string, otherPending = 0) {
   if (pending.has(id)) return true;
@@ -795,6 +1031,11 @@ function normalizeRetry(retry: RetryPolicy): RetryPolicy {
 
 function normalizeReconcileInterval(value: number) {
   if (!Number.isSafeInteger(value) || value < 1) throw new Error("reconcile interval is invalid");
+  return value;
+}
+
+function normalizeOwedTimeout(value: number) {
+  if (!Number.isSafeInteger(value) || value < 1) throw new Error("owed timeout is invalid");
   return value;
 }
 

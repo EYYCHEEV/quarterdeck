@@ -12,6 +12,13 @@ type Response = {
   trickle?: boolean;
 };
 
+type OwedAnswer = {
+  exitCode?: number;
+  holdMs?: number;
+  lines?: unknown[];
+  raw?: string;
+};
+
 type Scenario = {
   responses: Response[];
   statePath: string;
@@ -19,6 +26,10 @@ type Scenario = {
   envPath?: string;
   mailbox?: unknown[];
   pipeClosedPath?: string;
+  owed?: OwedAnswer;
+  owedLogPath?: string;
+  owedEnvPath?: string;
+  owedStoppedPath?: string;
 };
 
 type State = {
@@ -31,6 +42,25 @@ if (configIndex < 0 || !process.argv[configIndex + 1]) process.exit(64);
 
 const loadScenario = () => JSON.parse(readFileSync(process.argv[configIndex + 1], "utf8")) as Scenario;
 const scenario = loadScenario();
+
+if (process.argv[configIndex + 2] === "owed") {
+  const answer = scenario.owed ?? {};
+  if (scenario.owedLogPath) {
+    appendFileSync(scenario.owedLogPath, `${JSON.stringify({ argv: process.argv.slice(2), at: Date.now() })}\n`, { mode: 0o600 });
+  }
+  if (scenario.owedEnvPath) writeFileSync(scenario.owedEnvPath, JSON.stringify(Object.keys(process.env).sort()), { mode: 0o600 });
+  process.on("SIGTERM", () => {
+    if (scenario.owedStoppedPath) appendFileSync(scenario.owedStoppedPath, `${process.pid}\n`, { mode: 0o600 });
+    process.exit(0);
+  });
+  if (answer.holdMs) await Bun.sleep(answer.holdMs);
+  const text = (answer.lines ?? []).map((line) => `${typeof line === "string" ? line : JSON.stringify(line)}\n`).join("") + (answer.raw ?? "");
+  const written = Promise.withResolvers<void>();
+  process.stdout.write(text, () => written.resolve());
+  await written.promise;
+  process.exit(answer.exitCode ?? 0);
+}
+
 let state: State = { calls: 0, invocations: [] };
 try {
   state = JSON.parse(readFileSync(scenario.statePath, "utf8")) as State;
