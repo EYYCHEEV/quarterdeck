@@ -788,7 +788,8 @@ class ConnectService:
 
     def ack(self, message_id: str) -> bool:
         def operation(mailbox):
-            mailbox.ack(message_id)
+            if not mailbox.ack(message_id):
+                return False
             try:
                 return any(entry["id"] == message_id for entry in mailbox.owed())
             except Exception:

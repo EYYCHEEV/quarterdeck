@@ -196,6 +196,13 @@ def sender_of(email):
     return (email.get("from") or [{}])[0].get("email", "").partition("@")[0]
 
 
+def _is_captain_chat_header(email, subject, captain):
+    if email.get("subject") != subject:
+        return False
+    sender = (email.get("from") or [{}])[0].get("email") or ""
+    return sender.lower() == captain
+
+
 def is_chat(bot, subject, body):
     if subject != f"CHAT: {bot}":
         return False
@@ -339,27 +346,44 @@ class Mailbox:
         return messages
 
     def ack(self, mail_id):
-        copies = [e for e in self.inbox(False, ["id", "messageId", "keywords"]) if first_id(e) == mail_id]
+        properties = ["id", "messageId", "keywords", "from", "subject"]
+        copies = [e for e in self.inbox(False, properties) if first_id(e) == mail_id]
         if not copies:
             raise Refused(f"{self.bot}'s inbox has no message {mail_id}")
         todo = [e["id"] for e in copies if not (e.get("keywords") or {}).get(HANDLED)]
-        if not todo:
-            return
-        [done] = self.jmap.call(("Email/set", {"update": {c: {f"keywords/{HANDLED}": True} for c in todo}}))
-        if set(done.get("updated") or {}) != set(todo):
-            raise MailFailed("Stalwart did not mark every copy handled")
+        if todo:
+            [done] = self.jmap.call(("Email/set", {"update": {c: {f"keywords/{HANDLED}": True} for c in todo}}))
+            if set(done.get("updated") or {}) != set(todo):
+                raise MailFailed("Stalwart did not mark every copy handled")
+        subject, captain = f"CHAT: {self.bot}", f"{CAPTAIN}@{self.domain}"
+        return any(_is_captain_chat_header(email, subject, captain) for email in copies)
 
-    def newest_first(self, mailbox_id, properties):
+    def _newest_ids(self, flt, position):
+        [found] = self.jmap.call(("Email/query", {"filter": flt, "position": position, "limit": PAGE,
+                                                  "sort": [{"property": "receivedAt", "isAscending": False}]}))
+        return found.get("ids", [])
+
+    def _email_page(self, ids, properties):
+        [got] = self.jmap.call(("Email/get", {"ids": ids, "properties": properties}))
+        by_id = {m["id"]: m for m in got.get("list", [])}
+        return [by_id[i] for i in ids if i in by_id]
+
+    def _chat_pages(self, mailbox_id, properties, *indexed_conditions):
+        in_mailbox = {"inMailbox": mailbox_id}
+        recent_ids = self._newest_ids(in_mailbox, 0)
+        if recent_ids:
+            yield self._email_page(recent_ids, properties)
+        if len(recent_ids) < PAGE:
+            return
+
+        recent = set(recent_ids)
+        flt = {"operator": "AND", "conditions": [in_mailbox, *indexed_conditions]}
         position = 0
         while True:
-            [found] = self.jmap.call(("Email/query", {"filter": {"inMailbox": mailbox_id}, "position": position,
-                                                      "limit": PAGE,
-                                                      "sort": [{"property": "receivedAt", "isAscending": False}]}))
-            ids = found.get("ids", [])
-            if ids:
-                [got] = self.jmap.call(("Email/get", {"ids": ids, "properties": properties}))
-                by_id = {m["id"]: m for m in got.get("list", [])}
-                yield [by_id[i] for i in ids if i in by_id]
+            ids = self._newest_ids(flt, position)
+            older = [mail_id for mail_id in ids if mail_id not in recent]
+            if older:
+                yield self._email_page(older, properties)
             if len(ids) < PAGE:
                 return
             position += len(ids)
@@ -375,9 +399,10 @@ class Mailbox:
     def newest_reply(self):
         subject = f"CHAT: {self.bot}"
         captain = f"{CAPTAIN}@{self.domain}"
-        for page in self.newest_first(self.sent, ["id", "to", "subject", "receivedAt"]):
-            to_him = [e for e in page if e.get("subject") == subject
-                      and captain in [a.get("email", "").lower() for a in e.get("to") or []]]
+        for page in self._chat_pages(self.sent, ["id", "to", "subject", "receivedAt"],
+                                     {"to": captain}, {"subject": subject}):
+            to_him = [e for e in page if e.get("subject") == subject and
+                      any((a.get("email") or "").lower() == captain for a in e.get("to") or ())]
             for start in range(0, len(to_him), CHAT_CHUNK):
                 chunk = to_him[start:start + CHAT_CHUNK]
                 bodies = self.chat_bodies(chunk)
@@ -387,17 +412,18 @@ class Mailbox:
         return None
 
     def owed(self):
-        subject = f"CHAT: {self.bot}"
+        subject, captain = f"CHAT: {self.bot}", f"{CAPTAIN}@{self.domain}"
         replied = self.newest_reply()
         asked, answered = {}, set()
-        for page in self.newest_first(self.inbox_id, ["id", "messageId", "from", "subject", "receivedAt"]):
+        for page in self._chat_pages(self.inbox_id, ["id", "messageId", "from", "subject", "receivedAt"],
+                                     {"from": captain}, {"subject": subject}):
             reached, from_him = False, []
             for email in page:
                 mail_id = first_id(email)
                 if replied is not None and parse_time(email["receivedAt"]) <= replied:
                     reached = True
                     answered.add(mail_id)
-                elif mail_id and email.get("subject") == subject and sender_of(email) == CAPTAIN:
+                elif mail_id and _is_captain_chat_header(email, subject, captain):
                     from_him.append(email)
             bodies = self.chat_bodies(from_him)
             for email in from_him:

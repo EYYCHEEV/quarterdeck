@@ -12,6 +12,7 @@ import qd
 import qd_connect
 import qd_jmap
 import qd_mcp
+from fake_stalwart import FakeStalwart
 
 ENTRIES = [
     {"id": "m-1", "sent": "2026-11-20T09:00:00-05:00"},
@@ -56,6 +57,7 @@ class FakeMailbox:
 
     def ack(self, message_id):
         self.calls.append(("ack", message_id))
+        return message_id in ("m-1", "m-2")
 
     def owed(self):
         self.calls.append(("owed",))
@@ -116,6 +118,44 @@ class ServiceTests(unittest.TestCase):
             with self.assertRaises(qd_jmap.Refused):
                 self.service.ack("m-1")
         self.assertEqual(FakeMailbox.calls, [])
+
+
+class AckIntegrationTests(unittest.TestCase):
+    def test_plain_ack_does_not_read_sent(self):
+        bot, captain, peer = "bot-a", "captain", "bot-b"
+        session = "https://quarterdeck.example.test/.well-known/jmap"
+        server = FakeStalwart([bot, captain, peer])
+        server.keys[KEY.decode()] = bot
+        service = qd_connect.ConnectService(session, FakeAdapter(), None, server)
+
+        def mailbox(name):
+            key = qd_jmap.Credential(bytearray(server.key_of(name).encode()))
+            return qd_jmap.Mailbox(qd_jmap.Jmap(session, key, server))
+
+        subject = f"CHAT: {bot}"
+        chat = json.dumps({"qd": "chat/1", "bot": bot, "text": "hello"})
+        mailbox(bot).send(peer, "Status", "words", "sent-mail")
+        mailbox(captain).send(bot, subject, chat, "owed")
+        plain = mailbox(captain).send(bot, "Status", "words", "plain")
+        peer_chat = mailbox(peer).send(bot, subject, chat, "peer-chat")
+        sent_ids = {i for i, mail in server.mail[bot].items() if mail["mailboxIds"].get(f"sent-{bot}")}
+        before = len(server.requests)
+
+        for mail_id in (plain, peer_chat):
+            self.assertIs(service.ack(mail_id), False)
+            copy = next(mail for mail in server.mail[bot].values() if mail["messageId"] == [mail_id])
+            self.assertTrue(copy["keywords"][qd_jmap.HANDLED])
+
+        for method, _, _, body in server.requests[before:]:
+            if method != "POST":
+                continue
+            for name, args, _ in json.loads(body)["methodCalls"]:
+                if name == "Email/query":
+                    query = json.dumps(args.get("filter"))
+                    self.assertIn(f'"inbox-{bot}"', query)
+                    self.assertNotIn(f'"sent-{bot}"', query)
+                elif name == "Email/get":
+                    self.assertFalse(sent_ids.intersection(args["ids"]))
 
 
 class CliTests(unittest.TestCase):

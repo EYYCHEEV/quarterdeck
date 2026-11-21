@@ -50,6 +50,54 @@ class OwedTest(unittest.TestCase):
                 calls.extend((name, args) for name, args, _ in json.loads(body)["methodCalls"])
         return calls
 
+    def add_unrelated_mail(self, count):
+        mail = self.server.mail[OWN]
+        for box, sender, recipient in (("inbox", OTHER, OWN), ("sent", OWN, OTHER)):
+            for _ in range(count):
+                number = next(self.server.numbers)
+                mail[f"e{number}"] = {
+                    "n": number, "receivedAt": self.server.tick(), "mailboxIds": {f"{box}-{OWN}": True},
+                    "messageId": [f"bulk-{number}@example.test"], "subject": "Status",
+                    "from": [{"email": f"{sender}@example.test"}], "to": [{"email": f"{recipient}@example.test"}],
+                }
+
+    def owed_read_work(self, expected):
+        box = self.mailbox(OWN)
+        before = len(self.server.requests)
+        self.assertEqual([entry["id"] for entry in box.owed()], [expected])
+        return sum(1 + len(args.get("ids", ())) for name, args in self.calls_since(before)
+                   if name in ("Email/query", "Email/get"))
+
+    def test_unrelated_mail_does_not_increase_owed_reads(self):
+        first = self.his()
+        self.add_unrelated_mail(1024)
+        no_reply = self.owed_read_work(first)
+        self.add_unrelated_mail(1024)
+        no_reply_growth = self.owed_read_work(first) - no_reply
+
+        self.reply()
+        latest = self.his()
+        self.add_unrelated_mail(1024)
+        old_reply = self.owed_read_work(latest)
+        self.add_unrelated_mail(1024)
+        old_reply_growth = self.owed_read_work(latest) - old_reply
+        self.assertLessEqual(max(no_reply_growth, old_reply_growth), 16)
+
+    def test_an_unindexed_reply_counts_even_with_an_older_indexed_reply(self):
+        self.reply("older")
+        self.his("new question")
+        self.server.index_lag = True
+        self.reply("not yet indexed")
+        self.server.index_lag = False
+        self.send(OWN, OTHER, "Status", "newer unrelated mail")
+        self.assertEqual(self.owed_ids(), [])
+
+    def test_an_unindexed_new_chat_is_owed(self):
+        self.reply()
+        self.server.index_lag = True
+        first = self.his()
+        self.assertEqual(self.owed_ids(), [first])
+
     def test_his_chat_is_owed_until_the_bot_chats_back(self):
         first = self.his()
         self.assertEqual(self.owed_ids(), [first])
