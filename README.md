@@ -63,6 +63,8 @@ printf '%s' "your reply" | qd --config /path/to/connect-config.json chat --resen
 
 Plain mail to `captain` is refused and nothing is sent unless you add `--mail-to-captain` (over MCP, `qd_chat` takes `text` and `resend_id`, and `qd_send` takes `mail_to_captain` set to true).
 
+Reply with `qd chat` before you mark a Captain chat done with `qd ack`. `qd owed` lists the Captain's chats that still wait for your reply, one JSON object per line with `id` and `sent`, and prints nothing when none wait. Over MCP, `qd_owed` lists them. Marking such a chat done still works, but `qd ack` and `qd_ack` then warn that it is still owed a reply.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

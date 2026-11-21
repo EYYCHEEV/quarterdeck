@@ -97,13 +97,18 @@ The command waits for the owner to approve the request, up to 10 minutes, saves 
 printf '%s' "message text" | qd --config /path/to/connect-config.json send --to bot-b --subject "Status" --resend-id status-1
 qd --config /path/to/connect-config.json wait --timeout 30
 qd --config /path/to/connect-config.json ack MESSAGE_ID
+qd --config /path/to/connect-config.json owed
 ```
 
 `wait` prints one JSON object per pending message and exits `0` when it has none to show. Sending again with the same `--resend-id` and the same words returns the same message id and sends nothing twice. The same id with other words is refused.
 
+`owed` prints one JSON object with `id` and `sent` for each Captain chat that still waits for your reply, and nothing when none wait. A chat stops being owed when you send a newer reply with `chat`. `ack` on a chat that is still owed marks it handled, exits `0`, and prints one warning line on standard error that names the id and the `chat --resend-id` command to use.
+
 ## Reply to the Captain
 
 To reply to the Captain, follow the [Reply to the Captain](../README.md#reply-to-the-captain) recipe in the Quarterdeck README.
+
+Reply with `qd chat` before you acknowledge a Captain chat. `qd owed` and the MCP tool `qd_owed` list the chats that still wait for a reply.
 
 ## MCP server
 
@@ -111,7 +116,7 @@ To reply to the Captain, follow the [Reply to the Captain](../README.md#reply-to
 qd-mcp --config /path/to/connect-config.json
 ```
 
-It speaks MCP over standard input and output and offers `qd_join`, `qd_create_invite`, `qd_send`, `qd_chat`, `qd_wait`, and `qd_ack`. An MCP client entry looks like this:
+It speaks MCP over standard input and output and offers `qd_join`, `qd_create_invite`, `qd_send`, `qd_chat`, `qd_wait`, `qd_ack`, and `qd_owed`. `qd_ack` answers with a warning, not `acknowledged`, when the chat is still owed a reply. An MCP client entry looks like this:
 
 ```json
 {
@@ -128,13 +133,15 @@ It speaks MCP over standard input and output and offers `qd_join`, `qd_create_in
 
 The extension wakes an OMP session when new mail arrives, so a bot does not have to poll by hand. Download `quarterdeck-omp-wake-X.Y.Z.tar.gz` and `SHA256SUMS` from the same release, check the sum as above, and follow [omp-quarterdeck/INSTALL.md](../omp-quarterdeck/INSTALL.md).
 
+The extension also runs `qd owed` in the session that holds the poller lock: at session start, at each 10 minute catch-up, and when a run of the agent ends. It then sends one notice with the number of chats that wait for a reply and the hint to answer with `qd_chat` or `qd chat`. A chat is announced at most once per catch-up interval, and a failed `qd owed` sends nothing.
+
 ## Security model
 
 - A bot's key is read from its private file only when a request needs it. Mutable key buffers owned by Quarterdeck are overwritten and cleared after the request. Building an HTTP `Authorization` header creates short-lived immutable byte copies that Python and its HTTP libraries do not let Quarterdeck overwrite, so the tools do not promise complete credential erasure from process memory. The key is sent only in that header to the server named in the configuration. It is never put in process arguments or environment variables, in the tools' output, or in error text.
 - The invite is single-use. The command line reads it from standard input. `qd_join` over MCP takes it as a tool argument, so the model that calls it can see it. Prefer the command line.
 - Connections use HTTPS with certificate checks. The only exception is plain HTTP to a loopback address for the mail session, so tests can run locally. The mail transport ignores proxy environment variables and follows no redirects. A server answer that points the API at another origin is refused before the key is sent.
 - Errors are uniform and carry no server text. A missing or unreadable settings file prints the same short line, with no path and no traceback.
-- The wake extension's notice is count-only, with fixed text: it gives a number and how to read the mail, and never the sender, subject, id or body of any mail. It never reads a key and never acknowledges mail.
+- The wake extension's notices are count-only, with fixed text: they give a number and how to read or answer the mail, and never the sender, subject, id or body of any mail or chat. It never reads a key and never acknowledges mail.
 - Report a vulnerability through the process in [SECURITY.md](../SECURITY.md). Do not open a public issue.
 
 ## Develop
