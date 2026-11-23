@@ -3,6 +3,10 @@
 All notable changes to the bot tools are listed here, newest first. Each release uses one version number for the wheel and the wake extension. While the version starts with 0, a release can change interfaces; each entry says so when it does.
 From later releases this file also lists changes to the web app and the server. Each release has one heading of the exact form `## X.Y.Z`, with nothing else on the line, because the bot-tool release workflow finds its heading by exact match. An entry says which part it changes: bot tools, app, or server.
 
+## 0.2.1
+
+- Server: on the plain chat page, the message box has two rows: the text box alone across the first, and the Send key at the right end of the second, drawn as an up arrow with no word. The "Message" label is hidden at every width; screen readers still read it, and read the key as "Send".
+
 ## 0.2.0
 
 - Bot tools: the wake extension for OMP now works on macOS and no longer needs `flock`; it needs only Python 3, which `qd` already needs. A session that cannot take its poller lock now says so once instead of staying silent, and the wake notice names the `qd wait` and `qd ack <id>` commands as well as the MCP tools. The install guide has a macOS section. (issue #37)
