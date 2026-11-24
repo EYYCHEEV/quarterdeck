@@ -114,6 +114,9 @@ jobs:
         working-directory: omp-quarterdeck
         run: bun test
 
+      - name: Test the extension from its unpacked archive
+        run: python3 tools/ci/wake_archive_check.py check HEAD
+
   extension-macos:
     name: Bot tools on macOS
     runs-on: macos-15

@@ -940,7 +940,7 @@ class WorkflowContextsTest(unittest.TestCase):
                 self.assertEqual((result.returncode, result.stdout), (0, ""))
 
     def test_the_original_ci_has_exactly_the_three_reported_findings(self):
-        original = without_ignore_refusal(without_scan_config(without_server_lane(without_app_lanes(without_path_map(without_extension_macos(WORKFLOW.read_text(encoding="utf-8")))))))
+        original = without_ignore_refusal(without_scan_config(without_server_lane(without_app_lanes(without_path_map(without_extension_macos(without_wake_archive_check(WORKFLOW.read_text(encoding="utf-8"))))))))
         original = original.replace(
             "      - name: Fetch main for the design comparison\n"
             "        run: git -c credential.helper= fetch --no-tags --depth=1 origin main:refs/remotes/origin/main\n\n",
@@ -1109,6 +1109,18 @@ def without_extension_macos(text):
     return text
 
 
+WAKE_ARCHIVE_CHECK_STEP = (
+    "\n      - name: Test the extension from its unpacked archive\n"
+    "        run: python3 tools/ci/wake_archive_check.py check HEAD\n"
+)
+
+
+def without_wake_archive_check(text):
+    if text.count(WAKE_ARCHIVE_CHECK_STEP) > 1:
+        raise ValueError("unexpected wake archive check: found more than once")
+    return text.replace(WAKE_ARCHIVE_CHECK_STEP, "")
+
+
 class ExtensionMacosReconstructionTest(unittest.TestCase):
     def test_a_changed_or_missing_piece_is_refused_and_never_silently_kept(self):
         text = WORKFLOW.read_text(encoding="utf-8")
@@ -1263,7 +1275,7 @@ class WorkflowNullValuesTest(unittest.TestCase):
         self.assertEqual((result.returncode, result.stdout, result.stderr), (0, "", ""))
 
     def test_the_r1_workflow_has_exactly_one_null_finding(self):
-        original = ci_with_selftest_env(without_ignore_refusal(without_scan_config(without_server_lane(without_app_lanes(without_path_map(without_extension_macos(WORKFLOW.read_text(encoding="utf-8"))))))))
+        original = ci_with_selftest_env(without_ignore_refusal(without_scan_config(without_server_lane(without_app_lanes(without_path_map(without_extension_macos(without_wake_archive_check(WORKFLOW.read_text(encoding="utf-8")))))))))
         original = original.replace(
             "      - name: Fetch main for the design comparison\n"
             "        run: git -c credential.helper= fetch --no-tags --depth=1 origin main:refs/remotes/origin/main\n\n",
