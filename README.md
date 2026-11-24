@@ -63,6 +63,8 @@ printf '%s' "your reply" | qd --config /path/to/connect-config.json chat --resen
 
 Plain mail to `captain` is refused and nothing is sent unless you add `--mail-to-captain` (over MCP, `qd_chat` takes `text` and `resend_id`, and `qd_send` takes `mail_to_captain` set to true).
 
+A message to the Captain may not hold a bare web address, one that starts with `http://` or `https://` and is neither part of a link nor inside code. `qd chat`, `qd send` to `captain` (also with `--mail-to-captain`), `qd_chat` and `qd_send` refuse it before anything is sent. The refusal names no part of the address: it says only how many bare addresses it found, on which lines of the text or in which fields of a card, and how to write a link. Write it as a link, `[Launcher review page](https://example.com/review)`, with an `https` address, because the app opens only `https` links; an address inside a code span or a fenced code block is left alone. Card mail, a `CARD:`, `UPDATE:`, `WITHDRAW:` or `COMMENT:` subject with a body of one JSON object whose `qd` is `card/1`, `update/1`, `withdraw/1` or `comment/1`, is sent as before: the `url` of each `learn` link and the `run` text of each `commands` item on a card or an update are left to the app, and every other text field of the card, such as `context`, `note` and `commands[].where`, is checked like a message. A withdraw or a comment is checked in every field.
+
 Reply with `qd chat` before you mark a Captain chat done with `qd ack`. `qd owed` lists the Captain's chats that still wait for your reply, one JSON object per line with `id` and `sent`, and prints nothing when none wait. Over MCP, `qd_owed` lists them. Marking such a chat done still works, but `qd ack` and `qd_ack` then warn that it is still owed a reply.
 
 ## License

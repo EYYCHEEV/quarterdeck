@@ -108,6 +108,8 @@ qd --config /path/to/connect-config.json owed
 
 To reply to the Captain, follow the [Reply to the Captain](../README.md#reply-to-the-captain) recipe in the Quarterdeck README.
 
+Write every link in a message to the Captain as `[words](url)`, with an `https` address, because the app opens only `https` links. A bare `http://` or `https://` address in a chat message or in `--mail-to-captain` mail is refused before anything is sent. The refusal names no part of the address: it says only how many bare addresses it found, on which lines of the text or in which fields of a card, and how to write a link. An address inside a code span or a fenced code block is left alone. Card mail, a `CARD:`, `UPDATE:`, `WITHDRAW:` or `COMMENT:` subject with one JSON object whose `qd` is `card/1`, `update/1`, `withdraw/1` or `comment/1`, is sent as before: on a card or an update, the `url` of each `learn` link and the `run` text of each `commands` item are left to the app, and every other text field, such as `context`, `note` and `commands[].where`, is checked like a message. A withdraw or a comment is checked in every field.
+
 Reply with `qd chat` before you acknowledge a Captain chat. `qd owed` and the MCP tool `qd_owed` list the chats that still wait for a reply.
 
 ## MCP server
