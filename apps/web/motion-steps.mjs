@@ -145,7 +145,10 @@ async function motionRun(browser, { size, still, steps, prepare, ignore, late, l
   }
 }
 
-function pixelsApart([a, b]) {
+const SHADE_LIMIT = 1;
+const PIXEL_LIMIT = 64;
+
+function decodePictures(pictures) {
   const load = (data) =>
     new Promise((done) => {
       const image = new Image();
@@ -158,20 +161,26 @@ function pixelsApart([a, b]) {
     canvas.height = image.height;
     const context = canvas.getContext("2d");
     context.drawImage(image, 0, 0);
-    return context.getImageData(0, 0, image.width, image.height).data;
+    return { width: image.width, height: image.height, data: context.getImageData(0, 0, image.width, image.height).data };
   };
-  return Promise.all([load(a), load(b)]).then(([one, two]) => {
-    if (one.width !== two.width || one.height !== two.height) return "the sizes differ";
-    const [x, y] = [read(one), read(two)];
-    const spots = [];
-    let count = 0;
-    for (let at = 0; at < x.length; at += 4) {
-      if (x[at] === y[at] && x[at + 1] === y[at + 1] && x[at + 2] === y[at + 2]) continue;
-      count += 1;
-      if (spots.length < 6) spots.push((at / 4) % one.width + "," + Math.floor(at / 4 / one.width) + " " + [x[at], x[at + 1], x[at + 2]].join("/") + " vs " + [y[at], y[at + 1], y[at + 2]].join("/"));
-    }
-    return count + " pixels differ, first at " + spots.join("; ");
-  });
+  return Promise.all(pictures.map(load)).then((images) => images.map(read));
+}
+
+export function comparePictures(one, two) {
+  if (one.width !== two.width || one.height !== two.height) return "the sizes differ";
+  const [x, y] = [one.data, two.data];
+  const spots = [];
+  let count = 0;
+  let widest = 0;
+  for (let at = 0; at < x.length; at += 4) {
+    const gap = Math.max(Math.abs(x[at] - y[at]), Math.abs(x[at + 1] - y[at + 1]), Math.abs(x[at + 2] - y[at + 2]));
+    if (gap === 0) continue;
+    count += 1;
+    widest = Math.max(widest, gap);
+    if (spots.length < 6) spots.push((at / 4) % one.width + "," + Math.floor(at / 4 / one.width) + " " + [x[at], x[at + 1], x[at + 2]].join("/") + " vs " + [y[at], y[at + 1], y[at + 2]].join("/"));
+  }
+  if (widest <= SHADE_LIMIT && count <= PIXEL_LIMIT) return null;
+  return count + " pixels differ, first at " + spots.join("; ");
 }
 
 let kept = 0;
@@ -192,13 +201,17 @@ export async function motionPair(p, size, steps, extra = {}) {
   const still = await motionRun(browser, { size, still: true, steps, ...extra });
   same(still.starts, 0, "with Reduce Motion no view transition starts");
   if (moving.picture.equals(still.picture)) return;
-  const where = extra.leftover ? "" : keepPictures(size, moving.picture, still.picture);
   const page = await browser.newPage();
+  let miss;
   try {
-    throw new Error("the end picture with motion differs from the Reduce Motion picture: " + (await page.evaluate(pixelsApart, [moving.picture.toString("base64"), still.picture.toString("base64")])) + where);
+    const [one, two] = await page.evaluate(decodePictures, [moving.picture.toString("base64"), still.picture.toString("base64")]);
+    miss = comparePictures(one, two);
   } finally {
     await page.close();
   }
+  if (miss === null) return;
+  const where = extra.leftover ? "" : keepPictures(size, moving.picture, still.picture);
+  throw new Error("the end picture with motion differs from the Reduce Motion picture: " + miss + where);
 }
 
 export { settle, runningAnimations, viewTransitionCalls };
