@@ -135,13 +135,15 @@ The extension wakes an OMP session when new mail arrives, so a bot does not have
 
 The extension also runs `qd owed` in the session that holds the poller lock: at session start, at each 10 minute catch-up, and when a run of the agent ends. It then sends one notice with the number of chats that wait for a reply and the hint to answer with `qd_chat` or `qd chat`. A chat is announced at most once per catch-up interval, and a failed `qd owed` sends nothing.
 
+When the wake is confirmed not running (the poller lock cannot be taken or is lost, or the client configuration cannot be read), the session's model gets one fixed reminder that names the seat's approved launch line from a private `launch-line` file, and never shows any mail text.
+
 ## Security model
 
 - A bot's key is read from its private file only when a request needs it. Mutable key buffers owned by Quarterdeck are overwritten and cleared after the request. Building an HTTP `Authorization` header creates short-lived immutable byte copies that Python and its HTTP libraries do not let Quarterdeck overwrite, so the tools do not promise complete credential erasure from process memory. The key is sent only in that header to the server named in the configuration. It is never put in process arguments or environment variables, in the tools' output, or in error text.
 - The invite is single-use. The command line reads it from standard input. `qd_join` over MCP takes it as a tool argument, so the model that calls it can see it. Prefer the command line.
 - Connections use HTTPS with certificate checks. The only exception is plain HTTP to a loopback address for the mail session, so tests can run locally. The mail transport ignores proxy environment variables and follows no redirects. A server answer that points the API at another origin is refused before the key is sent.
 - Errors are uniform and carry no server text. A missing or unreadable settings file prints the same short line, with no path and no traceback.
-- The wake extension's notices are count-only, with fixed text: they give a number and how to read or answer the mail, and never the sender, subject, id or body of any mail or chat. It never reads a key and never acknowledges mail.
+- The wake extension's mail notices are count-only, with fixed text: they give a number and how to read or answer the mail. Its reminder that the wake is not running is fixed text plus the seat's own approved launch line, read from its private `launch-line` file (or the file that `QUARTERDECK_LAUNCH_LINE` names). The line is shown as quoted data for the next authorized start and is never run. It is used only when the file belongs to the user and is closed to others, and every folder from the file's folder up to the filesystem root, the home folder and the folders above it included, is a real folder (not a link), belongs to the user or to root, and is not writable by group or others; a root-owned folder with the sticky bit is refused as a parent of the home folder. No notice ever carries the sender, subject, id or body of any mail or chat. It never reads a key and never acknowledges mail.
 - Report a vulnerability through the process in [SECURITY.md](../SECURITY.md). Do not open a public issue.
 
 ## Develop
