@@ -2941,8 +2941,11 @@ it("Chat: a card-change reply names the Task Card, and the line opens it", MAC, 
 });
 
 const browser = await chromium.launch(chromeLaunchOptions({ args: ["--no-sandbox"] }));
+const only = process.env.QD_CHAT_ONLY;
+const repeat = Number(process.env.QD_CHAT_REPEAT) || 1;
+const runs = cases.filter((item) => !only || item.name.includes(only)).flatMap((item) => Array.from({ length: repeat }, () => item));
 try {
-  for (const item of cases) {
+  for (const item of runs) {
     const context = await browser.newContext({ ...item.size, reducedMotion: "reduce" });
     const page = await context.newPage();
     page.setDefaultTimeout(5000);
