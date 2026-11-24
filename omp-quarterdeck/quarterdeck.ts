@@ -38,7 +38,7 @@ const LAUNCH_LINE_FILE = "launch-line";
 const MAX_LAUNCH_LINE_BYTES = 2_048;
 const STICKY_BIT = 0o1000;
 const WAKE_ABSENT_REMINDER = "[Quarterdeck] Mail wake is not running. At the next authorized start, use: ";
-const WAKE_ABSENT_NO_LINE_REMINDER = "[Quarterdeck] Mail wake is not running, and this seat has no approved launch line on file. Ask your lead or Ives for it; do not start a second mail waiter.";
+const WAKE_ABSENT_NO_LINE_REMINDER = "[Quarterdeck] Mail wake is not running, and this seat has no approved launch line on file. Ask your lead or whoever runs your agents for it; do not start a second mail waiter.";
 
 export interface QuarterdeckConfig {
   botConfigPath: string;

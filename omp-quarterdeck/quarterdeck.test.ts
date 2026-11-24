@@ -1179,7 +1179,7 @@ const wakeHealthType = "quarterdeck.wake-health";
 const approvedLine = "omp -e /opt/example/omp-quarterdeck/index.ts --session bot-a";
 const reminderPrefix = "[Quarterdeck] Mail wake is not running. At the next authorized start, use: ";
 const noLineReminder =
-  "[Quarterdeck] Mail wake is not running, and this seat has no approved launch line on file. Ask your lead or Ives for it; do not start a second mail waiter.";
+  "[Quarterdeck] Mail wake is not running, and this seat has no approved launch line on file. Ask your lead or whoever runs your agents for it; do not start a second mail waiter.";
 
 function reminderFor(line: string) {
   return `${reminderPrefix}\`${line}\``;
