@@ -1121,6 +1121,20 @@ def without_wake_archive_check(text):
     return text.replace(WAKE_ARCHIVE_CHECK_STEP, "")
 
 
+class WakeArchiveCheckReconstructionTest(unittest.TestCase):
+    def test_a_doubled_step_is_refused_and_never_silently_kept(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertEqual(text.count(WAKE_ARCHIVE_CHECK_STEP), 1)
+        doubled = text.replace(WAKE_ARCHIVE_CHECK_STEP, WAKE_ARCHIVE_CHECK_STEP + WAKE_ARCHIVE_CHECK_STEP, 1)
+        with self.assertRaisesRegex(ValueError, "unexpected wake archive check: found more than once"):
+            without_wake_archive_check(doubled)
+
+    def test_taking_the_step_out_leaves_no_trace_of_it(self):
+        original = without_wake_archive_check(WORKFLOW.read_text(encoding="utf-8"))
+        self.assertNotIn("wake_archive_check.py", original)
+        self.assertEqual(without_wake_archive_check(original), original)
+
+
 class ExtensionMacosReconstructionTest(unittest.TestCase):
     def test_a_changed_or_missing_piece_is_refused_and_never_silently_kept(self):
         text = WORKFLOW.read_text(encoding="utf-8")
