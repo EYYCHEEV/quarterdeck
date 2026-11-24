@@ -10,9 +10,10 @@ import ssl
 import stat
 import subprocess
 import time
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Protocol
+from typing import Any, Callable, Iterator, Protocol
 from urllib.parse import urlsplit
 
 import qd_jmap
@@ -30,6 +31,34 @@ REQUEST_PATH = "/qd/join/request"
 COLLECT_PATH = "/qd/join/collect"
 CAPTAIN = "captain"
 CHAT_SCHEMA = "chat/1"
+LINE_BREAK = re.compile(r"(\r\n?|\n)")
+FENCE = re.compile(r"\s{0,3}(`{3,}|~{3,})(?:\s*([A-Za-z0-9_+-]+)\s*|\s*)")
+QUOTE = re.compile(r"\s{0,3}>\s?(.*)")
+QUOTE_DEPTH = 3
+LINK_OR_ADDRESS = re.compile(
+    r"`[^`\n]+`|\[[^\[\]\n]+\]\([^)\s\[]+\)|(https?://[^\s`<>|\"'\u2018\u2019\u201c\u201d\x00-\x1f\x7f-\x9f]+)",
+    re.IGNORECASE,
+)
+NON_ASCII = re.compile(r"[^\x00-\x7f]")
+MASKED_CATEGORIES = frozenset({"Cf", "Co", "Cn", "Zs", "Zl", "Zp"})
+TRAILING = ".,;:!?'\"*_"
+PAIRS = {")": "(", "]": "[", "}": "{"}
+CARD_MAIL = {
+    "CARD: ": ("card/1", True),
+    "UPDATE: ": ("update/1", True),
+    "WITHDRAW: ": ("withdraw/1", False),
+    "COMMENT: ": ("comment/1", False),
+}
+APP_LINKS = {"learn": "url", "commands": "run"}
+MOST_LISTED = 10
+OTHER_FIELDS = "other fields"
+CARD_FIELDS = frozenset(
+    {
+        "qd", "card", "rev", "id", "project", "lane", "title", "about", "context", "ascii", "options", "pick_why",
+        "you_do", "skip", "due", "door", "category", "kind", "words", "learn", "commands", "principles", "note",
+        "why", "text",
+    }
+)
 
 
 class ConnectRefused(RuntimeError):
@@ -104,6 +133,40 @@ class MailRefused(ConnectRefused):
         )
 
 
+def _listed(places: list[int | str]) -> str:
+    distinct = list(dict.fromkeys(places))
+    names = [str(place) for place in distinct[:MOST_LISTED]]
+    if len(distinct) > MOST_LISTED:
+        return f"{', '.join(names)} and more"
+    if len(names) == 1:
+        return names[0]
+    return f"{', '.join(names[:-1])} and {names[-1]}"
+
+
+class BareLinkRefused(MailRefused):
+    def __init__(self, places: list[int | str], in_card: bool) -> None:
+        super().__init__()
+        self.count = len(places)
+        listed = _listed(places)
+        if in_card:
+            self.where = f"in the card's {listed}"
+        else:
+            self.where = f"on line {listed}" if self.count == 1 else f"on lines {listed}"
+
+    def text(self, surface: str) -> str:
+        if self.count == 1:
+            return (
+                f"Refused, nothing sent: the message holds a bare web address {self.where}, and the Captain cannot click it. "
+                "Write it as [words](your full https address), because the app opens only https links. "
+                "Addresses inside code are left alone."
+            )
+        return (
+            f"Refused, nothing sent: the message holds {self.count} bare web addresses, {self.where}, and the Captain cannot click them. "
+            "Write each as [words](your full https address), because the app opens only https links. "
+            "Addresses inside code are left alone."
+        )
+
+
 OWED_WARNING = {
     "cli": (
         "qd: marked done, but the Captain's chat {id} is still owed a reply. "
@@ -124,22 +187,153 @@ def _no_constant(name: str) -> None:
     raise ValueError(name)
 
 
-def is_chat_message(bot: str, subject: Any, body: Any) -> bool:
+def _closes(fence: str, line: str) -> bool:
+    closing = FENCE.fullmatch(line)
+    return (
+        closing is not None
+        and closing[1][0] == fence[0]
+        and len(closing[1]) >= len(fence)
+        and not closing[2]
+    )
+
+
+def _code_lines(lines: list[str], depth: int = 0) -> set[int]:
+    code: set[int] = set()
+    at = 0
+    while at < len(lines):
+        opening = FENCE.fullmatch(lines[at])
+        if opening is not None:
+            end = at + 1
+            while end < len(lines) and not _closes(opening[1], lines[end]):
+                end += 1
+            code.update(range(at, min(end + 1, len(lines))))
+            at = end + 1
+        elif depth < QUOTE_DEPTH and QUOTE.fullmatch(lines[at]) is not None:
+            first = at
+            inner = []
+            while at < len(lines) and (quoted := QUOTE.fullmatch(lines[at])) is not None:
+                inner.append(quoted[1])
+                at += 1
+            code.update(first + number for number in _code_lines(inner, depth + 1))
+        else:
+            at += 1
+    return code
+
+
+def _trimmed(address: str) -> str:
+    counts = {mark: address.count(mark) for mark in "()[]{}"}
+    end = len(address)
+    while end:
+        last = address[end - 1]
+        if last in TRAILING:
+            end -= 1
+        elif last in PAIRS and counts[last] > counts[PAIRS[last]]:
+            counts[last] -= 1
+            end -= 1
+        else:
+            break
+    return address[:end]
+
+
+def _mask(match: re.Match[str]) -> str:
+    return "\x00" if unicodedata.category(match[0]) in MASKED_CATEGORIES else match[0]
+
+
+def _bare(body: str) -> Iterator[str]:
+    for match in LINK_OR_ADDRESS.finditer(NON_ASCII.sub(_mask, body)):
+        if match[1] is not None:
+            address = _trimmed(match[1])
+            if address.partition("//")[2]:
+                yield address
+
+
+def bare_addresses(text: str) -> Iterator[tuple[int, str]]:
+    bodies = LINE_BREAK.split(text)[::2]
+    code = _code_lines(bodies)
+    for number, body in enumerate(bodies):
+        if number not in code:
+            for address in _bare(body):
+                yield number + 1, address
+
+
+def chat_text(bot: str, subject: Any, body: Any) -> str | None:
     if subject != f"CHAT: {bot}" or not isinstance(body, str):
-        return False
+        return None
     try:
         document = json.loads(body, parse_constant=_no_constant)
     except (ValueError, RecursionError):
-        return False
+        return None
     if not isinstance(document, dict):
-        return False
+        return None
     text = document.get("text")
-    return (
+    if (
         document.get("qd") == CHAT_SCHEMA
         and document.get("bot") == bot
         and isinstance(text, str)
         and text.strip() != ""
-    )
+    ):
+        return text
+    return None
+
+
+def _unique(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    document = dict(pairs)
+    if len(document) != len(pairs):
+        raise ValueError("a field appears twice")
+    return document
+
+
+def _unlinked(document: dict[str, Any]) -> dict[str, Any]:
+    for field, key in APP_LINKS.items():
+        items = document.get(field)
+        if isinstance(items, list):
+            document[field] = [
+                {**item, key: ""} if isinstance(item, dict) and isinstance(item.get(key), str) else item
+                for item in items
+            ]
+    return document
+
+
+def card_mail(subject: Any, body: str) -> dict[str, Any] | None:
+    if not isinstance(subject, str) or "\n" in subject or "\r" in subject:
+        return None
+    prefix = next((prefix for prefix in CARD_MAIL if subject.startswith(prefix)), None)
+    if prefix is None:
+        return None
+    schema, links = CARD_MAIL[prefix]
+    try:
+        document = json.loads(body, object_pairs_hook=_unique, parse_constant=_no_constant)
+    except (ValueError, RecursionError):
+        return None
+    if not isinstance(document, dict) or document.get("qd") != schema:
+        return None
+    return _unlinked(document) if links else document
+
+
+def _strings(node: Any) -> Iterator[str]:
+    stack = [node]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, str):
+            yield node
+        elif isinstance(node, dict):
+            stack.extend(reversed(node.values()))
+        elif isinstance(node, list):
+            stack.extend(reversed(node))
+
+
+def mail_places(subject: Any, body: Any) -> tuple[list[int | str], bool]:
+    if not isinstance(body, str):
+        return [], False
+    document = card_mail(subject, body)
+    if document is None:
+        return [number for number, _ in bare_addresses(body)], False
+    return [
+        field if field in CARD_FIELDS else OTHER_FIELDS
+        for field, value in document.items()
+        for text in _strings(value)
+        for _ in bare_addresses(text)
+    ], True
 
 
 @dataclass(slots=True)
@@ -764,10 +958,17 @@ class ConnectService:
         *,
         mail_to_captain: bool = False,
     ) -> str:
-        if recipient == CAPTAIN and mail_to_captain is not True:
+        if recipient == CAPTAIN:
             bot = self._own_bot()
-            if bot is None or not is_chat_message(bot, subject, body):
+            text = None if bot is None else chat_text(bot, subject, body)
+            if text is None and mail_to_captain is not True:
                 raise MailRefused(bot)
+            if text is None:
+                places, in_card = mail_places(subject, body)
+            else:
+                places, in_card = [number for number, _ in bare_addresses(text)], False
+            if places:
+                raise BareLinkRefused(places, in_card)
         return self._mail(lambda mailbox: mailbox.send(recipient, subject, body, resend_id))
 
     def chat(self, text: str, resend_id: str) -> str:

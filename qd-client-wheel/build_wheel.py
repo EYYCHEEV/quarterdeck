@@ -15,7 +15,7 @@ from pathlib import Path
 
 PINS = {
     "golive/connect/qd.py": "2a2771b90b0ce427c14b47763b551bf103c0124a0031a50a72e9bc1d28432a01",
-    "golive/connect/qd_connect.py": "4a3bfef4de75a4f76be99db791cb6972457fe345914f0756392152c3fd29a2b3",
+    "golive/connect/qd_connect.py": "5a91682601c07a9e15078595eebf69ad03ad8a6e774921ea6381d50e83f8c45c",
     "golive/connect/qd_mcp.py": "22524b67ed0aa3efc8857a0b74227f3f19d89631244a8eeb01f6f1709559a3a8",
     "mail/qd_jmap.py": "6248bd115a82769e6124f1c23363b555c183c2d490174989a5a21c023b8c7600",
     "signup/signup_flow.py": "286ca5d749e98a82bd8a73545393ffe506b265887ff923f272905e6cd87a6bab",
