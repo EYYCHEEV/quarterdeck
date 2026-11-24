@@ -2,7 +2,7 @@ import type { Subprocess } from "bun";
 import { constants } from "node:fs";
 import { chmod, lstat, mkdir, open, readFile, rename, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { randomUUID } from "node:crypto";
 
 export const MAIL_NOTIFICATION_METHOD = "notifications/quarterdeck/mail";
@@ -33,12 +33,20 @@ const STALLED_NOTICE = "Quarterdeck: the wake has not reached mail for 30 minute
 const LOCK_FAILED_NOTICE = "Quarterdeck: this session is not watching mail because the wake could not take its poller lock. See the wake extension's INSTALL.md.";
 const REPLY_HINT = "Reply with qd_chat or `qd chat`; qd_owed or `qd owed` lists them.";
 const CONTAINED_LINE = "Quarterdeck wake add-on: an internal error was contained.\n";
+const WAKE_HEALTH_MESSAGE_TYPE = "quarterdeck.wake-health";
+const LAUNCH_LINE_FILE = "launch-line";
+const MAX_LAUNCH_LINE_BYTES = 2_048;
+const STICKY_BIT = 0o1000;
+const WAKE_ABSENT_REMINDER = "[Quarterdeck] Mail wake is not running. At the next authorized start, use: ";
+const WAKE_ABSENT_NO_LINE_REMINDER = "[Quarterdeck] Mail wake is not running, and this seat has no approved launch line on file. Ask your lead or Ives for it; do not start a second mail waiter.";
 
 export interface QuarterdeckConfig {
   botConfigPath: string;
   cursorRoot: string;
+  homeFolder: string;
   mcpServer: string;
   qdExecutable: string;
+  launchLinePath?: string;
   waitTimeoutSeconds: 300;
 }
 
@@ -74,6 +82,7 @@ export interface QuarterdeckExtensionOptions {
   lockHolderPath?: string;
   reconcileIntervalMs?: number;
   owedTimeoutMs?: number;
+  inspectFolder?: FolderInspector;
 }
 
 type MailMessage = {
@@ -105,6 +114,12 @@ type WakeRecord = {
 
 type WakeMessage = Parameters<ExtensionApi["sendMessage"]>[0];
 
+type WakeHealth = "running" | "backoff" | "stalled" | "peer" | "lock-failed" | "lease-lost";
+
+type FolderInfo = { isDirectory(): boolean; mode: number; uid: number };
+
+type FolderInspector = (path: string) => Promise<FolderInfo>;
+
 const DEFAULT_RETRY: RetryPolicy = {
   initialMs: 1_000,
   maximumMs: 60_000,
@@ -119,10 +134,13 @@ export function createQuarterdeckExtension(options: QuarterdeckExtensionOptions 
     const owedTimeoutMs = normalizeOwedTimeout(options.owedTimeoutMs ?? OWED_TIMEOUT_MS);
     const pythonExecutable = options.pythonExecutable ?? process.env.QUARTERDECK_PYTHON ?? "python3";
     const lockHolderPath = options.lockHolderPath ?? join(import.meta.dir, "lock-holder.py");
+    const inspectFolder = options.inspectFolder ?? lstat;
     let session: WakeSession | undefined;
     let subagent = false;
     const pendingNotifications = new Set<string>();
     let containedReported = false;
+    let noSettings = false;
+    let noSettingsReminded = false;
     const contain = (handler: (event: unknown, context: ExtensionContext) => Promise<void>) =>
       async (event: unknown, context: ExtensionContext) => {
         try {
@@ -136,6 +154,24 @@ export function createQuarterdeckExtension(options: QuarterdeckExtensionOptions 
           }
         }
       };
+
+    const remindNoSettings = async () => {
+      if (!noSettings || noSettingsReminded) return;
+      noSettingsReminded = true;
+      let admitted = false;
+      try {
+        const message = await reminderMessage(config.launchLinePath, config.homeFolder, inspectFolder);
+        admitted = noSettings && !session && await sendWake(pi, message);
+      } finally {
+        noSettingsReminded = admitted;
+      }
+    };
+
+    const checkWakeHealth = async (newContext: boolean) => {
+      if (newContext) noSettingsReminded = false;
+      if (session) await session.remindIfAbsent(newContext);
+      else await remindNoSettings();
+    };
 
     pi.on("mcp_notification", contain(async (event, context) => {
       if (subagent || context.agent?.kind === "sub") return;
@@ -160,7 +196,16 @@ export function createQuarterdeckExtension(options: QuarterdeckExtensionOptions 
         return;
       }
       if (session) return;
-      const bot = await readConfiguredBot(config.botConfigPath);
+      let bot: string;
+      try {
+        bot = await readConfiguredBot(config.botConfigPath);
+      } catch (error) {
+        noSettings = true;
+        await checkWakeHealth(false);
+        throw error;
+      }
+      noSettings = false;
+      noSettingsReminded = false;
       const botDirectory = join(config.cursorRoot, bot);
       await ensurePrivateDirectory(botDirectory);
       const cursorStore = new CursorStore(join(botDirectory, CURSOR_FILE));
@@ -171,11 +216,13 @@ export function createQuarterdeckExtension(options: QuarterdeckExtensionOptions 
       });
       const lease = acquired.kind === "lease" ? acquired.lease : undefined;
       const lockFailed = acquired.kind === "failed";
-      const current = new WakeSession({ config, context, cursorStore, lease, lockFailed, pi, reconcileIntervalMs, owedTimeoutMs, retry, pendingIds: pendingNotifications });
+      const launchLinePath = config.launchLinePath ?? join(botDirectory, LAUNCH_LINE_FILE);
+      const current = new WakeSession({ config, context, cursorStore, lease, lockFailed, launchLinePath, inspectFolder, pi, reconcileIntervalMs, owedTimeoutMs, retry, pendingIds: pendingNotifications });
       session = current;
       try {
         await current.start();
         await current.deliver([]).catch(() => undefined);
+        await current.remindIfAbsent();
       } catch (error) {
         session = undefined;
         await current.stop();
@@ -189,9 +236,21 @@ export function createQuarterdeckExtension(options: QuarterdeckExtensionOptions 
       await session?.nudge();
     }));
 
+    pi.on("session_ready", contain(async (_event, context) => {
+      if (subagent || context.agent?.kind === "sub") return;
+      await checkWakeHealth(false);
+    }));
+
+    pi.on("session_compact", contain(async (_event, context) => {
+      if (subagent || context.agent?.kind === "sub") return;
+      await checkWakeHealth(true);
+    }));
+
     pi.on("session_shutdown", contain(async () => {
       const current = session;
       session = undefined;
+      noSettings = false;
+      noSettingsReminded = false;
       await current?.stop();
     }));
   };
@@ -219,6 +278,8 @@ class WakeSession {
   private unreadablePending = false;
   private stalledPending = false;
   private lockFailedPending: boolean;
+  private reminderDue = false;
+  private reminderSent = false;
   private stopped = false;
   private pollerLost = false;
   private timer: unknown;
@@ -231,6 +292,8 @@ class WakeSession {
     cursorStore: CursorStore;
     lease: PollerLease | undefined;
     lockFailed: boolean;
+    launchLinePath: string | undefined;
+    inspectFolder: FolderInspector;
     pi: ExtensionApi;
     retry: RetryPolicy;
     reconcileIntervalMs: number;
@@ -255,6 +318,23 @@ class WakeSession {
   deliver(ids: string[], advanceCursor = false) {
     this.addToNotice(ids, advanceCursor);
     return this.queueDelivery(() => this.flushNotice());
+  }
+
+  private health(): WakeHealth {
+    if (this.state.lockFailed) return "lock-failed";
+    if (this.pollerLost) return "lease-lost";
+    if (!this.state.lease) return "peer";
+    if (Date.now() - this.lastWaitSuccessAt >= STALLED_AFTER_MS) return "stalled";
+    return this.backoffMs > this.state.retry.initialMs ? "backoff" : "running";
+  }
+
+  async remindIfAbsent(newContext = false) {
+    if (newContext) this.reminderSent = false;
+    if (this.stopped || this.reminderSent) return;
+    const health = this.health();
+    if (health !== "lock-failed" && health !== "lease-lost") return;
+    this.reminderDue = true;
+    await this.queueDelivery(() => this.flushNotice()).catch(() => undefined);
   }
 
   async stop() {
@@ -324,6 +404,7 @@ class WakeSession {
     this.timer = undefined;
     void this.waiter?.stop().catch(() => undefined);
     void this.owedReader?.stop().catch(() => undefined);
+    void this.remindIfAbsent().catch(() => undefined);
   }
 
   private noteSuccess() {
@@ -404,7 +485,7 @@ class WakeSession {
       const now = Date.now();
       const due = entries.filter((entry) => this.owedDue(entry.id, now)).map((entry) => entry.id);
       if (due.length === 0) return;
-      const admitted = await this.sendWake({
+      const admitted = await sendWake(this.state.pi, {
         customType: CUSTOM_MESSAGE_TYPE,
         content: owedNotice(due.length),
         display: true,
@@ -493,7 +574,7 @@ class WakeSession {
       const fresh = [...this.pendingFresh];
       const reminders = [...this.pendingReminders];
       const owed = count === 0 && special === undefined ? [...this.pendingOwed] : [];
-      const admitted = await this.sendWake({
+      const admitted = await sendWake(this.state.pi, {
         customType: CUSTOM_MESSAGE_TYPE,
         content: special ?? (owed.length > 0
           ? owedNotice(owed.length)
@@ -528,12 +609,15 @@ class WakeSession {
           this.pendingReminders.delete(id);
         }
       }
+    } else if (this.reminderDue && this.lastNoticeAt + NOTICE_INTERVAL_MS <= Date.now()) {
+      await this.sendReminder();
     }
     if (this.pendingFresh.size + this.pendingReminders.size > 0 || this.lockFailedPending || this.unreadablePending || this.stalledPending) {
       this.scheduleNotice(Math.max(0, this.lastNoticeAt + NOTICE_INTERVAL_MS - Date.now()));
       return;
     }
     if (this.pendingOwed.size > 0) this.scheduleNotice(Math.max(0, this.lastNoticeAt + NOTICE_INTERVAL_MS - Date.now()));
+    if (this.reminderDue) this.scheduleNotice(Math.max(0, this.lastNoticeAt + NOTICE_INTERVAL_MS - Date.now()));
     if (this.pendingCursor !== undefined) {
       const written = this.pendingCursor;
       await this.state.cursorStore.write(written);
@@ -542,17 +626,18 @@ class WakeSession {
     }
   }
 
-  private async sendWake(message: WakeMessage) {
-    try {
-      if (typeof this.state.pi.sendMessageWithReceipt === "function") {
-        const receipt = await this.state.pi.sendMessageWithReceipt(message, { deliverAs: "aside", triggerTurn: true });
-        return receipt.admitted;
-      }
-      this.state.pi.sendMessage(message, { deliverAs: "aside", triggerTurn: true });
-    } catch {
-      return true;
+  private async sendReminder() {
+    this.reminderDue = false;
+    const message = await reminderMessage(this.state.launchLinePath, this.state.config.homeFolder, this.state.inspectFolder);
+    if (this.stopped) return;
+    const previousNoticeAt = this.lastNoticeAt;
+    this.lastNoticeAt = Date.now();
+    if (await sendWake(this.state.pi, message)) {
+      this.reminderSent = true;
+      this.reminderDue = false;
+    } else {
+      this.lastNoticeAt = previousNoticeAt;
     }
-    return true;
   }
 
   private remember(id: string, wokenAt: number) {
@@ -981,12 +1066,15 @@ function retainPendingId(pending: Set<string>, id: string, otherPending = 0) {
   return true;
 }
 
-function configFromEnvironment(): QuarterdeckConfig {
+export function configFromEnvironment(): QuarterdeckConfig {
+  const homeFolder = homedir();
   return {
     botConfigPath: requiredEnvironment("QUARTERDECK_CONFIG"),
-    cursorRoot: process.env.QUARTERDECK_CURSOR_ROOT ?? join(homedir(), ".config", "quarterdeck"),
+    cursorRoot: process.env.QUARTERDECK_CURSOR_ROOT ?? join(homeFolder, ".config", "quarterdeck"),
+    homeFolder,
     mcpServer: process.env.QUARTERDECK_MCP_SERVER ?? "quarterdeck",
     qdExecutable: process.env.QUARTERDECK_QD ?? "qd.py",
+    launchLinePath: process.env.QUARTERDECK_LAUNCH_LINE || undefined,
     waitTimeoutSeconds: 300,
   };
 }
@@ -1074,6 +1162,68 @@ function safeChildEnvironment() {
 
 function isErrno(error: unknown, code: string): error is NodeJS.ErrnoException {
   return typeof error === "object" && error !== null && "code" in error && error.code === code;
+}
+
+async function sendWake(pi: ExtensionApi, message: WakeMessage) {
+  try {
+    if (typeof pi.sendMessageWithReceipt === "function") {
+      const receipt = await pi.sendMessageWithReceipt(message, { deliverAs: "aside", triggerTurn: true });
+      return receipt.admitted;
+    }
+    pi.sendMessage(message, { deliverAs: "aside", triggerTurn: true });
+  } catch {
+    return true;
+  }
+  return true;
+}
+
+async function reminderMessage(launchLinePath: string | undefined, homeFolder: string, inspectFolder: FolderInspector): Promise<WakeMessage> {
+  const line = launchLinePath === undefined ? undefined : await readLaunchLine(launchLinePath, homeFolder, inspectFolder);
+  return {
+    customType: WAKE_HEALTH_MESSAGE_TYPE,
+    content: line === undefined ? WAKE_ABSENT_NO_LINE_REMINDER : `${WAKE_ABSENT_REMINDER}\`${line}\``,
+    display: true,
+  };
+}
+
+async function parentFoldersAreClosed(file: string, homeFolder: string, inspectFolder: FolderInspector) {
+  const home = resolve(homeFolder);
+  let folder = dirname(file);
+  const fromHome = relative(home, folder);
+  if (isAbsolute(fromHome) || fromHome === ".." || fromHome.startsWith(`..${sep}`)) return false;
+  let aboveHome = false;
+  while (true) {
+    const info = await inspectFolder(folder);
+    if (!info.isDirectory() || (info.mode & 0o022) !== 0) return false;
+    if (typeof process.getuid === "function" && info.uid !== process.getuid() && info.uid !== 0) return false;
+    if (aboveHome && info.uid === 0 && (info.mode & STICKY_BIT) !== 0) return false;
+    const parent = dirname(folder);
+    if (parent === folder) return true;
+    aboveHome = aboveHome || folder === home;
+    folder = parent;
+  }
+}
+
+async function readLaunchLine(path: string, homeFolder: string, inspectFolder: FolderInspector) {
+  let handle;
+  try {
+    const file = resolve(path);
+    if (!(await parentFoldersAreClosed(file, homeFolder, inspectFolder))) return undefined;
+    handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    const info = await handle.stat();
+    if (!info.isFile() || info.nlink !== 1 || info.size > MAX_LAUNCH_LINE_BYTES) return undefined;
+    if (typeof process.getuid === "function" && info.uid !== process.getuid()) return undefined;
+    const mode = info.mode & 0o777;
+    if (mode !== 0o600 && mode !== 0o400) return undefined;
+    const buffer = Buffer.alloc(MAX_LAUNCH_LINE_BYTES + 1);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    const line = buffer.toString("utf8", 0, bytesRead).replace(/\n$/, "");
+    return bytesRead <= MAX_LAUNCH_LINE_BYTES && /^[ -~]+$/.test(line) && !line.includes("`") && line.trim() !== "" ? line : undefined;
+  } catch {
+    return undefined;
+  } finally {
+    await handle?.close().catch(() => undefined);
+  }
 }
 
 export default createQuarterdeckExtension();
