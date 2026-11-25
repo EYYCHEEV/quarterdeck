@@ -28,6 +28,7 @@ jobs:
       app-static: ${{ steps.gates.outputs.app-static }}
       app-build: ${{ steps.gates.outputs.app-build }}
       app-browser: ${{ steps.gates.outputs.app-browser }}
+      release-version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -40,6 +41,10 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
         run: python3 tools/ci/ci-changes
+
+      - name: Read the release version
+        id: version
+        run: printf 'version=%s\n' "$(jq -r .version omp-quarterdeck/package.json)" >> "$GITHUB_OUTPUT"
 
   python:
     name: Python tests
@@ -609,6 +614,17 @@ jobs:
         run: |
           printf '%s\n' "$TITLE" | grep -Eq '^(feat|fix|docs|test|ci|chore|refactor|perf|build)(\([a-z0-9-]+\))?!?: .+'
 
+  release-build:
+    name: Release build
+    needs: changes
+    permissions:
+      contents: read
+    uses: ./.github/workflows/release-build.yml
+    with:
+      version: ${{ needs.changes.outputs.release-version }}
+      commit: ${{ github.sha }}
+      check-only: true
+
   qd-check:
     name: qd-check
     if: always()
@@ -628,6 +644,7 @@ jobs:
       - app-static
       - app-build
       - app-browser
+      - release-build
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     permissions: {}
@@ -655,10 +672,11 @@ jobs:
       APP_STATIC_RESULT: ${{ needs.app-static.result }}
       APP_BUILD_RESULT: ${{ needs.app-build.result }}
       APP_BROWSER_RESULT: ${{ needs.app-browser.result }}
+      RELEASE_BUILD_RESULT: ${{ needs.release-build.result }}
     steps:
       - name: Require every lane to pass
         run: |
-          for result in "$CHANGES_RESULT" "$PYTHON_RESULT" "$SERVER_RESULT" "$EXTENSION_RESULT" "$EXTENSION_MACOS_RESULT" "$COMMENTS_RESULT" "$LEAKS_RESULT"; do
+          for result in "$CHANGES_RESULT" "$PYTHON_RESULT" "$SERVER_RESULT" "$EXTENSION_RESULT" "$EXTENSION_MACOS_RESULT" "$COMMENTS_RESULT" "$LEAKS_RESULT" "$RELEASE_BUILD_RESULT"; do
             test "$result" = success || exit 1
           done
           pair() {

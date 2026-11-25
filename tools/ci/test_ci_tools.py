@@ -940,7 +940,7 @@ class WorkflowContextsTest(unittest.TestCase):
                 self.assertEqual((result.returncode, result.stdout), (0, ""))
 
     def test_the_original_ci_has_exactly_the_three_reported_findings(self):
-        original = without_ignore_refusal(without_scan_config(without_server_lane(without_app_lanes(without_path_map(without_extension_macos(without_wake_archive_check(WORKFLOW.read_text(encoding="utf-8"))))))))
+        original = without_ignore_refusal(without_scan_config(without_server_lane(without_app_lanes(without_path_map(without_extension_macos(without_wake_archive_check(without_release_build(WORKFLOW.read_text(encoding="utf-8")))))))))
         original = original.replace(
             "      - name: Fetch main for the design comparison\n"
             "        run: git -c credential.helper= fetch --no-tags --depth=1 origin main:refs/remotes/origin/main\n\n",
@@ -1135,6 +1135,61 @@ class WakeArchiveCheckReconstructionTest(unittest.TestCase):
         self.assertEqual(without_wake_archive_check(original), original)
 
 
+RELEASE_BUILD_PIECES = (
+    "      release-version: ${{ steps.version.outputs.version }}\n",
+    "\n      - name: Read the release version\n"
+    "        id: version\n"
+    "        run: printf 'version=%s\\n' \"$(jq -r .version omp-quarterdeck/package.json)\" >> \"$GITHUB_OUTPUT\"\n",
+    "  release-build:\n"
+    "    name: Release build\n"
+    "    needs: changes\n"
+    "    permissions:\n"
+    "      contents: read\n"
+    "    uses: ./.github/workflows/release-build.yml\n"
+    "    with:\n"
+    "      version: ${{ needs.changes.outputs.release-version }}\n"
+    "      commit: ${{ github.sha }}\n"
+    "      check-only: true\n\n",
+    "      - release-build\n",
+    "      RELEASE_BUILD_RESULT: ${{ needs.release-build.result }}\n",
+    ' "$RELEASE_BUILD_RESULT"',
+)
+
+
+def without_release_build(text):
+    if "  release-build:\n" not in text:
+        return text
+    for piece in RELEASE_BUILD_PIECES:
+        if text.count(piece) != 1:
+            raise ValueError("unexpected release build lane: not found exactly once: " + piece.strip())
+        text = text.replace(piece, "")
+    return text
+
+
+class ReleaseBuildReconstructionTest(unittest.TestCase):
+    def test_a_doubled_or_changed_piece_is_refused_and_never_silently_kept(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        for piece in RELEASE_BUILD_PIECES:
+            with self.subTest(piece=piece.strip()):
+                self.assertEqual(text.count(piece), 1)
+                doubled = text.replace(piece, piece + piece, 1)
+                with self.assertRaisesRegex(ValueError, "unexpected release build lane"):
+                    without_release_build(doubled)
+                if piece != RELEASE_BUILD_PIECES[2]:
+                    with self.assertRaisesRegex(ValueError, "unexpected release build lane"):
+                        without_release_build(text.replace(piece, "", 1))
+        changed = text.replace("      check-only: true\n", "      check-only: false\n", 1)
+        with self.assertRaisesRegex(ValueError, "unexpected release build lane"):
+            without_release_build(changed)
+
+    def test_taking_the_lane_out_leaves_no_trace_of_it(self):
+        original = without_release_build(WORKFLOW.read_text(encoding="utf-8"))
+        self.assertNotIn("release-build", original)
+        self.assertNotIn("release-version", original)
+        self.assertNotIn("RELEASE_BUILD", original)
+        self.assertEqual(without_release_build(original), original)
+
+
 class ExtensionMacosReconstructionTest(unittest.TestCase):
     def test_a_changed_or_missing_piece_is_refused_and_never_silently_kept(self):
         text = WORKFLOW.read_text(encoding="utf-8")
@@ -1289,7 +1344,7 @@ class WorkflowNullValuesTest(unittest.TestCase):
         self.assertEqual((result.returncode, result.stdout, result.stderr), (0, "", ""))
 
     def test_the_r1_workflow_has_exactly_one_null_finding(self):
-        original = ci_with_selftest_env(without_ignore_refusal(without_scan_config(without_server_lane(without_app_lanes(without_path_map(without_extension_macos(without_wake_archive_check(WORKFLOW.read_text(encoding="utf-8")))))))))
+        original = ci_with_selftest_env(without_ignore_refusal(without_scan_config(without_server_lane(without_app_lanes(without_path_map(without_extension_macos(without_wake_archive_check(without_release_build(WORKFLOW.read_text(encoding="utf-8"))))))))))
         original = original.replace(
             "      - name: Fetch main for the design comparison\n"
             "        run: git -c credential.helper= fetch --no-tags --depth=1 origin main:refs/remotes/origin/main\n\n",
