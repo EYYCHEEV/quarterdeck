@@ -20,6 +20,10 @@ ACTIONS = {
 }
 COMPARE = "Fail if the two builds differ"
 WEB_FOLDER = '(cd "web-$n/apps/web" && '
+WAKE_SCRIPT = "python3 tools/ci/wake_archive_check.py"
+WAKE_TEST = "Test the extension from its unpacked archive"
+HELPER = pathlib.Path(__file__).resolve().with_name("safe_unpack.py")
+SCRIPT = pathlib.Path(__file__).resolve().with_name("wake_archive_check.py")
 
 
 def steps(text, job):
@@ -93,6 +97,44 @@ class ReleaseWorkflowTest(unittest.TestCase):
         options, _, target = ours[0].partition(" -cf ")
         self.assertEqual(options, theirs[0].partition(" -cf ")[0])
         self.assertEqual(target, '"out-$n/' + WEB + '" -C "web-$n/apps/web/dist" .')
+
+    def test_the_wake_archive_is_packed_and_tested_only_through_the_shared_script(self):
+        lines = job_lines(RELEASE, "build")
+        self.assertEqual([line for line in lines if WAKE_SCRIPT in line], [
+            WAKE_SCRIPT + ' pack "build-$n" "$VERSION" "out-$n"',
+            WAKE_SCRIPT + ' test "out-1/' + WAKE + '" "$VERSION"',
+        ])
+        self.assertEqual(run_lines(named(RELEASE, "build", WAKE_TEST)), [WAKE_SCRIPT + ' test "out-1/' + WAKE + '" "$VERSION"'])
+        self.assertEqual([line for line in lines if re.search(r"omp-quarterdeck(?!/)", line)], [])
+        self.assertEqual([line for line in lines if re.search(r"\bbun\b", line)], [])
+        source = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('"tar", "--sort=name", "--mtime=@0", "--owner=0", "--group=0", "--numeric-owner",', source)
+        self.assertIn('f"s,^omp-quarterdeck,{name},"', source)
+        self.assertIn('["gzip", "-n", "-9"]', source)
+
+    def test_ci_runs_the_same_unpacked_archive_check_in_the_extension_job(self):
+        step = named(CI, "extension", WAKE_TEST)
+        self.assertIsNotNone(step)
+        self.assertEqual(run_lines(step), [WAKE_SCRIPT + " check HEAD"])
+        names = [step_value(each, "name") for each in steps(CI, "extension")]
+        self.assertLess(names.index("Set up Bun"), names.index(WAKE_TEST))
+        self.assertEqual([line for line in job_lines(CI, "extension") if "wake_archive_check" in line], [WAKE_SCRIPT + " check HEAD"])
+        elsewhere = [
+            line for each in workflow_steps(CI) if each["job"] != "extension"
+            for line in each["lines"] if "wake_archive_check" in line
+        ]
+        self.assertEqual(elsewhere, [])
+
+    def test_the_safe_unpack_helper_is_the_file_in_the_repository(self):
+        self.assertTrue(HELPER.is_file())
+        self.assertEqual(run_lines(named(RELEASE, "build", "Write the safe unpack helper")), [
+            'cp tools/ci/safe_unpack.py "$RUNNER_TEMP/safe_unpack.py"',
+        ])
+        writers = [
+            line for line in job_lines(RELEASE, "build")
+            if "safe_unpack.py" in line and not line.startswith('python3 "$RUNNER_TEMP/safe_unpack.py" ')
+        ]
+        self.assertEqual(writers, ['cp tools/ci/safe_unpack.py "$RUNNER_TEMP/safe_unpack.py"'])
 
     def test_the_server_package_is_assembled_by_the_server_lane(self):
         lines = [line for line in job_lines(RELEASE, "build") if "server_lane.py" in line]

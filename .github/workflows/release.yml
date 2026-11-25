@@ -141,65 +141,7 @@ jobs:
           bun-version: 1.3.14
 
       - name: Write the safe unpack helper
-        run: |
-          cat > "$RUNNER_TEMP/safe_unpack.py" <<'PY'
-          import os
-          import posixpath
-          import stat
-          import sys
-          import tarfile
-          import zipfile
-
-
-          def refuse(reason):
-              sys.exit("unsafe archive: " + reason)
-
-
-          def check_names(names):
-              seen = set()
-              for name in names:
-                  if not name or name.startswith("/") or "\\" in name or "\x00" in name:
-                      refuse("bad member name")
-                  parts = name.rstrip("/").split("/")
-                  if ".." in parts or "" in parts:
-                      refuse("bad member name")
-                  normal = posixpath.normpath(name)
-                  if normal in seen:
-                      refuse("duplicate member name")
-                  seen.add(normal)
-
-
-          def unpack_zip(path, destination):
-              with zipfile.ZipFile(path) as archive:
-                  members = archive.infolist()
-                  check_names([member.filename for member in members])
-                  for member in members:
-                      kind = stat.S_IFMT(member.external_attr >> 16)
-                      if kind not in (0, stat.S_IFREG, stat.S_IFDIR):
-                          refuse("link or device member")
-                  os.makedirs(destination)
-                  archive.extractall(destination)
-
-
-          def unpack_tar(path, destination):
-              with tarfile.open(path) as archive:
-                  members = archive.getmembers()
-                  check_names([member.name for member in members])
-                  for member in members:
-                      if not (member.isreg() or member.isdir()):
-                          refuse("link or device member")
-                  os.makedirs(destination)
-                  archive.extractall(destination, members=members, filter="data")
-
-
-          source, destination = sys.argv[1], sys.argv[2]
-          if source.endswith(".whl"):
-              unpack_zip(source, destination)
-          elif source.endswith((".tar.gz", ".tar")):
-              unpack_tar(source, destination)
-          else:
-              refuse("unknown archive type")
-          PY
+        run: cp tools/ci/safe_unpack.py "$RUNNER_TEMP/safe_unpack.py"
 
       - name: Build the wheel, the wake archive and the server package twice in two clean folders
         run: |
@@ -208,9 +150,7 @@ jobs:
             mkdir "build-$n" "out-$n"
             git archive --format=tar "$COMMIT" | tar -x -C "build-$n"
             python3 "build-$n/qd-client-wheel/build_wheel.py" --source-root "build-$n" --version "$VERSION" --output "out-$n"
-            tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner \
-              --transform "s,^omp-quarterdeck,quarterdeck-omp-wake-$VERSION," \
-              -cf - -C "build-$n" omp-quarterdeck | gzip -n -9 > "out-$n/quarterdeck-omp-wake-$VERSION.tar.gz"
+            python3 tools/ci/wake_archive_check.py pack "build-$n" "$VERSION" "out-$n"
             scratch="$(mktemp -d)"
             python3 -B "build-$n/deploy/server_lane.py" --assemble-only "$scratch/tree" > /dev/null
             (cd "$scratch/tree/qd-web/qd-web" && find . -mindepth 1) | LC_ALL=C sort > "$scratch/present"
@@ -268,12 +208,7 @@ jobs:
           PY
 
       - name: Test the extension from its unpacked archive
-        run: |
-          set -eu
-          unpacked="$(mktemp -d)/extension"
-          python3 "$RUNNER_TEMP/safe_unpack.py" "out-1/quarterdeck-omp-wake-$VERSION.tar.gz" "$unpacked"
-          cd "$unpacked/quarterdeck-omp-wake-$VERSION"
-          bun test
+        run: python3 tools/ci/wake_archive_check.py test "out-1/quarterdeck-omp-wake-$VERSION.tar.gz" "$VERSION"
 
       - name: Rehearse the install switch with stand-ins in a throwaway home
         run: |

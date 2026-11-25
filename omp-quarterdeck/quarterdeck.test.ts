@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { chmod, copyFile, link, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 
 import {
   MAIL_NOTIFICATION_METHOD,
@@ -229,16 +229,24 @@ async function makeHarness(responses: StandinResponse[], options: HarnessOptions
   return { bot, root, config, pi, scenarioPath, statePath, stoppedPath };
 }
 
+type FolderReader = NonNullable<QuarterdeckExtensionOptions["inspectFolder"]>;
+
+const closedFolderAboveRoot = { isDirectory: () => true, mode: 0o755, uid: 0 };
+
+function folderReader(root: string): FolderReader {
+  return async (path) => (path === root || path.startsWith(root + sep) ? lstat(path) : closedFolderAboveRoot);
+}
+
 function install(
   harness: Harness,
   retry: RetryPolicy = { initialMs: 40, maximumMs: 80 },
   reconcileIntervalMs?: number,
 ) {
-  createQuarterdeckExtension({ config: harness.config, retry, reconcileIntervalMs })(harness.pi);
+  createQuarterdeckExtension({ config: harness.config, retry, reconcileIntervalMs, inspectFolder: folderReader(harness.root) })(harness.pi);
 }
 
 function installWith(harness: Harness, options: QuarterdeckExtensionOptions) {
-  createQuarterdeckExtension({ config: harness.config, retry: { initialMs: 40, maximumMs: 80 }, ...options })(harness.pi);
+  createQuarterdeckExtension({ config: harness.config, retry: { initialMs: 40, maximumMs: 80 }, inspectFolder: folderReader(harness.root), ...options })(harness.pi);
 }
 
 type StandinState = {
@@ -1245,9 +1253,10 @@ function withEnvironment(values: Record<string, string | undefined>, run: () => 
   }
 }
 
-function folderStandIn(folder: string, change: (info: { mode: number; uid: number }) => { mode?: number; uid?: number }) {
+function folderStandIn(root: string, folder: string, change: (info: { mode: number; uid: number }) => { mode?: number; uid?: number }) {
+  const read = folderReader(root);
   return async (path: string) => {
-    const info = await lstat(path);
+    const info = await read(path);
     const changed = path === folder ? change(info) : {};
     return { isDirectory: () => info.isDirectory(), mode: changed.mode ?? info.mode, uid: changed.uid ?? info.uid };
   };
@@ -1770,7 +1779,7 @@ describe("the wake reminder", () => {
     return harness.config.homeFolder;
   }
 
-  const aboveHomeFaults: Array<[string, (outer: string) => Promise<QuarterdeckExtensionOptions>]> = [
+  const aboveHomeFaults: Array<[string, (outer: string, root: string) => Promise<QuarterdeckExtensionOptions>]> = [
     [
       "can be written by its group",
       async (outer) => {
@@ -1785,10 +1794,10 @@ describe("the wake reminder", () => {
         return {};
       },
     ],
-    ["is owned by another account that is not root", async (outer) => ({ inspectFolder: folderStandIn(outer, (info) => ({ uid: info.uid + 1 })) })],
+    ["is owned by another account that is not root", async (outer, root) => ({ inspectFolder: folderStandIn(root, outer, (info) => ({ uid: info.uid + 1 })) })],
     [
       "is a root-owned sticky folder",
-      async (outer) => ({ inspectFolder: folderStandIn(outer, (info) => ({ uid: 0, mode: (info.mode & 0o170000) | 0o1755 })) }),
+      async (outer, root) => ({ inspectFolder: folderStandIn(root, outer, (info) => ({ uid: 0, mode: (info.mode & 0o170000) | 0o1755 })) }),
     ],
   ];
   for (const [name, fault] of aboveHomeFaults) {
@@ -1797,7 +1806,7 @@ describe("the wake reminder", () => {
       const outer = join(harness.root, "outer");
       await seatBelow(harness, outer);
       await writeLaunchLine(harness, `${approvedLine}\n`);
-      const clock = await startWithFailedLock(harness, await fault(outer));
+      const clock = await startWithFailedLock(harness, await fault(outer, harness.root));
 
       await clock.advance(600_000);
 
@@ -1810,7 +1819,7 @@ describe("the wake reminder", () => {
       const home = await seatBelow(harness, outer);
       harness.config.launchLinePath = join(home, "seat-launch-line");
       await putFile(harness.config.launchLinePath, `${approvedLine}\n`);
-      const clock = await startWithFailedLock(harness, await fault(outer));
+      const clock = await startWithFailedLock(harness, await fault(outer, harness.root));
 
       await clock.advance(600_000);
 
@@ -1849,7 +1858,7 @@ describe("the wake reminder", () => {
     expect(noticeTexts(harness)).toEqual([lockFailedNotice, noLineReminder]);
   }, 15_000);
 
-  const validAboveHome: Array<[string, (outer: string) => Promise<QuarterdeckExtensionOptions>]> = [
+  const validAboveHome: Array<[string, (outer: string, root: string) => Promise<QuarterdeckExtensionOptions>]> = [
     ["is a plain folder of the user", async () => ({})],
     [
       "can be read by others but not written",
@@ -1860,7 +1869,7 @@ describe("the wake reminder", () => {
     ],
     [
       "is owned by root and not sticky",
-      async (outer) => ({ inspectFolder: folderStandIn(outer, (info) => ({ uid: 0, mode: (info.mode & 0o170000) | 0o755 })) }),
+      async (outer, root) => ({ inspectFolder: folderStandIn(root, outer, (info) => ({ uid: 0, mode: (info.mode & 0o170000) | 0o755 })) }),
     ],
   ];
   for (const [name, setup] of validAboveHome) {
@@ -1869,7 +1878,7 @@ describe("the wake reminder", () => {
       const outer = join(harness.root, "outer");
       await seatBelow(harness, outer);
       await writeLaunchLine(harness, `${approvedLine}\n`);
-      const clock = await startWithFailedLock(harness, await setup(outer));
+      const clock = await startWithFailedLock(harness, await setup(outer, harness.root));
 
       await clock.advance(600_000);
 
@@ -1882,7 +1891,7 @@ describe("the wake reminder", () => {
       const home = await seatBelow(harness, outer);
       harness.config.launchLinePath = join(home, "seat-launch-line");
       await putFile(harness.config.launchLinePath, `${approvedLine}\n`);
-      const clock = await startWithFailedLock(harness, await setup(outer));
+      const clock = await startWithFailedLock(harness, await setup(outer, harness.root));
 
       await clock.advance(600_000);
 

@@ -7,7 +7,7 @@ import sys
 import tempfile
 import unittest
 
-from test_ci_tools import HERE, WORKFLOW, load_module, step_value, without_extension_macos, without_path_map, workflow_steps
+from test_ci_tools import HERE, WORKFLOW, load_module, step_value, without_extension_macos, without_path_map, without_wake_archive_check, workflow_steps
 
 WEB_JOBS = ("web-static", "web-build", "web-browser", "web-design", "web-design-selftest")
 APP_JOBS = ("app-static", "app-build", "app-browser")
@@ -333,7 +333,7 @@ class PathMapWorkflowTest(unittest.TestCase):
 
     def test_with_the_path_map_taken_out_the_workflow_is_the_file_on_main_byte_for_byte(self):
         self.assertIn("python3 tools/ci/ci-changes", self.text)
-        data = without_path_map(without_extension_macos(self.text)).encode("utf-8")
+        data = without_path_map(without_extension_macos(without_wake_archive_check(self.text))).encode("utf-8")
         blob = hashlib.sha1(b"blob " + str(len(data)).encode("ascii") + b"\0" + data).hexdigest()
         self.assertEqual(blob, MAIN_WORKFLOW_BLOB)
 
