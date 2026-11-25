@@ -367,6 +367,20 @@ class PathMapWorkflowTest(unittest.TestCase):
         ])
         self.assertEqual(job_list(self.blocks["changes"], "permissions"), ["contents: read"])
 
+    def test_the_map_job_turns_skipping_on_and_sets_only_the_event_and_the_mode(self):
+        gates = [
+            step for step in workflow_steps(self.text)
+            if step["job"] == "changes" and step_value(step, "name") == "Choose the jobs this change needs"
+        ]
+        self.assertEqual(len(gates), 1)
+        self.assertEqual(step_value(gates[0], "id"), "gates")
+        self.assertEqual(step_value(gates[0], "CI_CHANGES_MODE"), "enforce")
+        lines = gates[0]["lines"]
+        self.assertEqual(
+            lines[lines.index("        env:") + 1:lines.index("        run: python3 tools/ci/ci-changes")],
+            ["          EVENT: ${{ github.event_name }}", "          CI_CHANGES_MODE: enforce"],
+        )
+
     def test_the_jobs_outside_the_map_are_never_gated(self):
         for job in UNGATED_JOBS:
             self.assertEqual([line for line in self.blocks[job] if line.startswith(("    if:", "    needs:"))], [], job)

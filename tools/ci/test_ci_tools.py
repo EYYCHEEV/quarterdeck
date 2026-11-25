@@ -1236,6 +1236,7 @@ PATH_MAP_PIECES = (
         "        id: gates\n"
         "        env:\n"
         "          EVENT: ${{ github.event_name }}\n"
+        "          CI_CHANGES_MODE: enforce\n"
         "        run: python3 tools/ci/ci-changes\n",
         "          persist-credentials: false\n"
         "\n"

@@ -35,7 +35,7 @@ On a pull request the `changes` job runs `tools/ci/ci-changes`. It reads the fil
 - All eight run on every push to `main`, and whenever the changed files cannot be read.
 - An app with no `package.json` keeps its lanes off.
 
-The map starts in observe mode. In observe mode a lane that is not needed still runs: every filtered lane of an app that has its `package.json` is turned on, as it was before the map. The `changes` job only names the lanes the map would have skipped, by job name, in its log and in its job summary. After a day of pull requests that log is read for wrong skips. A later change then sets `CI_CHANGES_MODE` to `enforce` for the `changes` job. Only that exact value makes a lane that is not needed skip. Any other value, or none, is observe mode.
+The `changes` job sets `CI_CHANGES_MODE` to `enforce`, so a lane that is not needed is skipped, and `qd-check` requires it to be skipped. Only that exact value turns skipping on. Any other value, or none, is observe mode: every filtered lane of an app that has its `package.json` still runs, as it did before the map, and the `changes` job only names the lanes the map would have skipped, by job name, in its log and in its job summary. Observe mode ran first, and two pull requests showed only right skips. To go back to observe mode, remove the `CI_CHANGES_MODE` line from the `changes` job.
 
 The other lanes (`python`, `server`, `extension`, `extension-macos`, `no-comments`, `leaks`, `pr-title` and `release-build`) are not filtered. `qd-check` requires each filtered lane to have succeeded when it was turned on and to have been skipped when it was not.
 
