@@ -9,7 +9,7 @@ import qd_mcp
 
 
 ROOT = Path(__file__).resolve().parent
-RELEASE_WORKFLOW = ROOT.parents[1] / ".github" / "workflows" / "release.yml"
+RELEASE_WORKFLOW = ROOT.parents[1] / ".github" / "workflows" / "release-build.yml"
 
 
 class FakeService:

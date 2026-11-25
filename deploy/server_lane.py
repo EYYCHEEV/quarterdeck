@@ -102,7 +102,7 @@ def assemble_app(root):
         folder = "signup" if source.name in JOIN_SIGNUP_FILES else "golive/connect"
         copy_file(source, root / folder / source.name)
     copy_file(SERVER / "mail" / "qd_jmap.py", root / "qd-mail-stalwart" / "qd_jmap.py")
-    copy_file(REPOSITORY / ".github" / "workflows" / "release.yml", root / ".github" / "workflows" / "release.yml")
+    copy_file(REPOSITORY / ".github" / "workflows" / "release-build.yml", root / ".github" / "workflows" / "release-build.yml")
     copy_file(REPOSITORY / "docs" / "internals" / "server-captain-app.md", root / "captain-app" / "README.md")
     if NOTICES.is_file():
         copy_file(NOTICES, root / "captain-app" / "THIRD_PARTY_NOTICES.md")
