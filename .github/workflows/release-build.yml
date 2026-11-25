@@ -33,8 +33,8 @@ jobs:
       - name: Check the inputs
         run: |
           set -eu
-          printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'
-          printf '%s' "$COMMIT" | grep -Eq '^[0-9a-f]{40}$'
+          [[ $VERSION =~ ^[0-9]{1,9}\.[0-9]{1,9}\.[0-9]{1,9}$ ]]
+          [[ $COMMIT =~ ^[0-9a-f]{40}$ ]]
 
       - name: Checkout the named commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -48,7 +48,7 @@ jobs:
           set -eu
           test "$(git rev-parse HEAD)" = "$COMMIT"
           test "$CHECK_ONLY" = true || git merge-base --is-ancestor "$COMMIT" origin/main
-          grep -Fq "\"version\": \"$VERSION\"" omp-quarterdeck/package.json
+          test "$(jq -c .version omp-quarterdeck/package.json)" = "\"$VERSION\""
           grep -Fxq "## $VERSION" CHANGELOG.md
 
       - name: Fetch the pinned Node
@@ -119,8 +119,8 @@ jobs:
       - name: Check the inputs
         run: |
           set -eu
-          printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'
-          printf '%s' "$COMMIT" | grep -Eq '^[0-9a-f]{40}$'
+          [[ $VERSION =~ ^[0-9]{1,9}\.[0-9]{1,9}\.[0-9]{1,9}$ ]]
+          [[ $COMMIT =~ ^[0-9a-f]{40}$ ]]
 
       - name: Checkout the named commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -134,7 +134,7 @@ jobs:
           set -eu
           test "$(git rev-parse HEAD)" = "$COMMIT"
           test "$CHECK_ONLY" = true || git merge-base --is-ancestor "$COMMIT" origin/main
-          grep -Fq "\"version\": \"$VERSION\"" omp-quarterdeck/package.json
+          test "$(jq -c .version omp-quarterdeck/package.json)" = "\"$VERSION\""
           grep -Fxq "## $VERSION" CHANGELOG.md
 
       - name: Set up Bun

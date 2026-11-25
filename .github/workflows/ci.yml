@@ -44,7 +44,12 @@ jobs:
 
       - name: Read the release version
         id: version
-        run: printf 'version=%s\n' "$(jq -r .version omp-quarterdeck/package.json)" >> "$GITHUB_OUTPUT"
+        run: |
+          set -eu
+          version=$(jq -er '.version | strings' omp-quarterdeck/package.json)
+          [[ $version =~ ^[0-9]{1,9}\.[0-9]{1,9}\.[0-9]{1,9}$ ]]
+          test "$(jq -c .version omp-quarterdeck/package.json)" = "\"$version\""
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
 
   python:
     name: Python tests

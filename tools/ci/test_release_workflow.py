@@ -1,5 +1,9 @@
+import json
+import os
 import pathlib
 import re
+import subprocess
+import tempfile
 import unittest
 
 from test_ci_changes import job_blocks, job_list, job_setting
@@ -281,14 +285,18 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn(' "$RELEASE_BUILD_RESULT"', lines[0])
         self.assertEqual(lines[1], 'test "$result" = success || exit 1')
 
-    def test_the_confirm_steps_differ_from_the_base_text_in_exactly_the_ancestry_line(self):
+    def test_the_confirm_steps_differ_from_the_base_text_in_exactly_the_ancestry_and_version_lines(self):
         guarded = '          test "$CHECK_ONLY" = true || ' + ANCESTRY
+        whole = '          test "$(jq -c .version omp-quarterdeck/package.json)" = "\\"$VERSION\\""'
         for job in ("build-web", "build"):
             with self.subTest(job=job):
                 found = solid(named(BUILD, job, CONFIRM))
                 self.assertIsNotNone(found)
                 self.assertEqual(len(found), len(BASE_CONFIRM))
-                self.assertEqual([(a, b) for a, b in zip(found, BASE_CONFIRM) if a != b], [(guarded, "          " + ANCESTRY)])
+                self.assertEqual(
+                    [(a, b) for a, b in zip(found, BASE_CONFIRM) if a != b],
+                    [(guarded, "          " + ANCESTRY), (whole, BASE_CONFIRM[5])],
+                )
                 self.assertEqual([line for line in job_lines(BUILD, job) if "is-ancestor" in line], [guarded.strip()])
 
     def test_the_check_only_flag_reaches_both_jobs_and_the_sums_are_printed(self):
@@ -325,6 +333,93 @@ class ReleaseWorkflowTest(unittest.TestCase):
             ("build", "upload-artifact", "release-files", "release/"),
             ("draft", "download-artifact", "release-files", "release"),
         ])
+
+
+class VersionBoundaryTest(unittest.TestCase):
+    COMMIT = "0123456789abcdef0123456789abcdef01234567"
+
+    def text_of(self, step):
+        return "\n".join(run_lines(step)) + "\n"
+
+    def execute(self, text, folder, **environment):
+        env = {"PATH": os.environ.get("PATH", ""), **environment}
+        return subprocess.run(["bash", "-c", text], cwd=folder, env=env, capture_output=True, text=True, timeout=10)
+
+    def package(self, folder, document):
+        (folder / "omp-quarterdeck").mkdir()
+        (folder / "omp-quarterdeck" / "package.json").write_text(json.dumps(document), encoding="utf-8")
+
+    def test_the_version_step_writes_one_plain_version_or_nothing(self):
+        step = named(CI, "changes", "Read the release version")
+        self.assertIsNotNone(step)
+        text = self.text_of(step)
+        refused = (
+            {"version": "0.2.2\nversion=0.2.3"},
+            {"version": "0.2.2\r"},
+            {"version": "0.2.2\n"},
+            {"version": "0.2.2 "},
+            {"version": "v0.2.2"},
+            {"version": "1234567890.0.0"},
+            {"version": 0.2},
+            {"version": None},
+            {"version": ["0.2.2"]},
+            {},
+        )
+        for document in ({"version": "0.2.2"},) + refused:
+            with self.subTest(document=document), tempfile.TemporaryDirectory() as directory:
+                folder = pathlib.Path(directory)
+                self.package(folder, document)
+                output = folder / "output"
+                output.write_text("", encoding="utf-8")
+                result = self.execute(text, folder, GITHUB_OUTPUT=str(output))
+                if document in refused:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(output.read_text(encoding="utf-8"), "")
+                else:
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(output.read_text(encoding="utf-8"), "version=0.2.2\n")
+
+    def test_the_input_check_refuses_anything_but_one_whole_version_and_one_whole_commit(self):
+        refused = (
+            ("0.2.2\nversion=0.2.3", self.COMMIT),
+            ("0.2.2\n", self.COMMIT),
+            ("1234567890.0.0", self.COMMIT),
+            ("", self.COMMIT),
+            ("0.2.2", self.COMMIT + "\nversion=0.2.3"),
+            ("0.2.2", self.COMMIT.upper()),
+            ("0.2.2", self.COMMIT[:39]),
+        )
+        for job in ("build-web", "build"):
+            step = named(BUILD, job, "Check the inputs")
+            self.assertIsNotNone(step)
+            text = self.text_of(step)
+            with tempfile.TemporaryDirectory() as directory:
+                folder = pathlib.Path(directory)
+                with self.subTest(job=job, version="0.2.2", commit=self.COMMIT):
+                    self.assertEqual(self.execute(text, folder, VERSION="0.2.2", COMMIT=self.COMMIT).returncode, 0)
+                for version, commit in refused:
+                    with self.subTest(job=job, version=version, commit=commit):
+                        self.assertNotEqual(self.execute(text, folder, VERSION=version, COMMIT=commit).returncode, 0)
+
+    def test_the_version_check_reads_the_whole_value_of_the_version_key_only(self):
+        cases = (
+            ({"version": "0.2.2"}, "0.2.2", True),
+            ({"version": "0.2.3", "x": {"version": "0.2.2"}}, "0.2.2", False),
+            ({"version": "0.2.2\n"}, "0.2.2", False),
+            ({"version": "0.2.2"}, "0.2.2\nversion=0.2.3", False),
+        )
+        for job in ("build-web", "build"):
+            step = named(BUILD, job, CONFIRM)
+            self.assertIsNotNone(step)
+            lines = [line for line in run_lines(step) if "omp-quarterdeck/package.json" in line]
+            self.assertEqual(len(lines), 1)
+            text = lines[0] + "\n"
+            for document, version, accepted in cases:
+                with self.subTest(job=job, document=document, version=version), tempfile.TemporaryDirectory() as directory:
+                    folder = pathlib.Path(directory)
+                    self.package(folder, document)
+                    result = self.execute(text, folder, VERSION=version)
+                    self.assertEqual(result.returncode == 0, accepted, result.stderr)
 
 
 if __name__ == "__main__":

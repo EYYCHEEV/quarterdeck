@@ -1139,7 +1139,12 @@ RELEASE_BUILD_PIECES = (
     "      release-version: ${{ steps.version.outputs.version }}\n",
     "\n      - name: Read the release version\n"
     "        id: version\n"
-    "        run: printf 'version=%s\\n' \"$(jq -r .version omp-quarterdeck/package.json)\" >> \"$GITHUB_OUTPUT\"\n",
+    "        run: |\n"
+    "          set -eu\n"
+    "          version=$(jq -er '.version | strings' omp-quarterdeck/package.json)\n"
+    '          [[ $version =~ ^[0-9]{1,9}\\.[0-9]{1,9}\\.[0-9]{1,9}$ ]]\n'
+    '          test "$(jq -c .version omp-quarterdeck/package.json)" = "\\"$version\\""\n'
+    "          printf 'version=%s\\n' \"$version\" >> \"$GITHUB_OUTPUT\"\n",
     "  release-build:\n"
     "    name: Release build\n"
     "    needs: changes\n"

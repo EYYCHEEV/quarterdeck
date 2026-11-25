@@ -358,7 +358,13 @@ class PathMapWorkflowTest(unittest.TestCase):
         self.assertEqual(step_value(steps[1], "EVENT"), "${{ github.event_name }}")
         self.assertEqual(step_value(steps[1], "run"), "python3 tools/ci/ci-changes")
         self.assertEqual(step_value(steps[2], "id"), "version")
-        self.assertEqual(step_value(steps[2], "run"), "printf 'version=%s\\n' \"$(jq -r .version omp-quarterdeck/package.json)\" >> \"$GITHUB_OUTPUT\"")
+        self.assertEqual(step_value(steps[2], "run").split("\n"), [
+            "set -eu",
+            "version=$(jq -er '.version | strings' omp-quarterdeck/package.json)",
+            "[[ $version =~ ^[0-9]{1,9}\\.[0-9]{1,9}\\.[0-9]{1,9}$ ]]",
+            'test "$(jq -c .version omp-quarterdeck/package.json)" = "\\"$version\\""',
+            "printf 'version=%s\\n' \"$version\" >> \"$GITHUB_OUTPUT\"",
+        ])
         self.assertEqual(job_list(self.blocks["changes"], "permissions"), ["contents: read"])
 
     def test_the_jobs_outside_the_map_are_never_gated(self):
