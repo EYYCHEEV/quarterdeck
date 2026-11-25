@@ -48,7 +48,7 @@ The `build` job has `contents: read` only. It:
 
 1. makes the same checks of the inputs and the commit;
 2. builds the wheel, the archive and the server package twice, each time in a clean folder made from the commit, and fails if the two builds differ by a single byte; the server package must hold exactly the files its manifest lists;
-3. tests the built files, not the source: the wheel unpacks into an empty folder, `qd.py --help` works, and the MCP server answers `initialize` and lists exactly the expected tools; the extension's tests pass from the unpacked archive; the server package unpacks into one folder, matches its manifest, loads, and passes the package guard; the unpacked server package serves the unpacked web bundle, each file whole;
+3. tests the built files, not the source: the wheel unpacks into an empty folder, `qd.py --help` works, and the MCP server answers `initialize` and lists exactly the expected tools; the extension's tests pass from the unpacked archive; the server package unpacks into one folder, matches its manifest, loads, and passes the package guard; the unpacked server package serves `index.html` from the unpacked web bundle and every file that page names, each whole;
 4. rehearses the install switch in a throwaway home with stand-ins and no real key: unpack beside an older stand-in version, move the `current` pointer, run `qd.py --help` through it, move it back, and check that the older one answers;
 5. writes `PARTS.json`, `SHA256SUMS` and the release notes, and keeps the files for 7 days for the next job.
 
