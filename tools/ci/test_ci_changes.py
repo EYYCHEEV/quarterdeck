@@ -7,13 +7,13 @@ import sys
 import tempfile
 import unittest
 
-from test_ci_tools import HERE, WORKFLOW, load_module, step_value, without_extension_macos, without_path_map, without_wake_archive_check, workflow_steps
+from test_ci_tools import HERE, WORKFLOW, load_module, step_value, without_extension_macos, without_path_map, without_release_build, without_wake_archive_check, workflow_steps
 
 WEB_JOBS = ("web-static", "web-build", "web-browser", "web-design", "web-design-selftest")
 APP_JOBS = ("app-static", "app-build", "app-browser")
 GATED_JOBS = WEB_JOBS + APP_JOBS
 UNGATED_JOBS = ("python", "server", "extension", "extension-macos", "no-comments", "leaks")
-MAIN_JOBS = ("changes", *UNGATED_JOBS, *GATED_JOBS, "pr-title", "qd-check")
+MAIN_JOBS = ("changes", *UNGATED_JOBS, *GATED_JOBS, "pr-title", "release-build", "qd-check")
 MAIN_WORKFLOW_BLOB = "c639e234756c0b8222d0064fd46493ac425c246a"
 BASE_FILES = {
     "apps/web/package.json": "{}\n",
@@ -316,7 +316,7 @@ class PathMapWorkflowTest(unittest.TestCase):
 
     def verdict(self, script, **changed):
         env = {"PATH": os.environ.get("PATH", "")}
-        for name in ("CHANGES", "PYTHON", "SERVER", "EXTENSION", "EXTENSION_MACOS", "COMMENTS", "LEAKS"):
+        for name in ("CHANGES", "PYTHON", "SERVER", "EXTENSION", "EXTENSION_MACOS", "COMMENTS", "LEAKS", "RELEASE_BUILD"):
             env[name + "_RESULT"] = "success"
         for job in GATED_JOBS:
             env[env_name(job) + "_GATE"] = "true"
@@ -333,7 +333,7 @@ class PathMapWorkflowTest(unittest.TestCase):
 
     def test_with_the_path_map_taken_out_the_workflow_is_the_file_on_main_byte_for_byte(self):
         self.assertIn("python3 tools/ci/ci-changes", self.text)
-        data = without_path_map(without_extension_macos(without_wake_archive_check(self.text))).encode("utf-8")
+        data = without_path_map(without_extension_macos(without_wake_archive_check(without_release_build(self.text)))).encode("utf-8")
         blob = hashlib.sha1(b"blob " + str(len(data)).encode("ascii") + b"\0" + data).hexdigest()
         self.assertEqual(blob, MAIN_WORKFLOW_BLOB)
 
@@ -342,21 +342,29 @@ class PathMapWorkflowTest(unittest.TestCase):
             self.assertEqual(job_setting(self.blocks[job], "needs"), "changes", job)
             self.assertEqual(job_setting(self.blocks[job], "if"), "needs.changes.outputs." + job + " == 'true'", job)
 
-    def test_the_map_job_hands_out_one_gate_for_each_gated_job_and_nothing_else(self):
+    def test_the_map_job_hands_out_one_gate_for_each_gated_job_and_the_release_version(self):
         self.assertEqual(
             job_list(self.blocks["changes"], "outputs"),
-            [job + ": ${{ steps.gates.outputs." + job + " }}" for job in GATED_JOBS],
+            [job + ": ${{ steps.gates.outputs." + job + " }}" for job in GATED_JOBS] + ["release-version: ${{ steps.version.outputs.version }}"],
         )
 
     def test_the_map_job_reads_the_change_from_a_safe_checkout_two_commits_deep(self):
         steps = [step for step in workflow_steps(self.text) if step["job"] == "changes"]
-        self.assertEqual([step_value(step, "name") for step in steps], ["Checkout", "Choose the jobs this change needs"])
+        self.assertEqual([step_value(step, "name") for step in steps], ["Checkout", "Choose the jobs this change needs", "Read the release version"])
         self.assertTrue(step_value(steps[0], "uses").startswith("actions/checkout@"))
         self.assertEqual(step_value(steps[0], "fetch-depth"), "2")
         self.assertEqual(step_value(steps[0], "persist-credentials"), "false")
         self.assertEqual(step_value(steps[1], "id"), "gates")
         self.assertEqual(step_value(steps[1], "EVENT"), "${{ github.event_name }}")
         self.assertEqual(step_value(steps[1], "run"), "python3 tools/ci/ci-changes")
+        self.assertEqual(step_value(steps[2], "id"), "version")
+        self.assertEqual(step_value(steps[2], "run").split("\n"), [
+            "set -eu",
+            "version=$(jq -er '.version | strings' omp-quarterdeck/package.json)",
+            "[[ $version =~ ^[0-9]{1,9}\\.[0-9]{1,9}\\.[0-9]{1,9}$ ]]",
+            'test "$(jq -c .version omp-quarterdeck/package.json)" = "\\"$version\\""',
+            "printf 'version=%s\\n' \"$version\" >> \"$GITHUB_OUTPUT\"",
+        ])
         self.assertEqual(job_list(self.blocks["changes"], "permissions"), ["contents: read"])
 
     def test_the_jobs_outside_the_map_are_never_gated(self):
@@ -407,7 +415,7 @@ class PathMapWorkflowTest(unittest.TestCase):
                 {gate: "TRUE", result: "success"},
             ):
                 self.assertEqual(self.verdict(script, **wrong), 1, (job, wrong))
-        for name in ("CHANGES", "PYTHON", "SERVER", "EXTENSION", "EXTENSION_MACOS", "COMMENTS", "LEAKS"):
+        for name in ("CHANGES", "PYTHON", "SERVER", "EXTENSION", "EXTENSION_MACOS", "COMMENTS", "LEAKS", "RELEASE_BUILD"):
             for wrong in ("failure", "cancelled", "skipped", ""):
                 self.assertEqual(self.verdict(script, **{name + "_RESULT": wrong}), 1, (name, wrong))
 
