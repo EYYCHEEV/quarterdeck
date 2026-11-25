@@ -61,6 +61,8 @@ The `draft` job has `contents: write` only. It:
 
 The workflow stops at a draft. It does not publish. It uses no configured secret.
 
+The `build-web` and `build` jobs live in `.github/workflows/release-build.yml`, which `release.yml` calls; CI runs the same file on every pull request and every push to `main`, without the `draft` job and without the check that the commit is already on `main`, so a build or test step that would fail in a release fails in CI first.
+
 ### Publishing
 
 A maintainer looks at the draft and runs further checks that are kept private. Then the maintainer publishes it once, as an immutable release, or an agent does on the maintainer's word for that release. After that the release is read back:
