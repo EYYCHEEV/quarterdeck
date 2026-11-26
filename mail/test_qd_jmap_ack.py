@@ -116,6 +116,10 @@ class StandInHandler(socketserver.StreamRequestHandler):
         self.server.paths.append(path)
         if path == "/redirect":
             self.respond(302, b"", Location="/target")
+        elif path == "/no-content":
+            self.respond(204, b"")
+        elif path == "/created":
+            self.respond(201, b"created")
         elif path == "/big":
             self.respond(200, b"x" * 100)
         elif path.startswith("/size/"):
@@ -131,7 +135,9 @@ class StandInHandler(socketserver.StreamRequestHandler):
         return not self.server.close_each
 
     def respond(self, status, body, **headers):
-        head = [f"HTTP/1.1 {status} Stand-in", f"Content-Length: {len(body)}"]
+        head = [f"HTTP/1.1 {status} Stand-in"]
+        if status != 204:
+            head.append(f"Content-Length: {len(body)}")
         if self.server.close_each:
             head.append("Connection: close")
         head.extend(f"{name}: {value}" for name, value in headers.items())
@@ -267,6 +273,20 @@ class ConnectionTest(unittest.TestCase):
         self.assertIn("500", err)
         self.settle(self.server, 1)
 
+    def assert_non_200_opens_a_fresh_connection(self, path, status):
+        transport = qd_jmap.HttpTransport()
+        self.addCleanup(transport.close)
+        first = transport("GET", f"{self.server.base}{path}", {})
+        self.assertEqual(transport("GET", f"{self.server.base}/size/3", {}), (200, b"111"))
+        self.assertEqual(self.server.opened, 2)
+        self.assertEqual(first, (status, b""))
+
+    def test_a_204_answer_does_not_keep_its_connection(self):
+        self.assert_non_200_opens_a_fresh_connection("/no-content", 204)
+
+    def test_a_201_answer_with_a_body_does_not_keep_its_connection(self):
+        self.assert_non_200_opens_a_fresh_connection("/created", 201)
+
     def test_a_transport_let_go_at_the_end_of_a_command_closes_its_connection(self):
         self.assertFalse(command_like_connect(self.stalwart, self.session, WANTED))
         gc.collect()
@@ -297,6 +317,16 @@ class ConnectionTest(unittest.TestCase):
         self.assertEqual(self.server.paths, ["/jmap/session"])
         transport.close()
         self.settle(other, 1)
+
+    def test_port_zero_does_not_reuse_the_default_ports_connection(self):
+        transport = qd_jmap.HttpTransport()
+        self.addCleanup(transport.close)
+        connect = socket.create_connection
+        with mock.patch.object(socket, "create_connection",
+                               side_effect=lambda _, *args: connect(self.server.server_address, *args)):
+            self.assertEqual(transport("GET", "http://127.0.0.1/size/1", {}), (200, b"1"))
+            self.assertEqual(transport("GET", "http://127.0.0.1:0/size/2", {}), (200, b"11"))
+        self.assertEqual(self.server.opened, 2)
 
     def test_a_redirect_answer_is_refused_and_not_followed(self):
         code, out, err = run_command(self.stalwart, f"{self.server.base}/redirect", "wait", "--timeout", "0")

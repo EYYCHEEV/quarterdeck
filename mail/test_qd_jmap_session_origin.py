@@ -52,9 +52,9 @@ class SessionWithFields(FakeStalwart):
 
 
 class SessionOriginTest(unittest.TestCase):
-    def wait(self, fields):
+    def wait(self, fields, session=OFFLINE_SESSION):
         server = SessionWithFields([BOT], fields)
-        code, out, err = run_command(server, OFFLINE_SESSION, "wait", "--timeout", "0", transport=server)
+        code, out, err = run_command(server, session, "wait", "--timeout", "0", transport=server)
         return server, code, out, err
 
     def assert_refused_on_another_origin(self, field):
@@ -73,6 +73,20 @@ class SessionOriginTest(unittest.TestCase):
 
     def test_an_event_source_url_on_another_origin_is_refused(self):
         self.assert_refused_on_another_origin("eventSourceUrl")
+
+    def test_an_api_url_with_port_zero_is_not_on_the_default_port_origin(self):
+        server, code, out, err = self.wait({"apiUrl": "http://127.0.0.1:0/jmap/"},
+                                           "http://127.0.0.1/jmap/session")
+        self.assertEqual((code, out), (qd_jmap.MAIL_FAILED, ""), err)
+        self.assertIn("API on another origin", err)
+        self.assertEqual(len(server.requests), 1)
+
+    def test_an_upload_url_with_port_zero_is_not_on_the_default_port_origin(self):
+        server, code, out, err = self.wait({"uploadUrl": "http://127.0.0.1:0" + FIELDS["uploadUrl"]},
+                                           "http://127.0.0.1/jmap/session")
+        self.assertEqual((code, out), (qd_jmap.MAIL_FAILED, ""), err)
+        self.assertIn("uploadUrl on another origin", err)
+        self.assertEqual(len(server.requests), 1)
 
     def test_templates_on_the_session_origin_are_accepted(self):
         for fields in ({name: ORIGIN + path for name, path in FIELDS.items()}, dict(FIELDS), {}):
