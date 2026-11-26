@@ -938,7 +938,7 @@ class ConnectService:
             mailbox = qd_jmap.Mailbox(jmap)
             return operation(mailbox)
         finally:
-            if owned is not None:
+            if owned is not None and hasattr(owned, "close"):
                 owned.close()
             if credential is not None:
                 credential.clear()
