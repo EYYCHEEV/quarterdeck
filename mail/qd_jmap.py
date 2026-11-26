@@ -119,7 +119,7 @@ def check_session_fields(session_url, session):
             continue
         try:
             prefix = template.partition("{")[0]
-            fixed = prefix == template or bool(urllib.parse.urlsplit(prefix).path)
+            fixed = prefix == template or "?" in prefix or bool(urllib.parse.urlsplit(prefix).path)
             on_origin = fixed and on_session_origin(session_url, urllib.parse.urljoin(session_url, prefix))
         except (AttributeError, TypeError, ValueError):
             on_origin = False
@@ -151,7 +151,7 @@ class HttpTransport:
         except BaseException:
             self.close()
             raise
-        if not success or not answer.isclosed():
+        if not success or len(data) > MAX_ANSWER_BYTES or not answer.isclosed():
             self.close()
         self.last_used = self.clock()
         return answer.status, data
