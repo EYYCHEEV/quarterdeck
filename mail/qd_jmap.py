@@ -98,7 +98,10 @@ def check_session_url(url):
 
 def origin(url):
     parts = urllib.parse.urlsplit(url)
-    return parts.scheme, parts.hostname, parts.port or {"https": 443, "http": 80}.get(parts.scheme)
+    port = parts.port
+    if port is None:
+        port = {"https": 443, "http": 80}.get(parts.scheme)
+    return parts.scheme, parts.hostname, port
 
 
 def on_session_origin(session_url, url):
@@ -146,7 +149,7 @@ class HttpTransport:
         try:
             self.connection.request(method, selector, body, {"User-Agent": USER_AGENT, **headers})
             answer = self.connection.getresponse()
-            success = 200 <= answer.status < 300
+            success = answer.status == 200
             data = answer.read(MAX_ANSWER_BYTES + 1) if success else b""
         except BaseException:
             self.close()
