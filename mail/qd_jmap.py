@@ -23,6 +23,7 @@ HANDLED = "qd-handled"
 WORDS_HEADER = "X-QD-Words"
 BOT_NAME = re.compile(r"[a-z0-9][a-z0-9-]{0,62}")
 USING = ["urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail", "urn:ietf:params:jmap:submission"]
+SESSION_URL_FIELDS = ("uploadUrl", "downloadUrl", "eventSourceUrl")
 CAPTAIN = "captain"
 CHAT_SCHEMA = "chat/1"
 CLIENT_ID = re.compile(r"[A-Za-z0-9_-]{1,80}")
@@ -100,11 +101,31 @@ def origin(url):
     return parts.scheme, parts.hostname, parts.port or {"https": 443, "http": 80}.get(parts.scheme)
 
 
+def on_session_origin(session_url, url):
+    parts = urllib.parse.urlsplit(url)
+    return parts.username is None and parts.password is None and origin(url) == origin(session_url)
+
+
 def same_origin_api(session_url, api_url):
-    parts = urllib.parse.urlsplit(api_url)
-    if parts.username is not None or parts.password is not None or origin(api_url) != origin(session_url):
+    if not on_session_origin(session_url, api_url):
         raise MailFailed("Stalwart's session names an API on another origin; the key is not sent there")
     return api_url
+
+
+def check_session_fields(session_url, session):
+    for name in SESSION_URL_FIELDS:
+        template = session.get(name)
+        if template is None:
+            continue
+        try:
+            prefix = template.partition("{")[0]
+            fixed = prefix == template or bool(urllib.parse.urlsplit(prefix).path)
+            on_origin = fixed and on_session_origin(session_url, urllib.parse.urljoin(session_url, prefix))
+        except (AttributeError, TypeError, ValueError):
+            on_origin = False
+        if not on_origin:
+            raise MailFailed(f"Stalwart's session names a {name} on another origin or with no fixed origin; "
+                             "the key is not sent there")
 
 
 class HttpTransport:
@@ -130,7 +151,7 @@ class HttpTransport:
         except BaseException:
             self.close()
             raise
-        if not success or len(data) > MAX_ANSWER_BYTES:
+        if not success or not answer.isclosed():
             self.close()
         self.last_used = self.clock()
         return answer.status, data
@@ -164,6 +185,7 @@ class Jmap:
         except (KeyError, TypeError):
             raise MailFailed("Stalwart's session has no mail account for this key") from None
         self.api_url = same_origin_api(session_url, api_url)
+        check_session_fields(session_url, session)
 
     def fetch(self, method, url, payload=None):
         headers = {"Accept": "application/json", "Authorization": self.credential.header()}
