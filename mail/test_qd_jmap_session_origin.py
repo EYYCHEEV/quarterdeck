@@ -18,6 +18,25 @@ FOREIGN_ORIGINS = (
     "http://someone@127.0.0.1:18080",
 )
 NOT_FIXED = ("{origin}/jmap/x/", "http://{host}/jmap/x/", "http://127.0.0.1:18080{rest}/x/", "https:{rest}", 5)
+QUERY_ONLY = (
+    "http://127.0.0.1:18080?types={types}",
+    "http://127.0.0.1:18080?types={types}&closeafter={closeafter}&ping={ping}",
+    "?types={types}",
+)
+FOREIGN_QUERY_ONLY = (
+    "http://127.0.0.1:18081?types={types}",
+    "https://elsewhere.example.test?types={types}",
+    "http://[::1]:18080?types={types}",
+    "http://someone@127.0.0.1:18080?types={types}",
+)
+PLACEHOLDER_BEFORE_THE_QUERY = (
+    "{scheme}://127.0.0.1:18080?types={types}",
+    "http://{host}?types={types}",
+    "http://127.0.0.1:{port}?types={types}",
+    "http://127.0.0.1:18080{rest}?types={types}",
+    "{origin}?types={types}",
+    "http://someone:{secret}@127.0.0.1:18080?types={types}",
+)
 
 
 class SessionWithFields(FakeStalwart):
@@ -70,6 +89,23 @@ class SessionOriginTest(unittest.TestCase):
                     self.assertEqual((code, out), (qd_jmap.MAIL_FAILED, ""), err)
                     self.assertIn(field, err)
                     self.assertEqual(len(server.requests), 1)
+
+    def assert_each(self, templates, expected_code):
+        for field in FIELDS:
+            for template in templates:
+                with self.subTest(field=field, template=template):
+                    server, code, out, err = self.wait({field: template})
+                    self.assertEqual((code, out), (expected_code, ""), err)
+                    self.assertEqual(len(server.requests) > 1, expected_code == qd_jmap.NOTHING_NEW)
+
+    def test_a_template_with_a_fixed_origin_and_a_placeholder_after_a_question_mark_is_accepted(self):
+        self.assert_each(QUERY_ONLY, qd_jmap.NOTHING_NEW)
+
+    def test_a_placeholder_in_the_scheme_or_host_part_is_refused_even_before_a_question_mark(self):
+        self.assert_each(PLACEHOLDER_BEFORE_THE_QUERY, qd_jmap.MAIL_FAILED)
+
+    def test_a_query_only_template_on_another_origin_is_refused(self):
+        self.assert_each(FOREIGN_QUERY_ONLY, qd_jmap.MAIL_FAILED)
 
 
 if __name__ == "__main__":

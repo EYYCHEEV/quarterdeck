@@ -118,6 +118,8 @@ class StandInHandler(socketserver.StreamRequestHandler):
             self.respond(302, b"", Location="/target")
         elif path == "/big":
             self.respond(200, b"x" * 100)
+        elif path.startswith("/size/"):
+            self.respond(200, b"1" * int(path[len("/size/"):]))
         elif path == "/short":
             self.wfile.write(b"HTTP/1.1 200 Stand-in\r\nContent-Length: 100\r\n\r\n" + b"x" * 10)
             self.connection.shutdown(socket.SHUT_WR)
@@ -329,6 +331,31 @@ class ConnectionTest(unittest.TestCase):
         self.assertEqual(transport("GET", self.session, AUTH, None)[0], 200)
         transport.close()
         self.settle(self.server, 2)
+
+    def jmap_over(self, transport):
+        credential = qd_jmap.Credential(bytearray(f"key-of-{BOT}".encode()))
+        self.addCleanup(credential.clear)
+        return qd_jmap.Jmap(self.session, credential, transport)
+
+    def test_an_answer_one_byte_over_the_limit_is_refused_and_its_connection_closed_though_it_was_read_whole(self):
+        transport = qd_jmap.HttpTransport()
+        jmap = self.jmap_over(transport)
+        with mock.patch.object(qd_jmap, "MAX_ANSWER_BYTES", 10), self.assertRaises(qd_jmap.MailFailed):
+            jmap.fetch("GET", f"{self.server.base}/size/11")
+        self.settle(self.server, 1)
+        self.assertIn("apiUrl", jmap.fetch("GET", self.session))
+        transport.close()
+        self.settle(self.server, 2)
+
+    def test_an_answer_exactly_at_the_limit_is_accepted_and_its_connection_may_be_reused(self):
+        transport = qd_jmap.HttpTransport()
+        jmap = self.jmap_over(transport)
+        with mock.patch.object(qd_jmap, "MAX_ANSWER_BYTES", 10):
+            self.assertEqual(jmap.fetch("GET", f"{self.server.base}/size/10"), 1111111111)
+        self.assertIsNotNone(transport.connection)
+        self.assertIn("apiUrl", jmap.fetch("GET", self.session))
+        transport.close()
+        self.settle(self.server, 1)
 
     def test_a_truncated_answer_closes_that_connection_and_the_next_call_opens_a_new_one(self):
         transport = qd_jmap.HttpTransport()
