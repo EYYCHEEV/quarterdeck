@@ -118,6 +118,9 @@ class StandInHandler(socketserver.StreamRequestHandler):
             self.respond(302, b"", Location="/target")
         elif path == "/big":
             self.respond(200, b"x" * 100)
+        elif path == "/short":
+            self.wfile.write(b"HTTP/1.1 200 Stand-in\r\nContent-Length: 100\r\n\r\n" + b"x" * 10)
+            self.connection.shutdown(socket.SHUT_WR)
         elif self.server.fail_after is not None and len(self.server.paths) > self.server.fail_after:
             self.respond(500, b"")
         else:
@@ -323,6 +326,15 @@ class ConnectionTest(unittest.TestCase):
         with mock.patch.object(qd_jmap, "MAX_ANSWER_BYTES", 10):
             status, data = transport("GET", f"{self.server.base}/big", {}, None)
         self.assertEqual((status, len(data)), (200, 11))
+        self.assertEqual(transport("GET", self.session, AUTH, None)[0], 200)
+        transport.close()
+        self.settle(self.server, 2)
+
+    def test_a_truncated_answer_closes_that_connection_and_the_next_call_opens_a_new_one(self):
+        transport = qd_jmap.HttpTransport()
+        status, data = transport("GET", f"{self.server.base}/short", {}, None)
+        self.assertEqual((status, len(data)), (200, 10))
+        self.settle(self.server, 1)
         self.assertEqual(transport("GET", self.session, AUTH, None)[0], 200)
         transport.close()
         self.settle(self.server, 2)
