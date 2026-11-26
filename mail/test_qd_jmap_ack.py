@@ -123,10 +123,12 @@ class StandInHandler(socketserver.StreamRequestHandler):
         else:
             status, answer = self.server.stalwart(method, self.server.base + path, headers, body)
             self.respond(status, answer)
-        return True
+        return not self.server.close_each
 
     def respond(self, status, body, **headers):
         head = [f"HTTP/1.1 {status} Stand-in", f"Content-Length: {len(body)}"]
+        if self.server.close_each:
+            head.append("Connection: close")
         head.extend(f"{name}: {value}" for name, value in headers.items())
         self.wfile.write(("\r\n".join(head) + "\r\n\r\n").encode("latin-1") + body)
 
@@ -154,6 +156,7 @@ class StandInServer(socketserver.ThreadingTCPServer):
         self.opened = self.closed = 0
         self.paths = []
         self.fail_after = None
+        self.close_each = False
 
     @property
     def base(self):
@@ -217,7 +220,7 @@ class ConnectionTest(unittest.TestCase):
 
     def start(self, stalwart):
         server = StandInServer(stalwart)
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
         thread.start()
         self.addCleanup(self.stop, server, thread)
         return server
@@ -239,6 +242,13 @@ class ConnectionTest(unittest.TestCase):
         self.assertEqual(code, 0, err)
         self.assertEqual(len(self.stalwart.requests), ACK_CALLS)
         self.settle(self.server, 1)
+
+    def test_a_server_that_closes_after_every_answer_is_reconnected_to_for_each_call(self):
+        self.server.close_each = True
+        code, _, err = run_command(self.stalwart, self.session, "ack", WANTED)
+        self.assertEqual(code, 0, err)
+        self.assertEqual(len(self.stalwart.requests), ACK_CALLS)
+        self.settle(self.server, ACK_CALLS)
 
     def test_the_connection_is_closed_after_a_refusal(self):
         code, _, _ = run_command(self.stalwart, self.session, "ack", MISSING)
