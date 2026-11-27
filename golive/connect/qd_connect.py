@@ -925,19 +925,21 @@ class ConnectService:
     def _mail(self, operation):
         key = self.adapter.read()
         credential = None
+        owned = None
         try:
             if not isinstance(key, bytearray):
                 raise ConnectRefused("adapter did not return a mutable Stalwart API key")
             validate_api_key(key)
             credential = qd_jmap.Credential(key)
-            jmap = qd_jmap.Jmap(
-                self.session_url,
-                credential,
-                self.transport if self.transport is not None else qd_jmap.HttpTransport(),
-            )
+            transport = self.transport
+            if transport is None:
+                transport = owned = qd_jmap.HttpTransport()
+            jmap = qd_jmap.Jmap(self.session_url, credential, transport)
             mailbox = qd_jmap.Mailbox(jmap)
             return operation(mailbox)
         finally:
+            if owned is not None and hasattr(owned, "close"):
+                owned.close()
             if credential is not None:
                 credential.clear()
             elif isinstance(key, bytearray):

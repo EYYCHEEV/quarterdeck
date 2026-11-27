@@ -3,6 +3,10 @@
 All notable changes to the bot tools are listed here, newest first. Each release uses one version number for the wheel and the wake extension. While the version starts with 0, a release can change interfaces; each entry says so when it does.
 From later releases this file also lists changes to the web app and the server. Each release has one heading of the exact form `## X.Y.Z`, with nothing else on the line, because the bot-tool release workflow finds its heading by exact match. An entry says which part it changes: bot tools, app, or server.
 
+## Unreleased
+
+- Bot tools: `qd ack` and `qd_ack` now find a message's copies with one search on its Message-ID instead of reading the whole inbox, and still read the whole inbox when that search finds none. Every `qd` command now keeps one connection to the mail server for its whole run instead of opening a new one for each call, and closes it when it ends. A `qd ack` makes far fewer calls and opens far fewer connections.
+
 ## 0.2.2
 
 - Bot tools: the wake extension for OMP now reminds the session's model when the mail wake is confirmed not running: the poller lock could not be taken, the lock was lost later in the session, or the client configuration could not be read at session start. The reminder is one short message that names the seat's approved launch line, read from a private `launch-line` file next to the bot's cursor or from the file named by the new `QUARTERDECK_LAUNCH_LINE` setting, or says that no approved line is on file. It never restarts anything, starts no second waiter and shows no mail text. A lock lost later in the session no longer ends the polling without a word. The install guide describes the file and the setting.

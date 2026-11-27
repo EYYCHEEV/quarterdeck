@@ -1,14 +1,14 @@
 import argparse
 import hashlib
+import http.client
 import ipaddress
 import json
 import os
 import re
+import ssl
 import sys
 import time
-import urllib.error
 import urllib.parse
-import urllib.request
 from datetime import datetime
 
 NOTHING_NEW, REFUSED, MAIL_FAILED = 1, 2, 3
@@ -16,10 +16,14 @@ CHECK_EVERY_SECONDS = 5
 PAGE = 256
 MAX_KEY_BYTES = 4096
 MAX_ANSWER_BYTES = 16 * 1024 * 1024
+KEEP_IDLE_SECONDS = 2
+TIMEOUT_SECONDS = 30
+USER_AGENT = "Python-urllib/%d.%d" % sys.version_info[:2]
 HANDLED = "qd-handled"
 WORDS_HEADER = "X-QD-Words"
 BOT_NAME = re.compile(r"[a-z0-9][a-z0-9-]{0,62}")
 USING = ["urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail", "urn:ietf:params:jmap:submission"]
+SESSION_URL_FIELDS = ("uploadUrl", "downloadUrl", "eventSourceUrl")
 CAPTAIN = "captain"
 CHAT_SCHEMA = "chat/1"
 CLIENT_ID = re.compile(r"[A-Za-z0-9_-]{1,80}")
@@ -94,29 +98,83 @@ def check_session_url(url):
 
 def origin(url):
     parts = urllib.parse.urlsplit(url)
-    return parts.scheme, parts.hostname, parts.port or {"https": 443, "http": 80}.get(parts.scheme)
+    port = parts.port
+    if port is None:
+        port = {"https": 443, "http": 80}.get(parts.scheme)
+    return parts.scheme, parts.hostname, port
+
+
+def on_session_origin(session_url, url):
+    parts = urllib.parse.urlsplit(url)
+    return parts.username is None and parts.password is None and origin(url) == origin(session_url)
 
 
 def same_origin_api(session_url, api_url):
-    parts = urllib.parse.urlsplit(api_url)
-    if parts.username is not None or parts.password is not None or origin(api_url) != origin(session_url):
+    if not on_session_origin(session_url, api_url):
         raise MailFailed("Stalwart's session names an API on another origin; the key is not sent there")
     return api_url
 
 
+def check_session_fields(session_url, session):
+    for name in SESSION_URL_FIELDS:
+        template = session.get(name)
+        if template is None:
+            continue
+        try:
+            prefix = template.partition("{")[0]
+            fixed = prefix == template or "?" in prefix or bool(urllib.parse.urlsplit(prefix).path)
+            on_origin = fixed and on_session_origin(session_url, urllib.parse.urljoin(session_url, prefix))
+        except (AttributeError, TypeError, ValueError):
+            on_origin = False
+        if not on_origin:
+            raise MailFailed(f"Stalwart's session names a {name} on another origin or with no fixed origin; "
+                             "the key is not sent there")
+
+
 class HttpTransport:
-    def __init__(self):
-        no_redirect = type("NoRedirect", (urllib.request.HTTPRedirectHandler,),
-                           {"redirect_request": lambda *args, **kwargs: None})
-        self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), no_redirect)
+    connection = None
+    target = None
+    last_used = 0.0
+
+    def __init__(self, clock=time.monotonic):
+        self.clock = clock
 
     def __call__(self, method, url, headers, body=None):
-        request = urllib.request.Request(url, data=body, headers=headers, method=method)
+        parts = urllib.parse.urlsplit(url)
+        target = origin(url)
+        if self.connection is None or target != self.target or self.clock() - self.last_used > KEEP_IDLE_SECONDS:
+            self.close()
+            self.connection, self.target = self.connect(parts), target
+        selector = (parts.path or "/") + (f"?{parts.query}" if parts.query else "")
         try:
-            with self.opener.open(request, timeout=30) as answer:
-                return answer.status, answer.read(MAX_ANSWER_BYTES + 1)
-        except urllib.error.HTTPError as failure:
-            return failure.code, b""
+            self.connection.request(method, selector, body, {"User-Agent": USER_AGENT, **headers})
+            answer = self.connection.getresponse()
+            success = answer.status == 200
+            data = answer.read(MAX_ANSWER_BYTES + 1) if success else b""
+        except BaseException:
+            self.close()
+            raise
+        if not success or len(data) > MAX_ANSWER_BYTES or not answer.isclosed():
+            self.close()
+        self.last_used = self.clock()
+        return answer.status, data
+
+    @staticmethod
+    def connect(parts):
+        if not parts.hostname or parts.scheme not in ("http", "https"):
+            raise OSError("not a URL this client reaches")
+        if parts.scheme == "https":
+            return http.client.HTTPSConnection(parts.hostname, parts.port, timeout=TIMEOUT_SECONDS,
+                                               context=ssl.create_default_context())
+        return http.client.HTTPConnection(parts.hostname, parts.port, timeout=TIMEOUT_SECONDS)
+
+    def close(self):
+        if self.connection is not None:
+            self.connection.close()
+            self.connection = self.target = None
+
+    def __del__(self):
+        self.close()
 
 
 class Jmap:
@@ -130,6 +188,7 @@ class Jmap:
         except (KeyError, TypeError):
             raise MailFailed("Stalwart's session has no mail account for this key") from None
         self.api_url = same_origin_api(session_url, api_url)
+        check_session_fields(session_url, session)
 
     def fetch(self, method, url, payload=None):
         headers = {"Accept": "application/json", "Authorization": self.credential.header()}
@@ -345,9 +404,20 @@ class Mailbox:
             })
         return messages
 
+    def inbox_copies(self, mail_id, properties):
+        [found] = self.jmap.call(("Email/query", {"filter": {"operator": "AND", "conditions": [
+            {"inMailbox": self.inbox_id}, {"header": ["Message-ID", mail_id]}]}, "limit": PAGE}))
+        ids = found.get("ids", [])
+        if 0 < len(ids) < PAGE:
+            [got] = self.jmap.call(("Email/get", {"ids": ids, "properties": properties}))
+            copies = [e for e in got.get("list", []) if first_id(e) == mail_id]
+            if copies:
+                return copies
+        return [e for e in self.inbox(False, properties) if first_id(e) == mail_id]
+
     def ack(self, mail_id):
         properties = ["id", "messageId", "keywords", "from", "subject"]
-        copies = [e for e in self.inbox(False, properties) if first_id(e) == mail_id]
+        copies = self.inbox_copies(mail_id, properties)
         if not copies:
             raise Refused(f"{self.bot}'s inbox has no message {mail_id}")
         todo = [e["id"] for e in copies if not (e.get("keywords") or {}).get(HANDLED)]
@@ -467,10 +537,12 @@ def main(argv=None, transport=None):
     acking = commands.add_parser("ack", help="mark one message handled")
     acking.add_argument("id")
     args = parser.parse_args(argv)
+    owned = transport is None
+    transport = HttpTransport() if owned else transport
     credential = None
     try:
         credential = Credential.from_fd(args.key_fd)
-        mailbox = Mailbox(Jmap(args.session, credential, transport or HttpTransport()))
+        mailbox = Mailbox(Jmap(args.session, credential, transport))
         if args.command == "send":
             print(mailbox.send(args.to, args.subject, sys.stdin.read(), args.key), flush=True)
         elif args.command == "wait":
@@ -488,6 +560,8 @@ def main(argv=None, transport=None):
         print(f"qd-jmap: {failure}", file=sys.stderr)
         return MAIL_FAILED
     finally:
+        if owned:
+            transport.close()
         if credential is not None:
             credential.clear()
 

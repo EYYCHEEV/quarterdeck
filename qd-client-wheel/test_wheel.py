@@ -19,9 +19,9 @@ VERSION = "0.1.2"
 WHEEL_NAME = f"quarterdeck_mcp-{VERSION}-py3-none-any.whl"
 PINS = {
     "golive/connect/qd.py": "2a2771b90b0ce427c14b47763b551bf103c0124a0031a50a72e9bc1d28432a01",
-    "golive/connect/qd_connect.py": "5a91682601c07a9e15078595eebf69ad03ad8a6e774921ea6381d50e83f8c45c",
+    "golive/connect/qd_connect.py": "663db0a258caa610d98e79d2e926a36f334bb403ecd2e3c46824a431e4f4661e",
     "golive/connect/qd_mcp.py": "22524b67ed0aa3efc8857a0b74227f3f19d89631244a8eeb01f6f1709559a3a8",
-    "mail/qd_jmap.py": "6248bd115a82769e6124f1c23363b555c183c2d490174989a5a21c023b8c7600",
+    "mail/qd_jmap.py": "79a582a60ed67eea4ef1240364b3c4ab9b365639c9a9c460a3f08bdf1269ce8f",
     "signup/signup_flow.py": "286ca5d749e98a82bd8a73545393ffe506b265887ff923f272905e6cd87a6bab",
     "signup/helper_contract.py": "15b688cbcfde84bbbd0418fc5ac8606ab3a92acb651fa9bec0d9716cf8a55c1f",
     "signup/adapter_registry.py": "26dd59aebc5f1ee1e35e934e87bfccd4c4b5e2cf3397a38d050f1ef5839a4265",
