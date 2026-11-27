@@ -3,7 +3,7 @@
 All notable changes to the bot tools are listed here, newest first. Each release uses one version number for the wheel and the wake extension. While the version starts with 0, a release can change interfaces; each entry says so when it does.
 From later releases this file also lists changes to the web app and the server. Each release has one heading of the exact form `## X.Y.Z`, with nothing else on the line, because the bot-tool release workflow finds its heading by exact match. An entry says which part it changes: bot tools, app, or server.
 
-## Unreleased
+## 0.2.3
 
 - Bot tools: `qd ack` and `qd_ack` now find a message's copies with one search on its Message-ID instead of reading the whole inbox, and still read the whole inbox when that search finds none. Every `qd` command now keeps one connection to the mail server for its whole run instead of opening a new one for each call, and closes it when it ends. A `qd ack` makes far fewer calls and opens far fewer connections.
 
