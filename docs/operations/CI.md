@@ -22,6 +22,7 @@ The stdlib-only `tools/ci/workflow-contexts` checker runs through the CI tool te
 | leaks | gitleaks 8.30.1: `dir` on the checkout and `git` on the pull request's own commits. It loads `tools/ci/gitleaks.toml`: the default rules plus three per-file exceptions for the named digest fields listed there, for `generic-api-key` only. Other keys, files and rules still fail, as do values in the six named fields that are not exactly 64 lowercase hex characters. A different 64-character hex value, or a repeated matching line for one of those six fields, passes this public scan. The maintainers' own scan before each push checks those fields with the default rules, without this file. Inline allow markers are not honored. gitleaks always reads a `.gitleaksignore` file at the top of the checkout, whatever its options say, so this repository keeps none, and the scan step fails right before it runs gitleaks if one is there. A pull request that changes `tools/ci/` or `.github/` can change what this job runs, so those changes are reviewed as code. Output is redacted: the rule id and the path only | The tarball and its checksums file, by sha256 in `tools/ci/pins.json` | 10 min |
 | no-comments | Python by its tokenizer; `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, `.mts` and `.cts` by a check for a line that starts with a comment; `.css`, `.html`, `.yml` and shell files by their own checks. The keep-list is empty. Inside `apps/web`, the web-static lane also runs the syntax-aware TypeScript scanner through `npm run lint`. The lane checks file kinds too: no symlinks or special files, and every binary file listed by sha256 in `tools/ci/binaries.txt` | Scripts in this repository | 5 min |
 | pr-title | The title is a conventional commit title | None | 2 min |
+| release-build | Both jobs of `.github/workflows/release-build.yml`, the file a release calls, on the pull request's merge result or on the pushed commit, with the version from `omp-quarterdeck/package.json`. Every step runs except the check that the commit is already on `main`. The build job writes the sums of the four parts to its job summary. Its only permission is `contents: read`. It gets no configured secret and no exported `GH_TOKEN`; GitHub's automatic `GITHUB_TOKEN` is still there, read-only | As web-static for the web bundle; the runner's `python3` for the rest | 15 min and 20 min |
 | qd-check | The aggregate. It always runs. It fails if any lane failed or was skipped when it should not have been | None | 2 min |
 
 Path filters only choose which lanes do real work. `qd-check` always runs, so a required check is never left unreported.
@@ -34,9 +35,9 @@ On a pull request the `changes` job runs `tools/ci/ci-changes`. It reads the fil
 - All eight run on every push to `main`, and whenever the changed files cannot be read.
 - An app with no `package.json` keeps its lanes off.
 
-The map starts in observe mode. In observe mode a lane that is not needed still runs: every filtered lane of an app that has its `package.json` is turned on, as it was before the map. The `changes` job only names the lanes the map would have skipped, by job name, in its log and in its job summary. After a day of pull requests that log is read for wrong skips. A later change then sets `CI_CHANGES_MODE` to `enforce` for the `changes` job. Only that exact value makes a lane that is not needed skip. Any other value, or none, is observe mode.
+The `changes` job sets `CI_CHANGES_MODE` to `enforce`, so a lane that is not needed is skipped, and `qd-check` requires it to be skipped. Only that exact value turns skipping on. Any other value, or none, is observe mode: every filtered lane of an app that has its `package.json` still runs, as it did before the map, and the `changes` job only names the lanes the map would have skipped, by job name, in its log and in its job summary. Observe mode ran first, and two pull requests showed only right skips. To go back to observe mode, remove the `CI_CHANGES_MODE` line from the `changes` job.
 
-The other lanes (`python`, `server`, `extension`, `extension-macos`, `no-comments`, `leaks` and `pr-title`) are not filtered. `qd-check` requires each filtered lane to have succeeded when it was turned on and to have been skipped when it was not.
+The other lanes (`python`, `server`, `extension`, `extension-macos`, `no-comments`, `leaks`, `pr-title` and `release-build`) are not filtered. `qd-check` requires each filtered lane to have succeeded when it was turned on and to have been skipped when it was not.
 
 ## Required checks
 
@@ -95,7 +96,7 @@ A new action needs the same pull request and also a change of the repository's a
 
 ## Keep secrets out
 
-No secret is reachable from a pull request.
+No configured secret is reachable from a pull request. Every job still gets GitHub's automatic `GITHUB_TOKEN`, with only the grants in its own block, so a pull request's jobs get a read-only token.
 
 - Every workflow starts with `permissions: {}`. Jobs get only the grants listed in their own block, and none gets write access, except the manual release job described below.
 - `actions/checkout` runs with `persist-credentials: false`.
@@ -109,6 +110,6 @@ No secret is reachable from a pull request.
 ## Logs and artifacts
 
 - Jobs print the kind of a finding and its path, never the value. Bundle sha256 values are fine.
-- Artifacts are kept for 7 days. In the CI workflow, only failure pictures made from fixture data are uploaded. A step first refuses any failure file that is not a picture, the upload runs only when that step passed, and it takes only `.png` files. A test in `tools/ci` fails if an upload step loses that guard. The release workflow keeps its built files for 7 days between its two jobs.
+- Artifacts are kept for 7 days. In the CI workflow's own jobs, only failure pictures made from fixture data are uploaded. A step first refuses any failure file that is not a picture, the upload runs only when that step passed, and it takes only `.png` files. A test in `tools/ci` fails if an upload step loses that guard. The release build file keeps its built files for 7 days between its two jobs, both when a release calls it and when the `release-build` lane calls it.
 - Screenshots are never committed. A screenshot that CI makes is a 7-day artifact made from fixture data.
 - No file that CI produces is a release input.

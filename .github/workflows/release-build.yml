@@ -1,0 +1,378 @@
+name: Release build
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Version to build, for example 0.1.1
+        required: true
+        type: string
+      commit:
+        description: Full 40-character commit SHA to build
+        required: true
+        type: string
+      check-only:
+        description: Skip the check that the commit is already on main
+        required: true
+        type: boolean
+
+permissions: {}
+
+jobs:
+  build-web:
+    name: Build the web bundle twice and compare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ inputs.version }}
+      COMMIT: ${{ inputs.commit }}
+      CHECK_ONLY: ${{ inputs.check-only }}
+    steps:
+      - name: Check the inputs
+        run: |
+          set -eu
+          [[ $VERSION =~ ^[0-9]{1,9}\.[0-9]{1,9}\.[0-9]{1,9}$ ]]
+          [[ $COMMIT =~ ^[0-9a-f]{40}$ ]]
+
+      - name: Checkout the named commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Confirm the commit, the branch and the version
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$COMMIT"
+          test "$CHECK_ONLY" = true || git merge-base --is-ancestor "$COMMIT" origin/main
+          test "$(jq -c .version omp-quarterdeck/package.json)" = "\"$VERSION\""
+          grep -Fxq "## $VERSION" CHANGELOG.md
+
+      - name: Fetch the pinned Node
+        run: python3 tools/ci/fetch-pinned node
+
+      - name: Put the pinned Node first on the path
+        run: echo "$RUNNER_TEMP/pinned/node-v22.21.0-linux-x64/bin" >> "$GITHUB_PATH"
+
+      - name: Make two clean folders from the named commit
+        run: |
+          set -euo pipefail
+          for n in 1 2; do
+            mkdir "web-$n" "out-$n"
+            git archive --format=tar "$COMMIT" | tar -x -C "web-$n"
+          done
+
+      - name: Install the web dependencies from the lock file
+        run: |
+          set -eu
+          for n in 1 2; do
+            (cd "web-$n/apps/web" && npm ci --ignore-scripts)
+          done
+
+      - name: Verify registry signatures
+        run: |
+          set -eu
+          for n in 1 2; do
+            (cd "web-$n/apps/web" && npm audit signatures)
+          done
+
+      - name: Build the web bundle twice with chat on
+        run: |
+          set -eu
+          for n in 1 2; do
+            (cd "web-$n/apps/web" && npm run build:app -- --server --chat)
+            tar --sort=name --mtime='1970-01-01 00:00:00 UTC' --owner=0 --group=0 --numeric-owner --mode='u=rwX,go=rX' -cf "out-$n/quarterdeck-web-$VERSION.tar" -C "web-$n/apps/web/dist" .
+          done
+
+      - name: Fail if the two builds differ
+        run: cmp "out-1/quarterdeck-web-$VERSION.tar" "out-2/quarterdeck-web-$VERSION.tar"
+
+      - name: Print the hash of the web bundle
+        run: |
+          set -eu
+          sum=$(sha256sum "out-1/quarterdeck-web-$VERSION.tar" | cut -d' ' -f1)
+          printf 'web bundle built with --server --chat for %s: sha256 %s\n' "$COMMIT" "$sum" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the web bundle for the build job
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: web-bundle
+          path: out-1/
+          if-no-files-found: error
+          retention-days: 7
+
+  build:
+    name: Build twice, compare, and test the built files
+    needs: build-web
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ inputs.version }}
+      COMMIT: ${{ inputs.commit }}
+      CHECK_ONLY: ${{ inputs.check-only }}
+    steps:
+      - name: Check the inputs
+        run: |
+          set -eu
+          [[ $VERSION =~ ^[0-9]{1,9}\.[0-9]{1,9}\.[0-9]{1,9}$ ]]
+          [[ $COMMIT =~ ^[0-9a-f]{40}$ ]]
+
+      - name: Checkout the named commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Confirm the commit, the branch and the version
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$COMMIT"
+          test "$CHECK_ONLY" = true || git merge-base --is-ancestor "$COMMIT" origin/main
+          test "$(jq -c .version omp-quarterdeck/package.json)" = "\"$VERSION\""
+          grep -Fxq "## $VERSION" CHANGELOG.md
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.3.14
+
+      - name: Write the safe unpack helper
+        run: cp tools/ci/safe_unpack.py "$RUNNER_TEMP/safe_unpack.py"
+
+      - name: Build the wheel, the wake archive and the server package twice in two clean folders
+        run: |
+          set -euo pipefail
+          for n in 1 2; do
+            mkdir "build-$n" "out-$n"
+            git archive --format=tar "$COMMIT" | tar -x -C "build-$n"
+            python3 "build-$n/qd-client-wheel/build_wheel.py" --source-root "build-$n" --version "$VERSION" --output "out-$n"
+            python3 tools/ci/wake_archive_check.py pack "build-$n" "$VERSION" "out-$n"
+            scratch="$(mktemp -d)"
+            python3 -B "build-$n/deploy/server_lane.py" --assemble-only "$scratch/tree" > /dev/null
+            (cd "$scratch/tree/qd-web/qd-web" && find . -mindepth 1) | LC_ALL=C sort > "$scratch/present"
+            { jq -r '.files | keys[] | "./" + .' "build-$n/deploy/qd-web/package-manifest.json"; echo ./package-manifest.json; } | LC_ALL=C sort > "$scratch/wanted"
+            cmp "$scratch/wanted" "$scratch/present"
+            tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --mode='u=rwX,go=rX' \
+              --transform "s,^qd-web,quarterdeck-server-qd-web-$VERSION," \
+              -cf - -C "$scratch/tree/qd-web" qd-web | gzip -n -9 > "out-$n/quarterdeck-server-qd-web-$VERSION.tar.gz"
+          done
+
+      - name: Fail if the two builds differ
+        run: |
+          set -eu
+          cmp "out-1/quarterdeck_mcp-$VERSION-py3-none-any.whl" "out-2/quarterdeck_mcp-$VERSION-py3-none-any.whl"
+          cmp "out-1/quarterdeck-omp-wake-$VERSION.tar.gz" "out-2/quarterdeck-omp-wake-$VERSION.tar.gz"
+          cmp "out-1/quarterdeck-server-qd-web-$VERSION.tar.gz" "out-2/quarterdeck-server-qd-web-$VERSION.tar.gz"
+
+      - name: Download the web bundle
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: web-bundle
+          path: web
+
+      - name: Test the wheel after unpacking it into an empty folder
+        run: |
+          set -eu
+          unpacked="$(mktemp -d)/wheel"
+          python3 "$RUNNER_TEMP/safe_unpack.py" "out-1/quarterdeck_mcp-$VERSION-py3-none-any.whl" "$unpacked"
+          python3 "$unpacked/qd.py" --help > /dev/null
+          config="$(mktemp)"
+          cp build-1/golive/connect/connect-config.json "$config"
+          chmod 600 "$config"
+          python3 - "$unpacked" "$config" <<'PY'
+          import json
+          import subprocess
+          import sys
+
+          folder, config = sys.argv[1], sys.argv[2]
+          requests = [
+              {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+              {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+          ]
+          completed = subprocess.run(
+              [sys.executable, folder + "/qd_mcp.py", "--config", config],
+              input="".join(json.dumps(request) + "\n" for request in requests),
+              capture_output=True,
+              text=True,
+              timeout=60,
+              check=True,
+          )
+          answers = [json.loads(line) for line in completed.stdout.splitlines()]
+          assert answers[0]["result"]["serverInfo"]["name"] == "quarterdeck"
+          expected = ["qd_join", "qd_create_invite", "qd_send", "qd_chat", "qd_wait", "qd_ack", "qd_owed"]
+          assert [tool["name"] for tool in answers[1]["result"]["tools"]] == expected
+          PY
+
+      - name: Test the extension from its unpacked archive
+        run: python3 tools/ci/wake_archive_check.py test "out-1/quarterdeck-omp-wake-$VERSION.tar.gz" "$VERSION"
+
+      - name: Rehearse the install switch with stand-ins in a throwaway home
+        run: |
+          set -eu
+          home="$(mktemp -d)"
+          base="$home/.local/share/quarterdeck/bot-a"
+          mkdir -p "$base/releases/0.0.0"
+          printf 'print("stand-in older version")\n' > "$base/releases/0.0.0/qd.py"
+          python3 "$RUNNER_TEMP/safe_unpack.py" "out-1/quarterdeck_mcp-$VERSION-py3-none-any.whl" "$base/releases/$VERSION"
+          ln -s releases/0.0.0 "$base/current"
+          point() {
+            ln -s "releases/$1" "$base/current.next"
+            mv -T "$base/current.next" "$base/current"
+          }
+          test "$(python3 "$base/current/qd.py")" = "stand-in older version"
+          point "$VERSION"
+          python3 "$base/current/qd.py" --help > /dev/null
+          point 0.0.0
+          test "$(python3 "$base/current/qd.py")" = "stand-in older version"
+
+      - name: Test the server package after unpacking it into an empty folder
+        run: |
+          set -euo pipefail
+          unpacked="$(mktemp -d)/server"
+          python3 "$RUNNER_TEMP/safe_unpack.py" "out-1/quarterdeck-server-qd-web-$VERSION.tar.gz" "$unpacked"
+          test "$(ls -A "$unpacked")" = "quarterdeck-server-qd-web-$VERSION"
+          package="$unpacked/quarterdeck-server-qd-web-$VERSION"
+          manifest=build-1/deploy/qd-web/package-manifest.json
+          (cd "$package" && find . -mindepth 1) | LC_ALL=C sort > "$unpacked.present"
+          { jq -r '.files | keys[] | "./" + .' "$manifest"; echo ./package-manifest.json; } | LC_ALL=C sort > "$unpacked.wanted"
+          cmp "$unpacked.wanted" "$unpacked.present"
+          cmp "$manifest" "$package/package-manifest.json"
+          python3 -I -B - "$package" build-1/apps/server/qd-web/package_plan.py <<'PY'
+          import importlib.util
+          import pathlib
+          import sys
+
+          package, source = sys.argv[1], sys.argv[2]
+          spec = importlib.util.spec_from_file_location("commit_package_plan", source)
+          plan = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(plan)
+          plan.verify_manifest(pathlib.Path(package) / "package-manifest.json")
+          sys.path.insert(0, package)
+          import bundle
+          import cards
+          import server
+          import webapp
+          PY
+          python3 -B build-1/deploy/package_guard.py "$package"
+
+      - name: Test the web bundle from its unpacked archive, served by the unpacked server package
+        run: |
+          set -eu
+          unpacked="$(mktemp -d)"
+          python3 "$RUNNER_TEMP/safe_unpack.py" "web/quarterdeck-web-$VERSION.tar" "$unpacked/web"
+          python3 "$RUNNER_TEMP/safe_unpack.py" "out-1/quarterdeck-server-qd-web-$VERSION.tar.gz" "$unpacked/server"
+          python3 -I -B - "$unpacked/web" "$unpacked/server/quarterdeck-server-qd-web-$VERSION" <<'PY'
+          import hashlib
+          import os
+          import sys
+          from html.parser import HTMLParser
+
+          web, package = sys.argv[1], sys.argv[2]
+          sys.path.insert(0, package)
+          import approval_app
+          import bundle
+
+
+          class Names(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.found = []
+
+              def handle_starttag(self, tag, attributes):
+                  self.found.extend(value for key, value in attributes if key in ("href", "src") and value)
+
+
+          def ask(path):
+              return site.serve(approval_app.Request("GET", path, {}, bytearray(), "release-check"))
+
+
+          with open(os.path.join(web, "index.html"), "rb") as handle:
+              page = handle.read()
+          names = Names()
+          names.feed(page.decode("utf-8"))
+          assert "/app.js" in names.found and "/app.css" in names.found, names.found
+          site = bundle.Bundle.load(web)
+          answer = ask("/index.html")
+          headers = dict(answer.headers)
+          assert answer.status == 200 and answer.body == page, "index.html is not served whole"
+          assert headers["Cache-Control"] == "no-store" and "ETag" not in headers, headers
+          for name in names.found:
+              assert name.startswith("/") and os.path.isfile(os.path.join(web, name[1:])), name
+              with open(os.path.join(web, name[1:]), "rb") as handle:
+                  data = handle.read()
+              answer = ask(name)
+              assert answer is not None and answer.status == 200 and answer.body == data, name
+              assert dict(answer.headers)["ETag"] == '"' + hashlib.sha256(data).hexdigest() + '"', name
+          PY
+
+      - name: Write the sums, the parts list and the release notes
+        run: |
+          set -eu
+          mkdir release
+          cp "out-1/quarterdeck_mcp-$VERSION-py3-none-any.whl" "out-1/quarterdeck-omp-wake-$VERSION.tar.gz" "web/quarterdeck-web-$VERSION.tar" "out-1/quarterdeck-server-qd-web-$VERSION.tar.gz" release/
+          python3 -I -B - release "$VERSION" "$COMMIT" <<'PY'
+          import hashlib
+          import json
+          import pathlib
+          import posixpath
+          import sys
+          import tarfile
+          import zipfile
+
+          release, version, commit = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+
+
+          def digest(data):
+              return hashlib.sha256(data).hexdigest()
+
+
+          def inside(path):
+              found = {}
+              if path.name.endswith(".whl"):
+                  with zipfile.ZipFile(path) as archive:
+                      for member in archive.infolist():
+                          if not member.is_dir():
+                              found[member.filename] = digest(archive.read(member))
+                  return found
+              with tarfile.open(path) as archive:
+                  for member in archive.getmembers():
+                      if member.isreg():
+                          found[posixpath.normpath(member.name)] = digest(archive.extractfile(member).read())
+              return found
+
+
+          parts = []
+          for name, file in (
+              ("bot-tools-wheel", f"quarterdeck_mcp-{version}-py3-none-any.whl"),
+              ("wake-extension", f"quarterdeck-omp-wake-{version}.tar.gz"),
+              ("web-bundle", f"quarterdeck-web-{version}.tar"),
+              ("server-qd-web", f"quarterdeck-server-qd-web-{version}.tar.gz"),
+          ):
+              path = release / file
+              part = {"name": name, "file": file, "sha256": digest(path.read_bytes()), "files": inside(path)}
+              if name == "web-bundle":
+                  part["buildFlags"] = ["--server", "--chat"]
+              parts.append(part)
+          document = {"format": 1, "version": version, "commit": commit, "parts": parts}
+          (release / "PARTS.json").write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          PY
+          (cd release && sha256sum "quarterdeck_mcp-$VERSION-py3-none-any.whl" "quarterdeck-omp-wake-$VERSION.tar.gz" "quarterdeck-web-$VERSION.tar" "quarterdeck-server-qd-web-$VERSION.tar.gz" PARTS.json > SHA256SUMS)
+          awk -v v="$VERSION" '$0 == "## " v { found = 1; next } /^## / && found { exit } found' CHANGELOG.md > release/RELEASE-NOTES.md
+          test -s release/RELEASE-NOTES.md
+
+      - name: Print the sums of the parts
+        run: tee -a "$GITHUB_STEP_SUMMARY" < release/SHA256SUMS
+
+      - name: Keep the built files for the draft job
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: release-files
+          path: release/
+          if-no-files-found: error
+          retention-days: 7
